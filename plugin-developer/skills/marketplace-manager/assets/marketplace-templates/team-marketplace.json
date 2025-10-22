@@ -1,0 +1,30 @@
+{
+  "name": "team-tools",
+  "owner": {
+    "name": "Engineering Team",
+    "email": "engineering@company.com"
+  },
+  "metadata": {
+    "description": "Team-wide development tools and workflows",
+    "version": "1.0.0",
+    "pluginRoot": "./plugins"
+  },
+  "plugins": [
+    {
+      "name": "code-standards",
+      "source": "./code-standards",
+      "description": "Enforce coding standards and best practices",
+      "version": "1.0.0",
+      "category": "code-quality",
+      "keywords": ["standards", "linting", "quality"]
+    },
+    {
+      "name": "deployment-helper",
+      "source": "./deployment-helper",
+      "description": "Streamline deployment workflows",
+      "version": "1.0.0",
+      "category": "deployment",
+      "keywords": ["deploy", "staging", "production"]
+    }
+  ]
+}

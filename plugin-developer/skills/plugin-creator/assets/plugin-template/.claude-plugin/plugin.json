@@ -1,0 +1,14 @@
+{
+  "name": "plugin-name",
+  "version": "1.0.0",
+  "description": "Brief description of what this plugin does and when to use it",
+  "author": {
+    "name": "Your Name",
+    "email": "your.email@example.com"
+  },
+  "homepage": "https://your-docs-url.com",
+  "repository": "https://github.com/yourusername/your-plugin",
+  "license": "MIT",
+  "keywords": ["keyword1", "keyword2", "keyword3"],
+  "category": "development-tools"
+}

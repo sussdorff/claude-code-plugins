@@ -10,10 +10,6 @@ setopt ERR_RETURN     # Return on error in functions
 setopt NO_UNSET       # Error on undefined variables
 setopt PIPE_FAIL      # Fail if any command in pipeline fails
 
-# Script metadata (read-only constants)
-typeset -r SCRIPT_DIR="${0:A:h}"
-typeset -r PROJECT_ROOT="${SCRIPT_DIR:h:h}"
-
 usage() {
   cat <<EOF
 Usage: $(basename "$0") <skill-name>
@@ -21,11 +17,11 @@ Usage: $(basename "$0") <skill-name>
 Install a skill from the project directory to .claude/skills/ for testing.
 
 Arguments:
-  skill-name    Name of the skill directory (e.g., jira-context-fetcher)
+  skill-name    Name of the skill directory (e.g., git-worktree-tools)
 
 Examples:
-  $(basename "$0") jira-context-fetcher
-  $(basename "$0") screenshot-analyzer
+  $(basename "$0") git-worktree-tools
+  $(basename "$0") my-custom-skill
 
 The script will:
   1. Check if skill exists in project
@@ -43,8 +39,27 @@ fi
 
 # Parse arguments
 typeset skill_name="$1"
-typeset -r source_dir="${PROJECT_ROOT}/${skill_name}"
-typeset -r target_dir="${PROJECT_ROOT}/.claude/skills/${skill_name}"
+
+# Detect PROJECT_ROOT based on repository structure
+typeset PROJECT_ROOT
+typeset source_dir
+typeset target_dir
+
+# Case 1: Current directory is the skill itself (has SKILL.md or skill.md at root)
+if [[ -f "SKILL.md" ]] || [[ -f "skill.md" ]]; then
+  # We're in a single skill repository
+  PROJECT_ROOT="$(pwd)"
+  source_dir="${PROJECT_ROOT}"
+  target_dir="${PROJECT_ROOT}/.claude/skills/${skill_name}"
+# Case 2: Marketplace/multi-skill repository (skill is a subdirectory)
+else
+  PROJECT_ROOT="$(pwd)"
+  source_dir="${PROJECT_ROOT}/${skill_name}"
+  target_dir="${PROJECT_ROOT}/.claude/skills/${skill_name}"
+fi
+
+typeset -r source_dir
+typeset -r target_dir
 
 # Validate source exists
 if [[ ! -d "$source_dir" ]]; then

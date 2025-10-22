@@ -9,10 +9,24 @@ if [[ -z "$PLUGIN_NAME" ]]; then
     exit 1
 fi
 
-# Get absolute path to project root (parent of script location)
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-PROJECT_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
-PLUGIN_DIR="${PROJECT_ROOT}/${PLUGIN_NAME}"
+# Detect PROJECT_ROOT based on repository structure
+# Case 1: Current directory is the plugin itself (has .claude-plugin/plugin.json)
+if [[ -f ".claude-plugin/plugin.json" ]]; then
+    # We're in a single plugin repository
+    PROJECT_ROOT="$(pwd)"
+    PLUGIN_DIR="${PROJECT_ROOT}"
+    # Verify the plugin name matches
+    ACTUAL_NAME=$(jq -r '.name' .claude-plugin/plugin.json)
+    if [[ "$ACTUAL_NAME" != "$PLUGIN_NAME" ]]; then
+        echo "Warning: Plugin name '$PLUGIN_NAME' doesn't match actual name '$ACTUAL_NAME' in plugin.json" >&2
+        echo "Using actual name: $ACTUAL_NAME" >&2
+        PLUGIN_NAME="$ACTUAL_NAME"
+    fi
+# Case 2: Marketplace/multi-plugin repository (plugin is a subdirectory)
+else
+    PROJECT_ROOT="$(pwd)"
+    PLUGIN_DIR="${PROJECT_ROOT}/${PLUGIN_NAME}"
+fi
 
 # Validation
 if [[ ! -d "$PLUGIN_DIR" ]]; then

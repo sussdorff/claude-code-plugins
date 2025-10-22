@@ -1,17 +1,17 @@
 ---
 name: plugin-tester
-description: This skill should be used when testing or installing plugins under development in the claude-code-plugins project. It handles copying plugin commands and skills to .claude/ directories for local testing. Use when developing, testing, or validating any plugin in this project.
+description: This skill should be used when testing or installing plugins under local development. It handles copying plugin commands and skills to .claude/ directories for local testing. Use when developing, testing, or validating any plugin structure (with .claude-plugin/plugin.json). FOR LOCAL DEVELOPMENT ONLY - does not install plugins from marketplaces.
 ---
 
 # Plugin Tester
 
-Meta skill for testing plugins under development in the claude-code-plugins project.
+Meta skill for testing plugins under local development.
 
 ## Overview
 
 The plugin-tester provides tools and workflows for iterative plugin development. It automates the installation of plugins from development directories to `.claude/commands/` and `.claude/skills/` for local testing, handles validation, and clearly communicates when Claude Code restart is required.
 
-This skill understands the local development workflow for Claude Code plugins.
+**Important:** This skill is for LOCAL DEVELOPMENT ONLY. It installs plugins directly from your project directories, not from marketplaces or external sources.
 
 ## When to Use This Skill
 
@@ -22,35 +22,60 @@ Use this skill to:
 - Understand the local testing workflow for this project
 - Determine if Claude Code restart is needed
 
-## Key Understanding: Local Testing vs Distribution
+## Key Distinction: Plugin vs Skill Installation
 
-**For Local Development:**
+### Plugin-Tester (this skill) - For Complete Plugins
+- **What it installs:** Complete plugins (with `.claude-plugin/plugin.json`)
+- **Where from:** Local plugin directories
+- **Where to:** `.claude/commands/` AND `.claude/skills/`
+- **Use case:** Developing a plugin that bundles commands, skills, hooks, agents
+- **Example:** `reference-file-compactor` plugin
+- **Structure:** Plugin directory with `.claude-plugin/plugin.json` metadata
+
+### Skill-Tester (sibling skill) - For Standalone Skills
+- **What it installs:** Individual skills (directories with SKILL.md)
+- **Where from:** Local project directories
+- **Where to:** `.claude/skills/` directly
+- **Use case:** Developing a single skill in isolation
+- **Example:** `git-worktree-tools/`, `jira-context-fetcher/`
+- **Structure:** Skill directory with SKILL.md at root
+
+**Choose the right tool:**
+- Use **plugin-tester** for plugin development that may include multiple commands and skills
+- Use **skill-tester** for standalone skill development
+
+**Neither installs from marketplaces** - both are for local development only!
+
+## Local Testing vs Distribution
+
+**For Local Development (this skill):**
 - Commands → `.claude/commands/` (project-level)
 - Skills → `.claude/skills/` (project-level)
 - Both loaded at Claude Code startup
 - No marketplace/plugin system needed
+- Direct file copying for rapid iteration
 
 **For Distribution:**
 - Package as plugin with `.claude-plugin/plugin.json`
 - Commands and skills bundled together
-- Distributed via marketplaces
+- Distributed via marketplaces or git repositories
 - Installed with `/plugin install` command
-
-This skill focuses on **local development** workflow.
+- Version management and dependencies
 
 ## Project Structure Understanding
 
 Plugins in this project follow the standard Claude Code plugin structure:
 
 ```
-claude-code-plugins/
-├── reference-file-compactor/      # Plugin under development
+your-project/
+├── my-plugin/                     # Plugin under development
 │   ├── .claude-plugin/
-│   │   └── plugin.json           # Plugin metadata
-│   ├── commands/                  # Slash commands
-│   ├── skills/                    # Skills
-│   └── README.md
-├── plugin-tester/                 # This testing skill
+│   │   └── plugin.json           # Required: Plugin metadata
+│   ├── commands/                  # Optional: Slash commands
+│   ├── skills/                    # Optional: Skills
+│   ├── agents/                    # Optional: Agents
+│   ├── hooks/                     # Optional: Hooks
+│   └── README.md                  # Documentation
 └── .claude/                       # Local testing infrastructure
     ├── commands/                  # Installed commands
     └── skills/                    # Installed skills
@@ -83,12 +108,12 @@ claude-code-plugins/
 Execute the bundled install script to install a plugin for local testing:
 
 ```bash
-./plugin-tester/scripts/install-plugin-for-testing.sh <plugin-name>
+./plugin-developer/skills/plugin-tester/scripts/install-plugin-for-testing.sh <plugin-name>
 ```
 
 **Example:**
 ```bash
-./plugin-tester/scripts/install-plugin-for-testing.sh reference-file-compactor
+./plugin-developer/skills/plugin-tester/scripts/install-plugin-for-testing.sh my-plugin
 ```
 
 The script will:
@@ -100,14 +125,14 @@ The script will:
 
 **Example Output:**
 ```
-📦 Installing plugin: reference-file-compactor (v1.0.0)
-   Validation-driven reference file compaction
+📦 Installing plugin: my-plugin (v1.0.0)
+   Plugin description from plugin.json
 
 📋 Installing commands...
-   ✓ compact-reference
+   ✓ my-command
 
 🧠 Installing skills...
-   ✨ New: reference-file-compactor
+   ✨ New: my-skill
 
 ✅ Plugin installed successfully
 
@@ -121,10 +146,10 @@ The script will:
    Steps:
    1. Exit this Claude Code session: exit
    2. Start a new session: claude
-   3. Test commands: /compact-reference
-   3. Skills will be auto-invoked based on their descriptions
+   3. Test commands: /my-command
+   4. Skills will be auto-invoked based on their descriptions
 
-📍 Plugin source: /path/to/reference-file-compactor
+📍 Plugin source: /path/to/my-plugin
 📍 Commands: /path/to/.claude/commands/
 📍 Skills: /path/to/.claude/skills/
 ```
@@ -191,7 +216,7 @@ find <plugin-name>/skills/ -name "SKILL.md"
 1. Edit plugin files (commands, skills, scripts)
    ↓
 2. Install for testing
-   ./plugin-tester/scripts/install-plugin-for-testing.sh <plugin-name>
+   ./plugin-developer/skills/plugin-tester/scripts/install-plugin-for-testing.sh <plugin-name>
    ↓
 3. Restart Claude Code
    exit → claude
@@ -317,7 +342,7 @@ Installs a plugin for local testing by copying to `.claude/` directories.
 
 **Usage:**
 ```bash
-./plugin-tester/scripts/install-plugin-for-testing.sh <plugin-name>
+./plugin-developer/skills/plugin-tester/scripts/install-plugin-for-testing.sh <plugin-name>
 ```
 
 **Behavior:**
@@ -371,7 +396,7 @@ Installs a plugin for local testing by copying to `.claude/` directories.
 
 ## See Also
 
+- skill-tester skill - For testing standalone skills (without plugin structure)
 - [Claude Code Skills Documentation](https://docs.claude.com/en/docs/claude-code/skills)
 - [Claude Code Plugins Documentation](https://docs.claude.com/en/docs/claude-code/plugins)
 - [Claude Code Slash Commands](https://docs.claude.com/en/docs/claude-code/slash-commands)
-- skill-tester skill - For testing standalone skills (simpler, no plugin structure)
