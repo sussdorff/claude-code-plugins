@@ -1,0 +1,8 @@
+{
+  "name": "reference-file-compactor",
+  "description": "Validation-driven reference file compaction with workspace isolation and quality assurance",
+  "version": "1.0.0",
+  "author": {
+    "name": "Claude Code Plugins"
+  }
+}
