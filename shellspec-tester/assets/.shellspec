@@ -1,0 +1,28 @@
+# ShellSpec Configuration File
+# Place this in the root of your project
+
+# Require spec_helper before running tests
+--require spec_helper
+
+# Output format (documentation, tap, junit, etc.)
+--format documentation
+
+# Enable colored output
+--color
+
+# Enable Kcov coverage (requires kcov to be installed)
+# Uncomment the following lines to enable coverage:
+# --kcov
+# --kcov-options "--exclude-pattern=/spec/,/usr/"
+
+# Shell to use for testing (default: auto-detected)
+# --shell bash
+
+# Fail fast on first error (useful during TDD)
+# --fail-fast
+
+# Random execution order (helps find test interdependencies)
+# --random
+
+# Parallel execution (speeds up test suites)
+# --jobs 4
