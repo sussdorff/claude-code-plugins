@@ -203,12 +203,63 @@ References to bundled scripts, references, assets
 - `references/` - Documentation loaded into context as needed
 - `assets/` - Files used in output (templates, icons, etc.)
 
+**Python Script Standards:**
+
+Choose the appropriate approach based on your script's dependencies:
+
+**Scripts with external dependencies** → Use `uv` + PEP 723:
+
+```python
+#!/usr/bin/env -S uv run --quiet --script
+# /// script
+# dependencies = [
+#   "pyyaml>=6.0",
+#   "jsonschema>=4.0",
+#   "pytest>=8.0"
+# ]
+# ///
+"""
+Script description
+"""
+
+import yaml
+import jsonschema
+import pytest
+
+# Your code here...
+```
+
+**Scripts with stdlib only** → Use plain Python:
+
+```python
+#!/usr/bin/env python3
+"""
+Script description
+"""
+
+import sys
+import json
+from pathlib import Path
+
+# Your code here...
+```
+
+**Why this approach:**
+- **PEP 723**: Self-contained, portable, no manual dependency installation (required for external deps)
+- **Plain python3**: Simpler for stdlib-only scripts, no UV requirement
+
+**When to use skill-level `requirements.txt` instead:**
+- Only when you have importable Python modules (not just scripts)
+- Example: `core/` directory with shared utilities imported by scripts
+
 **Best Practices:**
 - Descriptive name and description determine invocation
 - Keep SKILL.md concise (<5k words)
 - Move detailed docs to `references/`
 - Use scripts for repetitive code
 - Store templates in `assets/`
+- Use PEP 723 + `uv` for scripts with external dependencies
+- Use plain `python3` for stdlib-only scripts
 
 #### Hooks
 

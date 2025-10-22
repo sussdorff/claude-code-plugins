@@ -1,4 +1,9 @@
-#!/usr/bin/env python3
+#!/usr/bin/env -S uv run --quiet --script
+# /// script
+# dependencies = [
+#   "pytest>=8.0"
+# ]
+# ///
 """
 Automated Hook Testing Framework
 
@@ -6,9 +11,9 @@ This script tests Claude Code hooks to ensure they behave correctly.
 It validates security patterns, exit codes, and integration with settings.json.
 
 Usage:
-    python test_hooks.py                    # Run all tests
-    python test_hooks.py -k pre_tool_use    # Test specific hook type
-    python test_hooks.py --help             # Show help
+    uv run test_hooks.py                    # Run all tests
+    uv run test_hooks.py -k pre_tool_use    # Test specific hook type
+    uv run test_hooks.py --help             # Show help
 """
 
 import json
