@@ -14,3 +14,4 @@ charly-server-dev-tools/
 
 # JIRA configuration (contains credentials)
 .jira-analyzer.json
+__pycache__/

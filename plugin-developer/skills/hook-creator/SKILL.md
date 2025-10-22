@@ -362,8 +362,8 @@ Edit `.claude/hooks/pre_tool_use.py` to add your security rules. Reference `refe
 # Option 1: Use built-in test mode
 uv run .claude/hooks/pre_tool_use.py --test
 
-# Option 2: Use automated test script
-./assets/test_hooks.sh pre_tool_use
+# Option 2: Use automated pytest framework
+python3 -m pytest assets/test_hooks.py -v -k pre_tool_use
 
 # Option 3: Manual testing
 echo '{"tool_name":"Bash","tool_input":{"command":"rm -rf /"}}' | \
@@ -492,11 +492,13 @@ All templates include:
 - Modular, reusable functions
 - Built-in test mode (run with `--test` flag)
 
-**Testing Tools** - `assets/test_hooks.sh`
-- Automated testing script for hook validation
+**Testing Tools** - `assets/test_hooks.py`
+- Automated pytest framework for hook validation
 - Tests security patterns, exit codes, and integration
-- Run individual tests or full test suite
-- Usage: `./assets/test_hooks.sh` or `./assets/test_hooks.sh pre_tool_use`
+- Parametrized tests for comprehensive coverage
+- Run all tests: `python3 -m pytest assets/test_hooks.py -v`
+- Run specific hook: `python3 -m pytest assets/test_hooks.py -v -k pre_tool_use`
+- Requires: `pip install pytest` or `uv pip install pytest`
 
 ## Troubleshooting
 

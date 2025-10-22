@@ -77,12 +77,12 @@ your-project/
 Execute the bundled install script to copy a skill to `.claude/skills/`:
 
 ```bash
-./skill-tester/scripts/install-skill-for-testing.zsh <skill-name>
+python3 ./skill-tester/scripts/install-skill-for-testing.py <skill-name>
 ```
 
 **Example:**
 ```bash
-./plugin-developer/skills/skill-tester/scripts/install-skill-for-testing.zsh git-worktree-tools
+python3 ./plugin-developer/skills/skill-tester/scripts/install-skill-for-testing.py git-worktree-tools
 ```
 
 The script will:
@@ -97,11 +97,11 @@ The script will:
 
 ### Manual Installation
 
-For manual control:
+For manual control using Python:
 
 ```bash
 # Copy skill files
-rsync -av --delete <skill-name>/ .claude/skills/<skill-name>/
+python3 -c "import shutil; from pathlib import Path; src=Path('<skill-name>'); dst=Path('.claude/skills/<skill-name>'); dst.parent.mkdir(parents=True, exist_ok=True); shutil.rmtree(dst, ignore_errors=True); shutil.copytree(src, dst)"
 
 # Check if new or updated:
 # - If new: Exit and restart Claude Code
@@ -133,7 +133,7 @@ This runs validation checks without creating a package.
 1. Edit skill files
    ↓
 2. Install for testing
-   ./plugin-developer/skills/skill-tester/scripts/install-skill-for-testing.zsh <skill-name>
+   python3 ./plugin-developer/skills/skill-tester/scripts/install-skill-for-testing.py <skill-name>
    ↓
 3. Restart Claude Code if new skill
    exit → claude
@@ -232,20 +232,21 @@ Once testing is complete and you want to share your skill:
 
 ## Scripts Reference
 
-### install-skill-for-testing.zsh
+### install-skill-for-testing.py
 
 Copies a skill from development directory to `.claude/skills/` for testing.
 
 **Usage:**
 ```bash
-./plugin-developer/skills/skill-tester/scripts/install-skill-for-testing.zsh <skill-name>
+python3 ./plugin-developer/skills/skill-tester/scripts/install-skill-for-testing.py <skill-name>
 ```
 
 **Behavior:**
 - Validates source skill exists
 - Detects if skill is new or updated
-- Copies all files using rsync
+- Copies all files using Python shutil (no external dependencies)
 - Reports restart requirement
+- Cross-platform compatible
 
 ### validate-skill.py
 
