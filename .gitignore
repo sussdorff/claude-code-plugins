@@ -1,0 +1,16 @@
+# Git sparse checkout of charly-server developer-tools
+# This is used for development and bundling scripts
+charly-server-dev-tools/
+
+# Packaged skills (build artifacts)
+*.zip
+
+# Backup files
+*.backup
+*~
+
+# Claude Code local configuration
+.claude/
+
+# JIRA configuration (contains credentials)
+.jira-analyzer.json

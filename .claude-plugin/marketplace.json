@@ -1,0 +1,57 @@
+{
+  "name": "claude-code-plugins",
+  "owner": {
+    "name": "Malte Sussdorff",
+    "email": "malte.sussdorff@gmail.com"
+  },
+  "plugins": [
+    {
+      "name": "bash-best-practices",
+      "source": "./bash-best-practices",
+      "description": "Cross-platform Bash scripting with ShellCheck integration and tree-sitter function discovery",
+      "version": "1.2.0"
+    },
+    {
+      "name": "zsh-best-practices",
+      "source": "./zsh-best-practices",
+      "description": "macOS ZSH scripting best practices with automated function discovery",
+      "version": "1.4.0"
+    },
+    {
+      "name": "powershell-pragmatic",
+      "source": "./powershell-pragmatic",
+      "description": "Production-ready PowerShell patterns with PSScriptAnalyzer integration",
+      "version": "1.0.0"
+    },
+    {
+      "name": "git-operations",
+      "source": "./git-operations",
+      "description": "Safe git operations with styleable commit messages and branch protection",
+      "version": "1.0.0"
+    },
+    {
+      "name": "git-worktree-tools",
+      "source": "./git-worktree-tools",
+      "description": "Git worktree lifecycle management with configuration syncing",
+      "version": "1.0.0"
+    },
+    {
+      "name": "branch-synchronizer",
+      "source": "./branch-synchronizer",
+      "description": "Intelligent branch sync with conflict-aware rebasing",
+      "version": "1.0.0"
+    },
+    {
+      "name": "youtube-music-updater",
+      "source": "./youtube-music-updater",
+      "description": "Update YouTube Music desktop app from GitHub releases",
+      "version": "1.0.0"
+    },
+    {
+      "name": "skill-tester",
+      "source": "./skill-tester",
+      "description": "Test and validate skills during development",
+      "version": "1.0.0"
+    }
+  ]
+}

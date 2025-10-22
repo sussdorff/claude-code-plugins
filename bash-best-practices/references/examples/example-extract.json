@@ -1,0 +1,119 @@
+{
+  "index": {
+    "backup_database": {
+      "file": "/tmp/test-bash/working-example.sh",
+      "start": 4,
+      "end": 10,
+      "size": 7,
+      "signature": "backup_database() {",
+      "purpose": "Backup database to target directory",
+      "return_type": "int",
+      "category": "export",
+      "params": [
+        "target_dir",
+        "database_name"
+      ]
+    },
+    "restore_database": {
+      "file": "/tmp/test-bash/working-example.sh",
+      "start": 13,
+      "end": 22,
+      "size": 10,
+      "signature": "restore_database() {",
+      "purpose": "Restore database from backup",
+      "return_type": "int",
+      "category": "export",
+      "params": [
+        "backup_file"
+      ]
+    },
+    "get_config": {
+      "file": "/tmp/test-bash/working-example.sh",
+      "start": 25,
+      "end": 28,
+      "size": 4,
+      "signature": "get_config() {",
+      "purpose": "Get configuration value",
+      "return_type": "string",
+      "category": "core",
+      "params": [
+        "key"
+      ]
+    },
+    "show_help": {
+      "file": "/tmp/test-bash/test-function.sh",
+      "start": 2,
+      "end": 4,
+      "size": 3,
+      "signature": "show_help() {",
+      "purpose": "!/usr/bin/env bash",
+      "return_type": "string",
+      "category": "display",
+      "params": []
+    },
+    "simple_function": {
+      "file": "/tmp/test-bash/heredoc-test.sh",
+      "start": 9,
+      "end": 11,
+      "size": 3,
+      "signature": "simple_function() {",
+      "purpose": "Performs simple function operation",
+      "return_type": "string",
+      "category": "helper",
+      "params": []
+    },
+    "test_function": {
+      "file": "/tmp/test-bash/simple.sh",
+      "start": 3,
+      "end": 5,
+      "size": 3,
+      "signature": "test_function() {",
+      "purpose": "!/usr/bin/env bash",
+      "return_type": "string",
+      "category": "test",
+      "params": []
+    },
+    "get_value": {
+      "file": "/tmp/test-bash/test-function.sh",
+      "start": 5,
+      "end": 8,
+      "size": 4,
+      "signature": "get_value() {",
+      "purpose": "Gets or displays value information",
+      "return_type": "string",
+      "category": "core",
+      "params": [
+        "key"
+      ]
+    }
+  },
+  "categories": {
+    "core": [
+      "get_config",
+      "get_value"
+    ],
+    "display": [
+      "show_help",
+      "show_help"
+    ],
+    "export": [
+      "backup_database",
+      "restore_database"
+    ],
+    "helper": [
+      "simple_function"
+    ],
+    "test": [
+      "test_function"
+    ]
+  },
+  "quick_ref": {
+    "backup_database": "working-example.sh:4-10",
+    "restore_database": "working-example.sh:13-22",
+    "get_config": "working-example.sh:25-28",
+    "show_help": "test-function.sh:2-4",
+    "simple_function": "heredoc-test.sh:9-11",
+    "test_function": "simple.sh:3-5",
+    "get_value": "test-function.sh:5-8"
+  }
+}

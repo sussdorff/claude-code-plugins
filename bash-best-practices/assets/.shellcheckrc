@@ -1,0 +1,44 @@
+# ShellCheck Configuration for bash-best-practices
+# This file configures ShellCheck to align with this skill's guidelines
+
+# Specify shell dialect (always bash for this skill)
+shell=bash
+
+# Disable specific checks that conflict with pragmatic practices
+
+# SC1090: Can't follow non-constant source
+# Reason: Dynamic sourcing is sometimes necessary
+disable=SC1090
+
+# SC1091: Not following sourced file
+# Reason: Files may not exist during linting (generated at runtime)
+disable=SC1091
+
+# SC2312: Consider invoking this command separately to avoid masking return values
+# Reason: Sometimes intentional for cleaner code when error is not critical
+# Note: Enable this in strict contexts by removing from this list
+# disable=SC2312
+
+# Enable optional checks for better quality
+
+# SC2250: Prefer putting braces around variable references even when not strictly required
+enable=quote-safe-variables
+
+# SC2251: This pattern may not have expected results
+enable=check-unassigned-uppercase
+
+# Set severity threshold (error, warning, info, style)
+# Comment out to see all levels
+# severity=warning
+
+# External sources to check (paths relative to script being checked)
+# external-sources=true
+
+# Source path for following source/. commands
+# source-path=SCRIPTDIR
+
+# Notes on common suppressions:
+# - Suppress inline with: # shellcheck disable=SC####
+# - Suppress for line with: # shellcheck disable=SC#### (comment on line before)
+# - Suppress for file with: # shellcheck disable=SC#### (at top of file)
+# - Always document WHY you're suppressing
