@@ -1,12 +1,12 @@
 # Plugin Developer
 
-Tools and workflows for developing Claude Code plugins locally.
+Tools and workflows for developing Claude Code plugins, skills, and hooks locally.
 
 ## Overview
 
-The plugin-developer plugin provides tools and workflows for iterative plugin development. It includes skills that automate the installation of plugins from development directories to `.claude/commands/` and `.claude/skills/` for local testing, handle validation, and clearly communicate when Claude Code restart is required.
+The plugin-developer plugin provides tools and workflows for iterative plugin, skill, and hook development. It includes skills that automate the installation of plugins from development directories to `.claude/commands/` and `.claude/skills/` for local testing, handle validation, and clearly communicate when Claude Code restart is required.
 
-This is a meta-plugin that understands the local development workflow for Claude Code plugins.
+This is a meta-plugin that understands the local development workflow for Claude Code plugins, skills, and hooks.
 
 ## Purpose
 
@@ -179,17 +179,36 @@ plugin-developer/                   # Plugin package
 │   │   │   └── team-collaboration.md
 │   │   └── assets/
 │   │       └── marketplace-templates/  # Marketplace templates
+│   ├── hook-creator/              # Hook creation skill
+│   │   ├── SKILL.md               # Hook development workflow
+│   │   ├── references/            # Hook documentation
+│   │   │   ├── hook_types.md
+│   │   │   ├── security_patterns.md
+│   │   │   └── hook_examples.md
+│   │   ├── assets/
+│   │   │   └── templates/         # Hook templates
+│   │   │       ├── pre_tool_use_template.py
+│   │   │       ├── post_tool_use_template.py
+│   │   │       ├── session_start_template.py
+│   │   │       ├── stop_template.py
+│   │   │       └── simple_hooks.md
+│   │   └── scripts/
+│   │       └── hook_manager.py    # Hook management CLI
 │   ├── plugin-tester/             # Plugin testing skill
 │   │   ├── SKILL.md
 │   │   └── scripts/
 │   │       └── install-plugin-for-testing.sh
-│   └── skill-tester/              # Skill testing skill
+│   ├── skill-tester/              # Skill testing skill
+│   │   ├── SKILL.md
+│   │   ├── references/
+│   │   │   └── testing-workflow.md
+│   │   └── scripts/
+│   │       ├── install-skill-for-testing.zsh
+│   │       └── validate-skill.py
+│   └── slash-command-creator/     # Slash command creation skill
 │       ├── SKILL.md
-│       ├── references/
-│       │   └── testing-workflow.md
-│       └── scripts/
-│           ├── install-skill-for-testing.zsh
-│           └── validate-skill.py
+│       └── references/
+│           └── decision-criteria.md
 └── README.md                      # This file
 ```
 
@@ -236,6 +255,29 @@ Meta skill for testing standalone skills (without plugin structure). Provides:
 - Testing workflow for skill development
 
 See plugin-developer/skills/skill-tester/SKILL.md for full documentation.
+
+### hook-creator
+
+Comprehensive skill for creating and managing Claude Code hooks. Provides:
+- Complete hook type documentation (SessionStart, PreToolUse, PostToolUse, etc.)
+- Security patterns and validation templates
+- Hook templates for common use cases (security, formatting, quality gates)
+- Hook manager CLI for installation and configuration
+- Best practices and troubleshooting guidance
+
+See plugin-developer/skills/hook-creator/SKILL.md for full documentation.
+
+### slash-command-creator
+
+Comprehensive skill for creating custom slash commands in Claude Code. Guides through:
+- Determining when to use slash commands vs CLAUDE.md instructions
+- Command structure design with proper parameters and frontmatter
+- Model selection based on complexity (Haiku/Sonnet/Opus)
+- Tool permissions and security configuration
+- Reusability strategies across projects and teams
+- Complete templates and best practices library
+
+See plugin-developer/slash-command-creator/SKILL.md for full documentation.
 
 ## Plugin Structure
 
