@@ -1,9 +1,9 @@
 ---
-name: slash-command-creator
+name: command-creator
 description: This skill should be used when creating or updating custom slash commands for Claude Code. It guides through the entire lifecycle - from determining if a slash command is appropriate (vs. CLAUDE.md instructions), designing the command structure with proper parameters and frontmatter, selecting the right model and tool permissions, and discussing reusability across projects. Use when the user wants to create a new slash command, convert repeated prompts into commands, or improve existing commands.
 ---
 
-# Slash Command Creator
+# Command Creator
 
 ## Overview
 

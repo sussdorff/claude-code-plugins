@@ -205,7 +205,7 @@ plugin-developer/                   # Plugin package
 │   │   └── scripts/
 │   │       ├── install-skill-for-testing.zsh
 │   │       └── validate-skill.py
-│   └── slash-command-creator/     # Slash command creation skill
+│   └── command-creator/           # Slash command creation skill
 │       ├── SKILL.md
 │       └── references/
 │           └── decision-criteria.md
@@ -267,7 +267,7 @@ Comprehensive skill for creating and managing Claude Code hooks. Provides:
 
 See plugin-developer/skills/hook-creator/SKILL.md for full documentation.
 
-### slash-command-creator
+### command-creator
 
 Comprehensive skill for creating custom slash commands in Claude Code. Guides through:
 - Determining when to use slash commands vs CLAUDE.md instructions
@@ -277,7 +277,7 @@ Comprehensive skill for creating custom slash commands in Claude Code. Guides th
 - Reusability strategies across projects and teams
 - Complete templates and best practices library
 
-See plugin-developer/slash-command-creator/SKILL.md for full documentation.
+See plugin-developer/skills/command-creator/SKILL.md for full documentation.
 
 ## Plugin Structure
 

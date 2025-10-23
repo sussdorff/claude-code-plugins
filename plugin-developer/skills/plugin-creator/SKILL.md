@@ -324,6 +324,145 @@ Configure in plugin.json under `mcpServers`:
 
 **Output**: Fully implemented plugin components ready for testing.
 
+---
+
+## Using Anthropic-Provided Skills
+
+When creating plugins, leverage Anthropic's official skills instead of recreating functionality.
+
+### Available Anthropic Skills
+
+Anthropic provides comprehensive skills in the `example-skills` plugin:
+
+**For Component Creation:**
+- **skill-creator** - Guide for creating effective skills with bundled resources
+- **mcp-builder** - Guide for creating MCP servers (FastMCP/Node SDK)
+
+**For Document Skills:**
+- **docx** - Word document creation/editing with tracked changes
+- **xlsx** - Spreadsheet creation/editing with formulas and analysis
+- **pptx** - Presentation creation/editing with layouts
+- **pdf** - PDF manipulation (extract, create, merge, split, forms)
+
+**For Development:**
+- **webapp-testing** - Playwright-based web app testing
+
+**For Design/Creative:**
+- **canvas-design** - Visual art creation in PNG/PDF documents
+- **algorithmic-art** - Generative art using p5.js
+- **slack-gif-creator** - Animated GIFs for Slack
+- **theme-factory** - Artifact styling with themes
+
+**For Business:**
+- **internal-comms** - Internal communications templates
+- **brand-guidelines** - Anthropic brand colors/typography
+
+### When to Use Anthropic Skills
+
+**In your plugin's SKILL.md files:**
+
+Reference Anthropic skills instead of duplicating their guidance:
+
+```markdown
+## Creating Skills
+
+For skill authoring guidance, use Anthropic's skill-creator skill:
+- Comprehensive workflow from planning to packaging
+- Bundled resources best practices
+- Progressive disclosure patterns
+- Validation and testing guidance
+
+To create a skill, invoke: "Use the skill-creator to help me create a new skill"
+```
+
+**In your plugin's documentation:**
+
+```markdown
+## Creating Components
+
+### Skills
+This plugin focuses on [your specific domain]. For general skill creation guidance,
+use Anthropic's @skill-creator skill from the example-skills plugin.
+
+### MCP Servers
+For creating new MCP servers, use Anthropic's @mcp-builder skill which provides
+comprehensive guidance on FastMCP (Python) and MCP SDK (Node/TypeScript).
+
+### Agents
+For creating agents, use the agent-creator skill from the plugin-developer plugin.
+```
+
+### Integration Pattern
+
+**Don't duplicate** - Reference Anthropic skills in your documentation:
+
+❌ **Bad - Duplicates Anthropic's guidance:**
+```markdown
+## How to Create a Skill
+
+To create a skill:
+1. Create a directory with SKILL.md
+2. Add YAML frontmatter with name and description
+3. Include scripts/, references/, and assets/ as needed
+[... 50 more lines duplicating skill-creator ...]
+```
+
+✅ **Good - References Anthropic skill:**
+```markdown
+## How to Create a Skill
+
+For comprehensive skill creation guidance, use Anthropic's skill-creator skill:
+
+\`\`\`
+"Use skill-creator to help me create a new skill for [your domain]"
+\`\`\`
+
+This plugin provides [your domain-specific] templates and examples to complement
+the general skill creation workflow.
+```
+
+### Benefits
+
+**Avoid duplication:**
+- Anthropic maintains canonical skill/MCP creation guidance
+- Your plugin focuses on domain-specific knowledge
+- Users get consistent, up-to-date best practices
+
+**Compose skills:**
+- Anthropic skills handle general component creation
+- Your plugin skills provide domain expertise
+- Users benefit from both working together
+
+**Stay current:**
+- Anthropic updates their skills with latest best practices
+- Your plugin doesn't need updates for component creation changes
+- Users always get current guidance
+
+### Example: Domain-Specific Plugin
+
+**Good pattern for a database plugin:**
+
+```markdown
+## Database Plugin Components
+
+### Creating Database Query Skills
+
+This plugin provides database-specific query patterns and schema documentation.
+For general skill creation guidance, use @skill-creator from Anthropic.
+
+**What this plugin provides:**
+- Database schema references
+- Query optimization patterns
+- Connection management examples
+- Domain-specific templates
+
+**What Anthropic's skills provide:**
+- Skill structure and creation workflow (@skill-creator)
+- MCP server creation for database connections (@mcp-builder)
+```
+
+---
+
 ### Step 6: Create Documentation
 
 Write comprehensive README.md for users.
