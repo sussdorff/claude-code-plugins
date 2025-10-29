@@ -12,6 +12,5 @@
     "sync",
     "rebase"
   ],
-  "category": "git-workflow",
   "license": "MIT"
 }
