@@ -9,7 +9,8 @@ charly-server-dev-tools/
 *.backup
 *~
 
-# Claude Code local configuration
+# Claude Code local configuration (symlink and directory)
+.claude
 .claude/
 
 # JIRA configuration (contains credentials)
