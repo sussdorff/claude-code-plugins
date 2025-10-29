@@ -1,0 +1,17 @@
+{
+  "name": "git-worktree-tools",
+  "version": "1.0.0",
+  "description": "Git worktree lifecycle management with configuration syncing",
+  "author": {
+    "name": "Malte Sussdorff",
+    "email": "malte.sussdorff@gmail.com"
+  },
+  "keywords": [
+    "git",
+    "worktree",
+    "workflow",
+    "management"
+  ],
+  "category": "git-workflow",
+  "license": "MIT"
+}

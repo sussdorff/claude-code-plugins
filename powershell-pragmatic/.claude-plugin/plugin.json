@@ -1,0 +1,17 @@
+{
+  "name": "powershell-pragmatic",
+  "version": "1.0.0",
+  "description": "Production-ready PowerShell patterns with PSScriptAnalyzer integration",
+  "author": {
+    "name": "Malte Sussdorff",
+    "email": "malte.sussdorff@gmail.com"
+  },
+  "keywords": [
+    "powershell",
+    "windows",
+    "scripting",
+    "best-practices"
+  ],
+  "category": "shell-scripting",
+  "license": "MIT"
+}

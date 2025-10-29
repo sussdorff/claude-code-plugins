@@ -1,0 +1,17 @@
+{
+  "name": "youtube-music-updater",
+  "version": "1.0.0",
+  "description": "Update YouTube Music desktop app from GitHub releases",
+  "author": {
+    "name": "Malte Sussdorff",
+    "email": "malte.sussdorff@gmail.com"
+  },
+  "keywords": [
+    "youtube-music",
+    "updater",
+    "macos",
+    "automation"
+  ],
+  "category": "productivity",
+  "license": "MIT"
+}

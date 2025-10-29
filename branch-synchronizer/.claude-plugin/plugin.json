@@ -1,0 +1,17 @@
+{
+  "name": "branch-synchronizer",
+  "version": "1.0.0",
+  "description": "Intelligent branch sync with conflict-aware rebasing",
+  "author": {
+    "name": "Malte Sussdorff",
+    "email": "malte.sussdorff@gmail.com"
+  },
+  "keywords": [
+    "git",
+    "branch",
+    "sync",
+    "rebase"
+  ],
+  "category": "git-workflow",
+  "license": "MIT"
+}

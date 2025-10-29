@@ -1,0 +1,18 @@
+{
+  "name": "timing-matcher",
+  "version": "1.0.0",
+  "description": "Process large Timing app JSON exports to match unassigned activities to projects using pattern recognition and git correlation",
+  "author": {
+    "name": "Malte Sussdorff",
+    "email": "malte.sussdorff@gmail.com"
+  },
+  "keywords": [
+    "timing",
+    "time-tracking",
+    "productivity",
+    "automation",
+    "pattern-matching"
+  ],
+  "category": "productivity",
+  "license": "MIT"
+}

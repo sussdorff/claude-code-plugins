@@ -1,0 +1,17 @@
+{
+  "name": "zsh-best-practices",
+  "version": "1.4.0",
+  "description": "macOS ZSH scripting best practices with automated function discovery",
+  "author": {
+    "name": "Malte Sussdorff",
+    "email": "malte.sussdorff@gmail.com"
+  },
+  "keywords": [
+    "zsh",
+    "macos",
+    "scripting",
+    "best-practices"
+  ],
+  "category": "shell-scripting",
+  "license": "MIT"
+}

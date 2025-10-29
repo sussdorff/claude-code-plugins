@@ -1,0 +1,18 @@
+{
+  "name": "bash-best-practices",
+  "version": "1.2.0",
+  "description": "Cross-platform Bash scripting with ShellCheck integration and tree-sitter function discovery",
+  "author": {
+    "name": "Malte Sussdorff",
+    "email": "malte.sussdorff@gmail.com"
+  },
+  "keywords": [
+    "bash",
+    "shellcheck",
+    "scripting",
+    "best-practices",
+    "cross-platform"
+  ],
+  "category": "shell-scripting",
+  "license": "MIT"
+}

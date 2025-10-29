@@ -1,0 +1,17 @@
+{
+  "name": "git-operations",
+  "version": "1.0.0",
+  "description": "Safe git operations with styleable commit messages and branch protection",
+  "author": {
+    "name": "Malte Sussdorff",
+    "email": "malte.sussdorff@gmail.com"
+  },
+  "keywords": [
+    "git",
+    "commit",
+    "safety",
+    "workflows"
+  ],
+  "category": "git-workflow",
+  "license": "MIT"
+}
