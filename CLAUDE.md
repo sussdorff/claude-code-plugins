@@ -131,3 +131,110 @@ When creating or updating Python scripts:
 - [ ] Use `#!/usr/bin/env python3` shebang
 - [ ] Verify no external dependencies in imports
 - [ ] Test script runs with `python3 script.py`
+
+## Project Structure and .claude Directories
+
+### Symlinked .claude Pattern
+
+This repository and related projects use a symlinked `.claude` directory pattern for centralized configuration management:
+
+**Pattern:**
+```
+~/code/solutio/charly-server/.claude -> ~/code/claude/charly-server/
+~/code/claude-code-plugins/.claude -> ~/code/claude/claude-code-plugins/
+```
+
+**Key Points:**
+- Project repositories (e.g., `~/code/solutio/charly-server/`) contain `.claude` symlinks
+- Actual `.claude` directories live in `~/code/claude/` (centralized location)
+- Multiple projects can share or have separate `.claude` configurations
+- Skills, commands, and settings are stored in the symlink target
+
+**When installing skills manually:**
+```bash
+# For charly-server project
+cp -r plugin/skills/skill-name ~/code/claude/charly-server/skills/
+
+# For this project
+cp -r plugin/skills/skill-name ~/code/claude/claude-code-plugins/skills/
+```
+
+## Plugin Skills Discovery Issue
+
+### Known Bug
+
+**Status:** There are active bugs in Claude Code with plugin skill discovery (Issues #9716, #9954).
+
+**Symptoms:**
+- Plugins install successfully with valid structure
+- Skills from plugins are not automatically discovered
+- Skills in `.claude/skills/` may not be recognized
+
+**Our Plugin Structure (CORRECT per documentation):**
+```
+plugin-name/
+├── .claude-plugin/
+│   └── plugin.json          # No 'category' field allowed
+└── skills/
+    └── skill-name/          # Skill subdirectory
+        ├── SKILL.md         # With YAML frontmatter
+        ├── references/
+        └── scripts/
+```
+
+**Workaround:**
+Until Claude Code fixes skill discovery, manually install skills to project `.claude/skills/` directories:
+
+```bash
+# Copy skill from plugin to project
+cp -r bash-best-practices/skills/bash-best-practices .claude/skills/
+
+# Or for symlinked .claude directories
+cp -r bash-best-practices/skills/bash-best-practices ~/code/claude/project-name/skills/
+```
+
+**Verification:**
+- Skills copied to `.claude/skills/` work reliably
+- Plugin skills discovery is inconsistent
+- Restart Claude Code after installing skills manually
+
+### Plugin Manifest Requirements
+
+**Valid plugin.json fields:**
+- `name` (required)
+- `version`
+- `description`
+- `author` (object with `name` and optional `email`)
+- `keywords` (array)
+- `license`
+
+**Invalid fields** (cause validation errors):
+- ❌ `category` - Only valid in marketplace.json, NOT plugin.json
+
+### Marketplace.json Pattern Options
+
+**Option 1: Anthropic Pattern (strict: false)**
+```json
+{
+  "name": "plugin-name",
+  "source": "./",
+  "strict": false,
+  "skills": ["./path/to/skill"]
+}
+```
+
+**Option 2: Proper Plugin Structure (strict: true, default)**
+```json
+{
+  "name": "plugin-name",
+  "source": "./plugin-name",
+  "category": "shell-scripting"  // Valid here, not in plugin.json
+}
+```
+
+**Current Status:**
+- This marketplace uses Option 2 (proper plugin structure)
+- Plugin structure is correct per documentation
+- Skill discovery bug prevents automatic loading
+- Manual installation workaround required until bug is fixed
+- ~/code/claude/ contains ".claude" directories which are dynamically linked. We we want to install into them, assume this is already the .claude directory
