@@ -93,6 +93,30 @@ cd skills/plugin-tester/scripts
 uv run validate-plugin.py  # Uses inline dependencies
 ```
 
+## MCP Configuration in Projects
+
+### Critical: `.mcp.json` Permission Acceptance
+
+**IMPORTANT**: If you have a local `.mcp.json` file in your project, you **MUST** run Claude Code without `--dangerously-skip-permissions` at least **once** in that project directory for it to accept and load the `.mcp.json` configuration.
+
+**Why this matters:**
+- `.mcp.json` files require explicit user trust/approval
+- Running with `--dangerously-skip-permissions` bypasses the permission dialog
+- Without the initial approval, MCP servers in `.mcp.json` won't be loaded
+- This only needs to be done once per project
+
+**Workflow:**
+1. Add/modify `.mcp.json` in your project
+2. Run `claude` (without `--dangerously-skip-permissions`) in that directory
+3. Accept the MCP server trust dialog when prompted
+4. After approval, you can use `--dangerously-skip-permissions` if desired
+5. Restart Claude Code to load the MCP servers
+
+**Troubleshooting:**
+- If MCP tools aren't available: Check if you've approved `.mcp.json`
+- If `claude mcp list` shows nothing: MCP servers might still work in the session
+- Check `.mcp.json` location: Must be at project root, not in `.claude/`
+
 ## Migration Checklist
 
 When creating or updating Python scripts:

@@ -1,0 +1,19 @@
+{
+  "name": "playwright-mcp",
+  "version": "1.0.0",
+  "description": "Complete Playwright MCP toolkit for browser automation with Microsoft Edge - includes installation, configuration, and comprehensive usage guidance for content extraction, form filling, and authenticated browsing",
+  "author": {
+    "name": "Malte"
+  },
+  "keywords": [
+    "playwright",
+    "browser-automation",
+    "web-scraping",
+    "content-extraction",
+    "mcp",
+    "edge",
+    "testing"
+  ],
+  "category": "automation",
+  "license": "MIT"
+}
