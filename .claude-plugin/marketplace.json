@@ -4,54 +4,99 @@
     "name": "Malte Sussdorff",
     "email": "malte.sussdorff@gmail.com"
   },
+  "metadata": {
+    "description": "Professional Claude Code plugins for shell scripting, git workflows, browser automation, and development tools",
+    "version": "2.0.0",
+    "repository": "https://github.com/sussdorff/claude-code-plugins"
+  },
   "plugins": [
     {
       "name": "bash-best-practices",
       "source": "./bash-best-practices",
       "description": "Cross-platform Bash scripting with ShellCheck integration and tree-sitter function discovery",
-      "version": "1.2.0"
+      "version": "1.2.0",
+      "category": "shell-scripting",
+      "keywords": ["bash", "shellcheck", "scripting", "best-practices", "cross-platform"]
     },
     {
       "name": "zsh-best-practices",
       "source": "./zsh-best-practices",
       "description": "macOS ZSH scripting best practices with automated function discovery",
-      "version": "1.4.0"
+      "version": "1.4.0",
+      "category": "shell-scripting",
+      "keywords": ["zsh", "macos", "scripting", "best-practices"]
     },
     {
       "name": "powershell-pragmatic",
       "source": "./powershell-pragmatic",
       "description": "Production-ready PowerShell patterns with PSScriptAnalyzer integration",
-      "version": "1.0.0"
+      "version": "1.0.0",
+      "category": "shell-scripting",
+      "keywords": ["powershell", "windows", "scripting", "best-practices"]
     },
     {
       "name": "git-operations",
       "source": "./git-operations",
       "description": "Safe git operations with styleable commit messages and branch protection",
-      "version": "1.0.0"
+      "version": "1.0.0",
+      "category": "git-workflow",
+      "keywords": ["git", "commit", "safety", "workflows"]
     },
     {
       "name": "git-worktree-tools",
       "source": "./git-worktree-tools",
       "description": "Git worktree lifecycle management with configuration syncing",
-      "version": "1.0.0"
+      "version": "1.0.0",
+      "category": "git-workflow",
+      "keywords": ["git", "worktree", "workflow", "management"]
     },
     {
       "name": "branch-synchronizer",
       "source": "./branch-synchronizer",
       "description": "Intelligent branch sync with conflict-aware rebasing",
-      "version": "1.0.0"
+      "version": "1.0.0",
+      "category": "git-workflow",
+      "keywords": ["git", "branch", "sync", "rebase"]
+    },
+    {
+      "name": "playwright-mcp",
+      "source": "./playwright-mcp",
+      "description": "Complete Playwright MCP toolkit for browser automation with Microsoft Edge",
+      "version": "1.0.0",
+      "category": "automation",
+      "keywords": ["playwright", "browser", "automation", "mcp", "edge", "testing"]
+    },
+    {
+      "name": "plugin-developer",
+      "source": "./plugin-developer",
+      "description": "Comprehensive toolkit for creating and managing Claude Code plugins, skills, commands, agents, hooks, and marketplaces",
+      "version": "1.0.0",
+      "category": "development-tools",
+      "keywords": ["plugin", "skill", "development", "tools", "marketplace", "agent", "hook"]
+    },
+    {
+      "name": "reference-file-compactor",
+      "source": "./reference-file-compactor",
+      "description": "Optimize and compact skill reference files using validation-driven workflow",
+      "version": "1.0.0",
+      "category": "development-tools",
+      "keywords": ["optimization", "reference", "skill", "compaction"]
+    },
+    {
+      "name": "timing-matcher",
+      "source": "./timing-matcher",
+      "description": "Process large Timing app JSON exports to match unassigned activities to projects using pattern recognition and git correlation",
+      "version": "1.0.0",
+      "category": "productivity",
+      "keywords": ["timing", "time-tracking", "productivity", "automation", "pattern-matching"]
     },
     {
       "name": "youtube-music-updater",
       "source": "./youtube-music-updater",
       "description": "Update YouTube Music desktop app from GitHub releases",
-      "version": "1.0.0"
-    },
-    {
-      "name": "skill-tester",
-      "source": "./skill-tester",
-      "description": "Test and validate skills during development",
-      "version": "1.0.0"
+      "version": "1.0.0",
+      "category": "productivity",
+      "keywords": ["youtube-music", "updater", "macos", "automation"]
     }
   ]
 }

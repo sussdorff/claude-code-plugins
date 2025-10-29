@@ -1,8 +1,10 @@
-# Claude Code Plugins
+# Claude Code Plugins Marketplace
 
-Professional Claude Code plugins for shell scripting, git workflows, and development automation.
+Professional Claude Code marketplace with 11 plugins and skills for shell scripting, git workflows, browser automation, and development tools.
 
 ## Installation
+
+### Quick Start
 
 Add this marketplace to Claude Code:
 
@@ -10,7 +12,46 @@ Add this marketplace to Claude Code:
 /plugin marketplace add sussdorff/claude-code-plugins
 ```
 
-Then browse and install individual plugins via the `/plugin` menu in Claude Code.
+Browse available plugins:
+
+```bash
+/plugin
+```
+
+Install specific plugins:
+
+```bash
+/plugin install plugin-name@claude-code-plugins
+```
+
+### Example Installation
+
+```bash
+# Add the marketplace
+/plugin marketplace add sussdorff/claude-code-plugins
+
+# Install bash best practices
+/plugin install bash-best-practices@claude-code-plugins
+
+# Install git workflow tools
+/plugin install git-operations@claude-code-plugins
+/plugin install git-worktree-tools@claude-code-plugins
+
+# Install plugin developer toolkit
+/plugin install plugin-developer@claude-code-plugins
+```
+
+## Marketplace Information
+
+This repository is configured as an official Claude Code marketplace containing 11 plugins and skills organized by category:
+
+- **Shell Scripting** (3): bash-best-practices, zsh-best-practices, powershell-pragmatic
+- **Git Workflow** (3): git-operations, git-worktree-tools, branch-synchronizer
+- **Automation** (1): playwright-mcp
+- **Development Tools** (2): plugin-developer, reference-file-compactor
+- **Productivity** (2): timing-matcher, youtube-music-updater
+
+All plugins are maintained in this monorepo with consistent structure and can be installed individually or as a collection.
 
 ## Available Plugins
 
@@ -108,7 +149,42 @@ See [branch-synchronizer/SKILL.md](./branch-synchronizer/SKILL.md)
 
 ---
 
+### Automation
+
+#### playwright-mcp (v1.0.0)
+
+Complete Playwright MCP toolkit for browser automation with Microsoft Edge.
+
+**Features:**
+- Automated Playwright MCP server installation and configuration
+- Project-specific .mcp.json setup with Edge browser
+- Content extraction and form filling capabilities
+- Authenticated browsing support
+- Testing workflow integration
+- Complete reference documentation and site presets
+
+See [playwright-mcp/README.md](./playwright-mcp/README.md)
+
+---
+
 ### Development Tools
+
+#### plugin-developer (v1.0.0)
+
+Comprehensive toolkit for creating and managing Claude Code plugins, skills, commands, agents, hooks, and marketplaces.
+
+**Features:**
+- **agent-creator**: Create specialized AI agents with custom prompts and tool access
+- **command-creator**: Build slash commands with parameter handling and model selection
+- **hook-creator**: Implement lifecycle hooks for security and workflow automation
+- **marketplace-manager**: Set up and manage plugin marketplaces
+- **plugin-creator**: Design complete plugins with multiple components
+- **plugin-tester**: Test plugins locally before distribution
+- **skill-tester**: Validate and install skills during development
+
+See [plugin-developer/README.md](./plugin-developer/README.md)
+
+---
 
 #### youtube-music-updater (v1.0.0)
 
@@ -155,13 +231,6 @@ Process large Timing app JSON exports to match unassigned activities to projects
 See [timing-matcher/SKILL.md](./timing-matcher/SKILL.md)
 
 ---
-
-## Coming Soon
-
-These plugins are under development and available in feature branches:
-
-- **shellspec-tester** (branch: `feature/shellspec-tester`) - BDD-style testing for shell scripts
-- **reference-file-compactor** (branch: `feature/reference-compactor`) - Optimize skill reference files
 
 ## Contributing
 
