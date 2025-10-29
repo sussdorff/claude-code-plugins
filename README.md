@@ -124,17 +124,35 @@ See [youtube-music-updater/SKILL.md](./youtube-music-updater/SKILL.md)
 
 ---
 
-#### skill-tester (v1.0.0)
+#### reference-file-compactor (v1.0.0)
 
-Test and validate skills during development.
+Optimize and compact skill reference files using validation-driven workflow.
 
 **Features:**
-- Automated skill installation to .claude/skills/
-- Skill validation tool (validate-skill.py)
-- Testing workflow documentation
-- Claude Code restart guidance
+- Single file or whole skill compaction
+- Validation-driven workflow
+- Context-aware compression
+- Maintains reference integrity
 
-See [skill-tester/SKILL.md](./skill-tester/SKILL.md)
+See [reference-file-compactor/SKILL.md](./reference-file-compactor/SKILL.md)
+
+---
+
+### Productivity Tools
+
+#### timing-matcher (v1.0.0)
+
+Process large Timing app JSON exports to match unassigned activities to projects using pattern recognition, git commit correlation, and intelligent aggregation.
+
+**Features:**
+- Handles 70k+ entries efficiently with incremental processing
+- Pattern extraction from training data (ticket prefixes, activity patterns)
+- Git commit correlation (±15 min window with commit SHA linking)
+- Intelligent activity aggregation with confidence scoring
+- Timing MCP server integration for bulk time entry creation
+- Duplicate detection and rate limit handling
+
+See [timing-matcher/SKILL.md](./timing-matcher/SKILL.md)
 
 ---
 

@@ -1,0 +1,89 @@
+{
+  "projectMappings": {
+    "ticketPrefixes": {
+      "CH2-": {
+        "projectName": "Entwicklung charly-server",
+        "projectId": "REPLACE-WITH-TIMING-PROJECT-ID",
+        "description": "Charly server development tickets"
+      },
+      "FALL-": {
+        "projectName": "Fallklärung",
+        "projectId": "REPLACE-WITH-TIMING-PROJECT-ID",
+        "description": "Case clarification tasks"
+      },
+      "CHAR-": {
+        "projectName": "Entwicklung charly-server",
+        "projectId": "REPLACE-WITH-TIMING-PROJECT-ID",
+        "description": "Alternative charly server ticket prefix"
+      }
+    },
+    "activityPatterns": [
+      {
+        "pattern": "Daily Fuchs",
+        "regex": false,
+        "projectName": "Füchse Allgemein",
+        "projectId": "REPLACE-WITH-TIMING-PROJECT-ID",
+        "description": "Daily team standup meetings"
+      },
+      {
+        "pattern": "Chat \\| Fuchsbau",
+        "regex": true,
+        "projectName": "Füchse Allgemein",
+        "projectId": "REPLACE-WITH-TIMING-PROJECT-ID",
+        "description": "Team chat activities in Fuchsbau channel"
+      },
+      {
+        "pattern": "Container.*Update",
+        "regex": true,
+        "projectName": "Container Support",
+        "projectId": "REPLACE-WITH-TIMING-PROJECT-ID",
+        "description": "Container infrastructure updates and discussions"
+      },
+      {
+        "pattern": "elysium",
+        "regex": false,
+        "projectName": "Spaß Haben",
+        "projectId": "REPLACE-WITH-TIMING-PROJECT-ID",
+        "description": "Gaming and personal fun time"
+      },
+      {
+        "pattern": "Aktivitäten",
+        "regex": false,
+        "projectName": "cognovis Verwaltung",
+        "projectId": "REPLACE-WITH-TIMING-PROJECT-ID",
+        "description": "Administrative activities"
+      }
+    ],
+    "ignorePatterns": [
+      "Systemeinstellungen",
+      "Bluetooth",
+      "Finder",
+      "Spotlight",
+      "^\\d+$",
+      "^\\d{3} \\d{3} \\d{3}$",
+      "^[a-f0-9]{8,}$"
+    ]
+  },
+  "matching": {
+    "minDurationSeconds": 30,
+    "maxGapMinutes": 15,
+    "commitTimeWindowMinutes": 15,
+    "confidenceThresholds": {
+      "high": 0.85,
+      "medium": 0.6,
+      "low": 0.3
+    }
+  },
+  "gitRepos": [
+    {
+      "path": "~/code/solutio/charly-server",
+      "ticketPrefixes": ["CH2-", "CHAR-"],
+      "description": "Main charly server repository"
+    }
+  ],
+  "output": {
+    "includeSourceActivities": true,
+    "includeCommitShas": true,
+    "groupByProject": true
+  }
+}
