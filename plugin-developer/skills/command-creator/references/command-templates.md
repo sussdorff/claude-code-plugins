@@ -38,7 +38,7 @@ Quick git status check and commit workflow for daily development.
 ---
 description: Show git status and help create commit
 allowed-tools: Bash(git:*)
-model: claude-3-5-haiku-20241022
+model: haiku
 ---
 
 Quick git workflow:
@@ -78,7 +78,7 @@ Run complete test suite with coverage and reporting.
 ---
 description: Run complete test suite with coverage
 allowed-tools: Bash(npm:*), Bash(pnpm:*), Read, Glob
-model: claude-3-5-haiku-20241022
+model: haiku
 ---
 
 Run comprehensive test suite:
@@ -483,7 +483,7 @@ Validate all changes before committing to ensure quality.
 ---
 description: Validate changes before committing
 allowed-tools: Bash(git:*), Bash(npm:*), Bash(pnpm:*), Read, Grep
-model: claude-3-5-haiku-20241022
+model: haiku
 ---
 
 Pre-commit validation:
@@ -981,7 +981,7 @@ Comprehensive security review of codebase.
 ---
 description: Comprehensive security audit of codebase
 allowed-tools: Bash(npm:*), Read, Grep, Glob
-model: claude-opus-4-20250514
+model: opus
 ---
 
 Security audit:
@@ -1081,7 +1081,7 @@ Analyze application performance and identify bottlenecks.
 description: Analyze application performance
 argument-hint: [@component or "full"]
 allowed-tools: Bash(npm:*), Read, Grep, Glob
-model: claude-3-7-sonnet-20250219
+model: sonnet
 ---
 
 Performance analysis: $ARGUMENTS

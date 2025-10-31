@@ -533,7 +533,7 @@ Review PR #$1 with priority: ${2:-medium}
 ```markdown
 ---
 description: Complex architectural analysis
-model: claude-3-5-haiku-20241022
+model: haiku
 ---
 
 Analyze architecture and suggest improvements...
@@ -543,7 +543,7 @@ Analyze architecture and suggest improvements...
 ```markdown
 ---
 description: Complex architectural analysis
-model: claude-opus-4-20250514
+model: opus
 ---
 ```
 
@@ -562,7 +562,7 @@ model: claude-opus-4-20250514
 ```markdown
 ---
 description: Run linter
-model: claude-opus-4-20250514
+model: opus
 ---
 
 Run npm run lint
@@ -572,7 +572,7 @@ Run npm run lint
 ```markdown
 ---
 description: Run linter
-model: claude-3-5-haiku-20241022
+model: haiku
 ---
 ```
 
@@ -596,12 +596,12 @@ description: Standard code review
 ```markdown
 # Specify Haiku for speed
 ---
-model: claude-3-5-haiku-20241022
+model: haiku
 ---
 
 # Specify Opus for complexity
 ---
-model: claude-opus-4-20250514
+model: opus
 ---
 ```
 
@@ -621,9 +621,9 @@ model: sonnet-3.7
 **Correct:**
 ```markdown
 ---
-model: claude-3-5-haiku-20241022
-model: claude-3-7-sonnet-20250219
-model: claude-opus-4-20250514
+model: haiku
+model: sonnet
+model: opus
 ---
 ```
 
@@ -727,7 +727,7 @@ python3 plugin-developer/skills/command-creator/scripts/validate-command.py .cla
 ```markdown
 # Change from Opus to Haiku for simple tasks
 ---
-model: claude-3-5-haiku-20241022
+model: haiku
 ---
 ```
 

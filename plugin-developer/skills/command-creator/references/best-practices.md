@@ -377,7 +377,7 @@ allowed-tools: Read, Edit, Grep
 **Examples:**
 ```markdown
 ---
-model: claude-3-5-haiku-20241022
+model: haiku
 ---
 
 # Good Haiku tasks:
@@ -406,7 +406,7 @@ model: claude-3-5-haiku-20241022
 **Examples:**
 ```markdown
 ---
-model: claude-3-7-sonnet-20250219
+model: sonnet
 ---
 
 # Good Sonnet tasks:
@@ -435,7 +435,7 @@ model: claude-3-7-sonnet-20250219
 **Examples:**
 ```markdown
 ---
-model: claude-opus-4-20250514
+model: opus
 ---
 
 # Good Opus tasks:
@@ -482,7 +482,7 @@ description: Standard code review
 # Over-thinking it
 ---
 description: Standard code review
-model: claude-opus-4-20250514
+model: opus
 ---
 ```
 

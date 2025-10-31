@@ -105,7 +105,7 @@ Summary: Actionable priorities for today
 ```markdown
 ---
 description: Quick morning check
-model: claude-3-5-haiku-20241022
+model: haiku
 ---
 
 Quick check:
@@ -177,7 +177,7 @@ Validate all changes before committing to ensure quality and standards.
 ---
 description: Validate changes before committing
 allowed-tools: Bash(git:*), Bash(npm:*), Read, Grep
-model: claude-3-5-haiku-20241022
+model: haiku
 ---
 
 Pre-commit validation:
@@ -246,7 +246,7 @@ Pre-commit validation:
 ```markdown
 ---
 description: Quick pre-commit validation
-model: claude-3-5-haiku-20241022
+model: haiku
 ---
 
 Fast validation:
@@ -444,7 +444,7 @@ Rapidly fix small bugs or issues with minimal overhead.
 description: Quick fix for small issues
 argument-hint: [description]
 allowed-tools: Bash(git:*), Edit, Read, Grep
-model: claude-3-5-haiku-20241022
+model: haiku
 ---
 
 Quick fix: $ARGUMENTS
@@ -832,7 +832,7 @@ Systematic approach to handling production incidents and outages.
 description: Respond to production incident
 argument-hint: [incident-description]
 allowed-tools: Bash(git:*), Bash(gh:*), Read, Grep
-model: claude-3-7-sonnet-20250219
+model: sonnet
 ---
 
 Incident response: $ARGUMENTS
@@ -1079,7 +1079,7 @@ Summary: Code quality score and action items
 ```markdown
 ---
 description: Fast code quality scan
-model: claude-3-5-haiku-20241022
+model: haiku
 ---
 
 Quick quality check:
@@ -1093,7 +1093,7 @@ Quick quality check:
 ```markdown
 ---
 description: Thorough code quality audit
-model: claude-opus-4-20250514
+model: opus
 ---
 
 Deep audit:

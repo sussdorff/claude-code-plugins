@@ -1404,7 +1404,7 @@ Commands can maintain context and state across steps.
 ---
 description: Comprehensive PR review with intelligent adaptation
 argument-hint: [PR-number] [priority]
-model: claude-3-7-sonnet-20250219
+model: sonnet
 allowed-tools: Bash(gh:*), Bash(git:*), Read, Grep, Glob
 ---
 

@@ -170,17 +170,17 @@ Choose appropriate model and configure tool access.
 
 **Model selection:**
 
-**claude-3-5-haiku-20241022** (faster, cheaper):
+**haiku** (faster, cheaper):
 - Simple, well-defined tasks
 - Routine workflows (linting, testing, formatting)
 - Example: `/lint-fix`, `/run-tests`
 
-**claude-3-7-sonnet-20250219** (default, balanced):
+**sonnet** (default, balanced):
 - Standard workflows with moderate complexity
 - Most commands fit here
 - Example: `/review-pr`, `/fix-issue`
 
-**claude-opus-4-20250514** (most capable, slower):
+**opus** (most capable, slower):
 - Complex problem-solving
 - Architectural decisions
 - Example: `/design-system`, `/security-audit`
@@ -229,7 +229,7 @@ model: [model-id if overriding default]
 ---
 description: Run all pre-commit checks
 allowed-tools: Bash(npm:*)
-model: claude-3-5-haiku-20241022
+model: haiku
 ---
 
 Run checks in order:
@@ -342,16 +342,16 @@ Test command immediately (available as soon as saved).
 description: Brief explanation (shows in /help)   # Required
 argument-hint: [expected arguments]               # Optional
 allowed-tools: Read, Bash(git:*)                  # Optional (omit for all)
-model: claude-3-7-sonnet-20250219                 # Optional (default: sonnet)
+model: sonnet                                      # Optional (default: sonnet)
 ---
 ```
 
 ### Model Selection
 
 ```yaml
-model: claude-3-5-haiku-20241022       # Fast, routine tasks
-model: claude-3-7-sonnet-20250219      # Balanced (default)
-model: claude-opus-4-20250514          # Complex reasoning
+model: haiku       # Fast, routine tasks
+model: sonnet      # Balanced (default)
+model: opus        # Complex reasoning
 ```
 
 ### Tool Access Patterns

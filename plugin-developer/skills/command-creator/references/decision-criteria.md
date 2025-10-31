@@ -270,7 +270,7 @@ Morning routine:
 ---
 description: Validate changes before committing
 allowed-tools: Bash(git:*), Bash(npm:*)
-model: claude-3-5-haiku-20241022
+model: haiku
 ---
 
 Pre-commit validation:
