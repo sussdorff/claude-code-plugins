@@ -1,0 +1,10 @@
+{
+  "name": "skill-forge",
+  "description": "Quality-focused skill development toolkit with scoring, auditing, and refactoring for Claude Code skills",
+  "version": "1.0.0",
+  "author": {
+    "name": "Malte Sussdorff",
+    "email": "malte.sussdorff@gmail.com"
+  },
+  "repository": "https://github.com/sussdorff/claude-code-plugins"
+}

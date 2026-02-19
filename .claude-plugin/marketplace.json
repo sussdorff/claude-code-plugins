@@ -97,6 +97,22 @@
       "version": "1.0.0",
       "category": "productivity",
       "keywords": ["youtube-music", "updater", "macos", "automation"]
+    },
+    {
+      "name": "test-orchestrator",
+      "source": "./test-orchestrator",
+      "description": "Multi-language test generation orchestrator that routes changed files to appropriate language-specific test generation commands (Bash, PowerShell, ZSH)",
+      "version": "1.0.0",
+      "category": "development-tools",
+      "keywords": ["testing", "test-generation", "shellspec", "pester", "bash", "powershell", "zsh", "multi-language", "orchestrator", "tdd"]
+    },
+    {
+      "name": "skill-forge",
+      "source": "./skill-forge",
+      "description": "Quality-focused skill development toolkit with scoring, auditing, and refactoring for Claude Code skills",
+      "version": "1.0.0",
+      "category": "development-tools",
+      "keywords": ["skill", "quality", "review", "audit", "refactoring", "scoring", "development"]
     }
   ]
 }
