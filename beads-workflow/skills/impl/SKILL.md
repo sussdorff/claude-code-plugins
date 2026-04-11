@@ -162,7 +162,7 @@ Execute integration tests from the Test Plan to validate user-facing behavior.
 
 **Option A: Project has integration-test-runner agent**
 ```
-Use Task tool with subagent_type="integration-test-runner"
+Use Task tool with subagent_type="dev-tools:integration-test-runner"
 Prompt: "Run integration tests. Test Plan: [section]. Changed files: [list]."
 ```
 
@@ -198,7 +198,7 @@ If the plan affects user-visible behavior:
 
 Use the `doc-changelog-updater` agent if available:
 ```
-Task with subagent_type="doc-changelog-updater"
+Task with subagent_type="beads-workflow:doc-changelog-updater"
 ```
 
 ### User Documentation
@@ -255,7 +255,7 @@ Use `test-engineer` agent to verify:
 - Tests are environment-independent
 
 ```
-Task with subagent_type="test-engineer"
+Task with subagent_type="dev-tools:test-engineer"
 Prompt: "Verify unit tests exist and adequately cover all changed behavior.
 Changed files: [list from git diff --name-only]. Report any gaps."
 ```
@@ -279,7 +279,7 @@ Use `doc-changelog-updater` agent to verify:
 - No inconsistencies between docs and implementation
 
 ```
-Task with subagent_type="doc-changelog-updater"
+Task with subagent_type="beads-workflow:doc-changelog-updater"
 Prompt: "Verify documentation accurately reflects code changes. Report inconsistencies."
 ```
 

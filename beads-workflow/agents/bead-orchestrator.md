@@ -592,7 +592,7 @@ bd update {BEAD_ID} --append-notes="Token capture: {TOTAL_TOKENS} total tokens (
 Spawn the `verification-agent` to independently verify the implementer's Completion Report:
 
 ```
-Agent(subagent_type="verification-agent", prompt="""
+Agent(subagent_type="beads-workflow:verification-agent", prompt="""
 ## Verification Context
 - bead_id: <BEAD_ID>
 - acceptance_criteria: |
@@ -752,7 +752,7 @@ leave bead `in_progress`, report to user. Do not close the bead.
 
 ### Phase 4b: UAT Validation (PAUL mode only)
 
-Spawn the `uat-validator` agent (`subagent_type: 'uat-validator'`) **only if routing decision was PAUL mode**.
+Spawn the `uat-validator` agent (`subagent_type: 'dev-tools:uat-validator'`) **only if routing decision was PAUL mode**.
 
 **Skip entirely if:**
 - Routing was GSD mode

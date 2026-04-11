@@ -233,7 +233,7 @@ Before the independent review, stress-test the plan with a targeted pre-mortem:
 Launch a separate agent to review the plan:
 
 ```
-Use Task tool with subagent_type="plan-reviewer"
+Use Task tool with subagent_type="beads-workflow:plan-reviewer"
 
 Prompt: "Review the implementation plan at [PLAN_PATH].
 Read the ticket context at [CONTEXT_SOURCE].
