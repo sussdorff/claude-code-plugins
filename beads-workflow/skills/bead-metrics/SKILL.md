@@ -28,8 +28,8 @@ Run the query script:
 
 ```bash
 uv run python -c "
-import sys
-sys.path.insert(0, '/Users/malte/code/claude')
+import os, sys
+sys.path.insert(0, os.path.join(os.environ['CLAUDE_PLUGIN_ROOT'], 'lib'))
 from orchestrator.metrics import query_report
 # Replace with actual parsed args:
 # e.g. print(query_report(top=5))
@@ -43,7 +43,7 @@ print(query_report())
 Full report:
 ```bash
 uv run python -c "
-import sys; sys.path.insert(0, '/Users/malte/code/claude')
+import os, sys; sys.path.insert(0, os.path.join(os.environ['CLAUDE_PLUGIN_ROOT'], 'lib'))
 from orchestrator.metrics import query_report
 print(query_report())
 "
@@ -52,7 +52,7 @@ print(query_report())
 Top 5 most expensive:
 ```bash
 uv run python -c "
-import sys; sys.path.insert(0, '/Users/malte/code/claude')
+import os, sys; sys.path.insert(0, os.path.join(os.environ['CLAUDE_PLUGIN_ROOT'], 'lib'))
 from orchestrator.metrics import query_report
 print(query_report(top=5))
 "
@@ -61,7 +61,7 @@ print(query_report(top=5))
 Single bead detail:
 ```bash
 uv run python -c "
-import sys; sys.path.insert(0, '/Users/malte/code/claude')
+import os, sys; sys.path.insert(0, os.path.join(os.environ['CLAUDE_PLUGIN_ROOT'], 'lib'))
 from orchestrator.metrics import query_report
 print(query_report(bead_id='claude-i7it'))
 "
@@ -102,8 +102,7 @@ Avg impl:review ratio: 2.8:1
 
 ## Error Handling
 
-If the script fails (import error, DB locked), report the error message and suggest running:
-```bash
-uv run pytest tests/orchestrator/test_metrics.py -v
-```
-to verify the metrics module is healthy.
+If the script fails (import error, DB locked), report the error message. Common causes:
+- `CLAUDE_PLUGIN_ROOT` env var not set — the beads-workflow plugin is not active
+- `~/.claude/metrics.db` does not exist — no bead has been tracked yet
+- `orchestrator.metrics` import fails — the `lib/` directory inside the plugin is missing or corrupt

@@ -52,7 +52,7 @@ Spawn a `researcher` subagent to collect data from three sources in parallel:
 
 2. **Bead metrics report**:
    ```bash
-   uv run python -c "import sys; sys.path.insert(0, '/Users/malte/code/claude'); from orchestrator.metrics import query_report; print(query_report())"
+   uv run python -c "import os, sys; sys.path.insert(0, os.path.join(os.environ['CLAUDE_PLUGIN_ROOT'], 'lib')); from orchestrator.metrics import query_report; print(query_report())"
    ```
 
 3. **Git log** (last 14 days, all branches):

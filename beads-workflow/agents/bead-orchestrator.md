@@ -552,8 +552,8 @@ After the review loop completes, persist token usage to `~/.claude/metrics.db` f
 **Write the row:**
 ```bash
 uv run python -c "
-import sys
-sys.path.insert(0, '/Users/malte/code/claude')
+import os, sys
+sys.path.insert(0, os.path.join(os.environ['CLAUDE_PLUGIN_ROOT'], 'lib'))
 from orchestrator.metrics import init_db, insert_bead_run, BeadRun
 from datetime import date
 
