@@ -7,7 +7,17 @@ Each skill is versioned independently. Versions are assigned when skills are rel
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## 2026-04-11
+## 2026.04.5 — 2026-04-11
+
+### Changed
+
+- **beads-workflow/cmux-reviewer**: Replace flat adversarial-on-every-iteration loop with a
+  three-stage escalation ladder (challenge → adversarial-verify → neutral sanity check).
+  Adds bead-scope classification rules (REGRESSION / PRE_EXISTING / OUT_OF_SCOPE) so only
+  genuine regressions become fix-injection candidates. Adds an oscillation detector that stops
+  the loop when the same file+symbol is flagged across consecutive iterations (design signal,
+  not a fix-refinement cycle) and escalates to the user. Hard stop at iteration 3 — no iter 4
+  ever, even on user request.
 
 ### Fixed
 
