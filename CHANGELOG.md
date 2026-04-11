@@ -7,6 +7,24 @@ Each skill is versioned independently. Versions are assigned when skills are rel
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## 2026.04.6 — 2026-04-11
+
+### Fixed
+
+- **beads-workflow**: Bundle `orchestrator/` Python library as `beads-workflow/lib/orchestrator/`
+  so Phase 3.6 Token Capture, the bead-metrics skill, and the retro workflow work without
+  requiring the `/Users/malte/code/claude` legacy path on the host machine.
+  All three import sites now use `os.path.join(os.environ['CLAUDE_PLUGIN_ROOT'], 'lib')`
+  instead of a hardcoded absolute path.
+- **beads-workflow/gate.py**: Drop hardcoded `malte.skills.council` import. The regex-based
+  severity classifier (`_classify_severity`) is now the primary implementation — no coupling
+  to the host's `~/.claude` tree.
+
+### Chore
+
+- Remove stray `~/.claude` harness-test files (`validator/`, `tests/`, `docs/`, `tools/`,
+  `conftest.py`, `pyproject.toml`, `uv.lock`) that had drifted into this plugin repo.
+
 ## 2026.04.5 — 2026-04-11
 
 ### Changed
