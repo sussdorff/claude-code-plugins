@@ -7,6 +7,16 @@ Each skill is versioned independently. Versions are assigned when skills are rel
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## 2026-04-11
+
+### Fixed
+
+- **beads-workflow**: Use fully qualified plugin namespace for all `subagent_type` references.
+  Short names like `verification-agent`, `uat-validator`, `doc-changelog-updater`,
+  `integration-test-runner`, `test-engineer`, and `plan-reviewer` were not resolving correctly
+  without their plugin prefix. All references now use `plugin:agent` format (e.g.
+  `beads-workflow:verification-agent`, `dev-tools:uat-validator`).
+
 ## 2025-10-22
 
 ### bash-best-practices v1.2.0
