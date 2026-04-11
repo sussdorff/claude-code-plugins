@@ -1,6 +1,12 @@
 {
   "name": "content",
-  "version": "1.0.0",
-  "description": "Content creation and social — LinkedIn automation, brand/voice profiles, Pencil UI design, audio transcription, cmux browser/markdown",
-  "keywords": ["content", "linkedin", "design", "transcription", "brand", "social"]
+  "description": "Content creation and social \u2014 LinkedIn automation, brand/voice profiles, Pencil UI design, audio transcription, cmux browser/markdown",
+  "keywords": [
+    "content",
+    "linkedin",
+    "design",
+    "transcription",
+    "brand",
+    "social"
+  ]
 }

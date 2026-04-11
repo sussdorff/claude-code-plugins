@@ -127,7 +127,7 @@ else
     git -C "$REPO_ROOT" add "$SUSHI_CONFIG"
   fi
 
-  # Sync version into plugin/.claude-plugin/plugin.json if present
+  # Sync version into plugin/.claude-plugin/plugin.json if present (single-plugin layout)
   PLUGIN_JSON="$REPO_ROOT/plugin/.claude-plugin/plugin.json"
   if [[ -f "$PLUGIN_JSON" ]]; then
     sed -i '' "s/\"version\": \".*\"/\"version\": \"$NEXT_VERSION\"/" "$PLUGIN_JSON"
