@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
 # Sync all sussdorff-plugins to Claude Code plugin cache.
-# Run after editing skills/agents in this repo.
+# Manual full-sync — updates all plugins regardless of what changed.
+# For targeted sync (changed plugins only), session-close runs
+# handlers/sync-plugin-cache.sh automatically after each commit.
 set -euo pipefail
 
 MARKETPLACE="sussdorff-plugins"
