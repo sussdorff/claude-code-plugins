@@ -1,0 +1,6 @@
+{
+  "name": "medical",
+  "version": "1.0.0",
+  "description": "Healthcare and FHIR — Mira-specific Aidbox config, billing review, compliance auditing (GDPR/EU AI Act), clinical UX human-factors review",
+  "keywords": ["medical", "fhir", "aidbox", "mira", "compliance", "gdpr", "clinical"]
+}

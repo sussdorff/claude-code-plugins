@@ -1,118 +1,78 @@
 {
-  "name": "claude-code-plugins",
+  "name": "sussdorff-plugins",
   "owner": {
     "name": "Malte Sussdorff",
     "email": "malte.sussdorff@gmail.com"
   },
   "metadata": {
-    "description": "Professional Claude Code plugins for shell scripting, git workflows, browser automation, and development tools",
-    "version": "2.0.0",
+    "description": "Personal Claude Code plugin bundles — infrastructure, business, content, medical, dev-tools, and harness maintenance",
+    "version": "3.0.0",
     "repository": "https://github.com/sussdorff/claude-code-plugins"
   },
   "plugins": [
     {
-      "name": "bash-best-practices",
-      "source": "./bash-best-practices",
-      "description": "Cross-platform Bash scripting with ShellCheck integration and tree-sitter function discovery",
-      "version": "1.2.0",
-      "category": "shell-scripting",
-      "keywords": ["bash", "shellcheck", "scripting", "best-practices", "cross-platform"]
-    },
-    {
-      "name": "zsh-best-practices",
-      "source": "./zsh-best-practices",
-      "description": "macOS ZSH scripting best practices with automated function discovery",
-      "version": "1.4.0",
-      "category": "shell-scripting",
-      "keywords": ["zsh", "macos", "scripting", "best-practices"]
-    },
-    {
-      "name": "powershell-pragmatic",
-      "source": "./powershell-pragmatic",
-      "description": "Production-ready PowerShell patterns with PSScriptAnalyzer integration",
+      "name": "infra",
+      "source": "./infra",
+      "description": "Infrastructure management — Hetzner Cloud, UniFi, home network, VMs, document archives, and deployment principles",
       "version": "1.0.0",
-      "category": "shell-scripting",
-      "keywords": ["powershell", "windows", "scripting", "best-practices"]
+      "category": "infrastructure",
+      "keywords": ["infrastructure", "hetzner", "unifi", "network", "server", "deployment"]
     },
     {
-      "name": "git-operations",
-      "source": "./git-operations",
-      "description": "Safe git operations with styleable commit messages and branch protection",
+      "name": "business",
+      "source": "./business",
+      "description": "Business operations — proposals, invoicing, accounting, Amazon orders, 1Password credentials, email automation",
       "version": "1.0.0",
-      "category": "git-workflow",
-      "keywords": ["git", "commit", "safety", "workflows"]
+      "category": "business",
+      "keywords": ["business", "invoicing", "accounting", "amazon", "1password", "proposals"]
     },
     {
-      "name": "git-worktree-tools",
-      "source": "./git-worktree-tools",
-      "description": "Git worktree lifecycle management with configuration syncing",
+      "name": "content",
+      "source": "./content",
+      "description": "Content creation and social — LinkedIn automation, brand profiles, Pencil UI design, audio transcription",
       "version": "1.0.0",
-      "category": "git-workflow",
-      "keywords": ["git", "worktree", "workflow", "management"]
+      "category": "content",
+      "keywords": ["content", "linkedin", "design", "transcription", "brand", "social"]
     },
     {
-      "name": "branch-synchronizer",
-      "source": "./branch-synchronizer",
-      "description": "Intelligent branch sync with conflict-aware rebasing",
+      "name": "medical",
+      "source": "./medical",
+      "description": "Healthcare and FHIR — Mira Aidbox config, billing review, compliance auditing, clinical UX human-factors review",
       "version": "1.0.0",
-      "category": "git-workflow",
-      "keywords": ["git", "branch", "sync", "rebase"]
+      "category": "healthcare",
+      "keywords": ["medical", "fhir", "aidbox", "mira", "compliance", "gdpr", "clinical"]
     },
     {
-      "name": "playwright-mcp",
-      "source": "./playwright-mcp",
-      "description": "Complete Playwright MCP toolkit for browser automation with Microsoft Edge",
+      "name": "dev-tools",
+      "source": "./dev-tools",
+      "description": "Development tooling — playwright-cli, bug-triage, codex, project-health, project-setup, spec-developer, test agents",
       "version": "1.0.0",
-      "category": "automation",
-      "keywords": ["playwright", "browser", "automation", "mcp", "edge", "testing"]
+      "category": "development",
+      "keywords": ["development", "testing", "codex", "playwright", "bug-triage", "scaffolding"]
     },
     {
-      "name": "plugin-developer",
-      "source": "./plugin-developer",
-      "description": "Comprehensive toolkit for creating and managing Claude Code plugins, skills, commands, agents, hooks, and marketplaces",
+      "name": "meta",
+      "source": "./meta",
+      "description": "Harness authoring and audit — agent/hook/skill/plugin creation, entropy scan, NBJ audit, system prompt audit, token cost, CLAUDE.md pruning, standards sync",
       "version": "1.0.0",
-      "category": "development-tools",
-      "keywords": ["plugin", "skill", "development", "tools", "marketplace", "agent", "hook"]
+      "category": "tooling",
+      "keywords": ["meta", "harness", "authoring", "audit", "agents", "hooks", "skills", "plugins"]
     },
     {
-      "name": "reference-file-compactor",
-      "source": "./reference-file-compactor",
-      "description": "Optimize and compact skill reference files using validation-driven workflow",
+      "name": "core",
+      "source": "./core",
+      "description": "Essential skills for every session — beads, dolt, standards, cmux, prompt-refiner, summarize, vision, event-log",
       "version": "1.0.0",
-      "category": "development-tools",
-      "keywords": ["optimization", "reference", "skill", "compaction"]
+      "category": "core",
+      "keywords": ["core", "beads", "dolt", "standards", "cmux", "essential"]
     },
     {
-      "name": "timing-matcher",
-      "source": "./timing-matcher",
-      "description": "Process large Timing app JSON exports to match unassigned activities to projects using pattern recognition and git correlation",
+      "name": "beads-workflow",
+      "source": "./beads-workflow",
+      "description": "Beads orchestration and lifecycle — wave-orchestrator, epic-init, retro, compound, bead-metrics, workplan, intake",
       "version": "1.0.0",
-      "category": "productivity",
-      "keywords": ["timing", "time-tracking", "productivity", "automation", "pattern-matching"]
-    },
-    {
-      "name": "youtube-music-updater",
-      "source": "./youtube-music-updater",
-      "description": "Update YouTube Music desktop app from GitHub releases",
-      "version": "1.0.0",
-      "category": "productivity",
-      "keywords": ["youtube-music", "updater", "macos", "automation"]
-    },
-    {
-      "name": "test-orchestrator",
-      "source": "./test-orchestrator",
-      "description": "Multi-language test generation orchestrator that routes changed files to appropriate language-specific test generation commands (Bash, PowerShell, ZSH)",
-      "version": "1.0.0",
-      "category": "development-tools",
-      "keywords": ["testing", "test-generation", "shellspec", "pester", "bash", "powershell", "zsh", "multi-language", "orchestrator", "tdd"]
-    },
-    {
-      "name": "skill-forge",
-      "source": "./skill-forge",
-      "description": "Quality-focused skill development toolkit with scoring, auditing, and refactoring for Claude Code skills",
-      "version": "1.0.0",
-      "category": "development-tools",
-      "keywords": ["skill", "quality", "review", "audit", "refactoring", "scoring", "development"]
+      "category": "workflow",
+      "keywords": ["beads", "workflow", "orchestration", "retro", "epic", "planning"]
     }
   ]
 }

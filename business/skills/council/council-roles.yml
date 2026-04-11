@@ -1,0 +1,59 @@
+# Default council role profiles for different document types
+# Adapted from K2SO /council command
+# Each profile_type has exactly 4 roles with: name, description, focus
+
+requirements:
+  - name: End-User
+    description: "UX-Friction, Verstaendlichkeit, fehlende Szenarien, Accessibility"
+    focus: "Usability, missing error states, confusing flows, accessibility gaps"
+  - name: Developer
+    description: "Implementierbarkeit, Edge Cases, technische Schulden, fehlende Details"
+    focus: "Implementation gaps, missing details, edge cases, technical debt"
+  - name: Security Reviewer
+    description: "Auth, Datenschutz, Input-Validierung, OWASP"
+    focus: "Security gaps, missing auth checks, data exposure, input validation"
+  - name: Product Owner
+    description: "Scope Creep, MVP-Disziplin, Priorisierung, fehlende AKs"
+    focus: "Scope creep, missing acceptance criteria, MVP fit, prioritization"
+
+training:
+  - name: Learning Designer
+    description: "Didaktik, Lernziele, Sequenzierung, Methodenmix"
+    focus: "Learning objectives clarity, didactic sequencing, method variety"
+  - name: Teilnehmer-Anwalt
+    description: "Zielgruppen-Passung, Komplexitaet, Vorwissen, Ueberforderung"
+    focus: "Audience fit, cognitive overload, prerequisite knowledge gaps"
+  - name: Facilitator
+    description: "Timing, Durchfuehrbarkeit, Energie-Management, Gruppendynamik"
+    focus: "Time feasibility, group dynamics, energy management, facilitation gaps"
+  - name: Auftraggeber
+    description: "Business-ROI, strategische Passung, messbare Ergebnisse"
+    focus: "Business ROI, strategic alignment, measurable outcomes"
+
+healthcare:
+  - name: Compliance Reviewer
+    description: "GDPR, EU AI Act, NIS2, healthcare privacy controls, processor boundaries, data minimization"
+    focus: "Health data classification (Art. 9 GDPR), missing DPAs, audit trail gaps, secrets exposure, retention/deletion, AI Act human oversight, transmission security"
+  - name: Human Factors Reviewer
+    description: "Clinical UX safety, WCAG 2.1 AA, patient identity, alert fatigue, error prevention, data display"
+    focus: "Persistent patient header, color-only indicators, keyboard accessibility, session timeout, destructive action confirmation, numeric formatting (de-DE), structured code entry"
+  - name: Security Architect
+    description: "Auth boundaries, tenancy isolation, secret management, transport encryption, attack surface"
+    focus: "RBAC enforcement at API layer (not just UI), multi-tenant data isolation, secret rotation, TLS between services, rate limiting on external API calls"
+  - name: Data Protection Officer
+    description: "DPIA requirements, data subject rights, cross-border transfers, lawful basis, consent management"
+    focus: "Art. 35 DPIA triggers, Art. 15/17/20 implementation, processor agreements, data flow documentation, retention policy codification"
+
+deliverable:
+  - name: Client-Skeptiker
+    description: "Einwaende, Widerstaende, politische Risiken, blinde Flecken"
+    focus: "Client objections, political risks, blind spots, resistance points"
+  - name: Umsetzungs-Realist
+    description: "Was bricht in der Praxis, Ressourcen, Timeline, Abhaengigkeiten"
+    focus: "Practical feasibility, resource constraints, timeline risks, dependencies"
+  - name: Executive
+    description: "Strategische Passung, Executive Summary, Sprache/Tonalitaet"
+    focus: "Strategic fit, executive communication, tone, summary clarity"
+  - name: Change Manager
+    description: "People Impact, Adoption, Kommunikationsstrategie, Quick Wins"
+    focus: "People impact, adoption barriers, change communication, quick wins"

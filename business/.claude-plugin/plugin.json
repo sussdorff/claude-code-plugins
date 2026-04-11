@@ -1,0 +1,6 @@
+{
+  "name": "business",
+  "version": "1.0.0",
+  "description": "Business operations — proposals, invoicing, accounting (Collmex), Amazon orders, 1Password credentials, email automation, career assessment",
+  "keywords": ["business", "invoicing", "accounting", "amazon", "1password", "proposals"]
+}

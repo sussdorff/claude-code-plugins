@@ -1,0 +1,6 @@
+{
+  "name": "beads-workflow",
+  "version": "1.0.0",
+  "description": "Beads orchestration and lifecycle — wave-orchestrator, epic-init, retro, compound, bead-metrics, workplan, intake",
+  "keywords": ["beads", "workflow", "orchestration", "retro", "epic", "planning"]
+}

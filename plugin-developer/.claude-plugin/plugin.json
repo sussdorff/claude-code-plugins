@@ -1,8 +1,0 @@
-{
-  "name": "plugin-developer",
-  "description": "Tools and workflows for developing Claude Code plugins, skills, hooks, and slash commands locally",
-  "version": "1.2.0",
-  "author": {
-    "name": "Claude Code Plugins"
-  }
-}
