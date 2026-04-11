@@ -328,20 +328,39 @@ cd /path/to/project && bd init --shared-server --prefix <name>
 # Create remote DB (if not exists) — MUST be owned by dolt user, not root
 ssh dolt-server "cd /var/lib/dolt && sudo -u dolt mkdir -p beads_<name> && cd beads_<name> && sudo -u dolt /usr/local/bin/dolt init"
 
-# Fix remote URL (bd init may set it to git repo URL, not Dolt remote)
-bd dolt remote remove origin
-bd dolt remote add origin https://dolt.cognovis.de/beads_<name>
+# Fix file permissions if needed (if mkdir was run as root not dolt)
+ssh dolt-server "chown -R dolt:dolt /var/lib/dolt/beads_<name>"
 
-bd dolt push
+# Restart remote Dolt server so it discovers the new DB
+ssh dolt-server "systemctl restart dolt-server && sleep 3 && systemctl is-active dolt-server"
+
+# Drop the local DB that bd init created (wrong name, no auth), then clone from remote.
+# DOLT_CLONE automatically sets __DOLT__grpc_username in the SQL remote — no manual fix needed.
+dolt --host 127.0.0.1 --port 3308 --no-tls sql -q "DROP DATABASE IF EXISTS <name>; CALL DOLT_CLONE('--user', 'malte', 'https://dolt.cognovis.de/beads_<name>');"
+
+# Update metadata.json to point to the cloned DB name (beads_<name>)
+python3 -c "
+import json
+path = '.beads/metadata.json'
+d = json.load(open(path))
+d = {k: v for k, v in d.items() if k in ('dolt_mode', 'dolt_database', 'project_id')}
+d['dolt_database'] = 'beads_<name>'
+json.dump(d, open(path, 'w'), indent=2)
+"
+
+bd dolt pull && bd dolt push --force
 ```
 
 **Setup Checklist:**
 1. Always use `--shared-server` flag (embedded mode is broken for remote push)
-2. Create remote dir as `dolt` user (not `root`) — use `chown -R dolt:dolt` if created as root
-3. First push to a brand-new empty remote may require `--force` (diverged init histories) — this is safe and expected for brand-new remotes with no shared history
-4. Run `bun install` (or equivalent) after re-init — devDependencies may not be installed
-5. Verify `metadata.json` has `"dolt_mode": "server"` after init
-6. Run `bd prime` after compaction, clear, or new session
+2. Create remote dir as `dolt` user — `chown -R dolt:dolt` if created as root; wrong permissions crash the remote server on restart
+3. **Restart remote Dolt server** after creating the DB — it won't expose the new DB via RemoteAPI until restarted
+4. **Use `DOLT_CLONE` not `bd dolt remote add`** to create the local shared-server DB — clone automatically sets `__DOLT__grpc_username` in params; `bd dolt remote add` does NOT
+5. **Drop the `bd init`-created local DB** before cloning — `bd init` creates `<name>` (without `beads_` prefix), but the remote is `beads_<name>`; after clone, update `metadata.json` to `beads_<name>`
+6. **Set issue prefix in DB** — `bd config set issue_prefix <PREFIX>`; the `issue-prefix` in `config.yaml` is NOT read for this; without it, all `bd create/update` commands fail with "issue_prefix config is missing"
+7. First push to a brand-new empty remote may require `--force` (diverged init histories)
+8. Verify `metadata.json` has `"dolt_mode": "server"` and correct `dolt_database` after setup
+9. Run `bd prime` after compaction, clear, or new session
 
 ### Fix Existing Misconfigured Project
 
@@ -614,6 +633,7 @@ then re-import missing rows via CSV.
 - **Embedded pull panics on empty DB (v1.0.0)**: `bd dolt pull` into a freshly initialized empty embedded DB crashes with nil pointer dereference. Use `dolt clone` instead for initial data load.
 - **Embedded init sets wrong remote (v1.0.0)**: `bd init` sets the Dolt remote to the git repo URL. Always fix with `bd dolt remote remove origin && bd dolt remote add origin https://dolt.cognovis.de/<db>`.
 - **Embedded auth defaults to `root`**: After `dolt clone` or `bd init`, `repo_state.json` has empty `params: {}`. Must add `__DOLT__grpc_username` manually or push/pull fails with "Access denied for user 'root'".
+- **Shared-server `bd dolt remote add` doesn't set auth**: In shared-server mode, `bd dolt remote add` does NOT write `__DOLT__grpc_username` to `~/.beads/shared-server/dolt/<db>/.dolt/repo_state.json`. After adding a remote, always set it manually: `python3 -c "import json; path='~/.beads/shared-server/dolt/<db>/.dolt/repo_state.json'; d=json.load(open(path)); d['remotes']['origin']['params']['__DOLT__grpc_username']='malte'; json.dump(d,open(path,'w'),indent=2)"`
 - **`bd dolt show` / `bd doctor` unsupported in embedded (v1.0.0)**: Cosmetic limitation. Use `bd stats` and `bd dolt push/pull` to verify health instead.
 - **`schema_migrations` table causes remote dirty state**: `bd` v1.0.0 creates a `schema_migrations` table in embedded mode. The Dolt SQL server on the remote auto-deletes it from WORKING on every startup/push, causing permanent "target has uncommitted changes" errors. Fix: drop the table locally (`DROP TABLE schema_migrations` + `DOLT_COMMIT`), verify both sides have same issue count, then `bd dolt push --force` once. `bd` works fine without it after initial migrations.
 - **Old shared Dolt server may still be running**: After migrating to embedded mode, check `ps aux | grep dolt` for a stale `dolt sql-server` on port 3308. Kill it — it's no longer needed and holds a duplicate copy of the DB pointing to the same remote.
