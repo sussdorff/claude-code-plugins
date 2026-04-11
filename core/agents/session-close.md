@@ -85,7 +85,7 @@ another session-close could push between our second merge and our push.
 
 Handler scripts live in `handlers/` relative to this agent file. Resolve the path:
 ```bash
-HANDLERS_DIR="$(dirname "$(find ~/code/claude/malte/agents/session-close -name agent.md)")/handlers"
+HANDLERS_DIR=~/code/claude-code-plugins/core/agents/session-close-handlers
 ```
 
 ## Phase B: Ship-Close (Steps 1-7, 9, 13-17)
