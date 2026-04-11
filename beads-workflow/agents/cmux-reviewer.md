@@ -211,7 +211,7 @@ Why three iterations and not more: compound review pathologies (self-review, sco
 
 ### Step 1: Write fix prompt to temp file
 
-Concise fix prompt (max 30 lines) with exact file:line refs. Include re-review trigger.
+Fix prompt must be actionable and complete, with exact file:line refs and verification steps. Length follows complexity — match the number of findings, do not pad, do not trim to hit an arbitrary number. Write it once and move on.
 
 ```bash
 cat > /tmp/review-fix-BEAD_ID-iN.md << 'FIXEOF'
@@ -246,7 +246,8 @@ cmux send-key --surface IMPL_SURFACE enter
 
 ### Rules
 
-- **Max 30 lines** -- concise, actionable, not a copy of the full review
+- **Length follows complexity, no hard cap.** One finding = short prompt. Five findings with deep root-cause = longer prompt. Write it once at the natural length and send it. Do NOT rewrite the prompt to hit a length target — rewrite-to-trim thrashing is a context waster and a real observed failure mode.
+- **No redundancy.** Don't quote the full Codex review back at the impl agent. Don't repeat each finding under "What to change". State the finding and the change once.
 - **Exact file:line refs** -- the impl agent needs to find the code fast
 - **Include "How to verify"** -- so the impl agent knows when it's done
 - **Include re-review trigger** -- closed loop back to this agent
@@ -293,6 +294,7 @@ Then output a final summary:
 - **Classification is the filter, not the finding list.** Codex's raw output is noisy. The classification labels (REGRESSION / PRE_EXISTING / OUT_OF_SCOPE) are what you use to decide "inject as fix" vs "show to user". Do this filtering BEFORE deciding CLEAN vs FINDINGS.
 - **Oscillation is a design signal, not a review signal.** If iter N's top finding touches the same file+symbol as iter N-1, the fix for iter N-1 is the wrong fix. Don't inject another round — escalate to the user with accept/revert/scope-expand.
 - **Iter 3 is the final review of the session. Period.** Iter 3 CLEAN → session-close. Iter 3 FINDINGS → hard escalation to the user (ACCEPT / REVERT / SCOPE EXPAND), no iter 4. Even if the user says "try once more", don't — a fresh session with explicit new scope is the correct response.
+- **Write the fix prompt once, at its natural length.** Do NOT rewrite the prompt to hit a length target. Observed failure mode: when this agent had a hard "max 30 lines" rule, it would draft the prompt, count lines, find it was 43, rewrite to 36, rewrite to 31, then give up and send the 31-line version anyway — burning ~60s of wall time and 3x the context for zero quality gain. Length follows the number and depth of findings. One fix ≠ five fixes. Match complexity, do not pad, do not trim.
 - **`.catch(() => {})` and similar swallow-the-error fixes are anti-patterns.** If Codex flags an unhandled rejection, the fix must actually handle the error (reset state, log, rethrow with context), not make it invisible. If the impl agent's fix commit contains a silent-swallow pattern, re-inject with explicit guidance on what to do with the error.
 - **Adversarial means design challenges too.** The Codex review questions assumptions and tradeoffs, not just bugs. Treat blocking design concerns as FINDINGS only if they apply to the new diff, not to pre-existing architecture the diff merely touches.
 - **DECIDE items are for humans.** Only inject FIX items to the impl surface. DECIDE items appear in your output for the user to see.
