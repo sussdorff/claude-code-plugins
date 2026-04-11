@@ -83,9 +83,9 @@ another session-close could push between our second merge and our push.
 
 ## Handlers
 
-Handler scripts live in `handlers/` relative to this agent file. Resolve the path:
+Handler scripts live in `session-close-handlers/` in the plugin cache. Resolve the path:
 ```bash
-HANDLERS_DIR=~/code/claude-code-plugins/core/agents/session-close-handlers
+HANDLERS_DIR="$HOME/.claude/plugins/cache/sussdorff-plugins/core/agents/session-close-handlers"
 ```
 
 ## Phase B: Ship-Close (Steps 1-7, 9, 13-17)
