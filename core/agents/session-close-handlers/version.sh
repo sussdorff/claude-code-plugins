@@ -127,6 +127,14 @@ else
     git -C "$REPO_ROOT" add "$SUSHI_CONFIG"
   fi
 
+  # Sync version into plugin/.claude-plugin/plugin.json if present
+  PLUGIN_JSON="$REPO_ROOT/plugin/.claude-plugin/plugin.json"
+  if [[ -f "$PLUGIN_JSON" ]]; then
+    sed -i '' "s/\"version\": \".*\"/\"version\": \"$NEXT_VERSION\"/" "$PLUGIN_JSON"
+    echo "plugin.json updated: $NEXT_VERSION"
+    git -C "$REPO_ROOT" add "$PLUGIN_JSON"
+  fi
+
   # Create annotated tag
   git -C "$REPO_ROOT" tag -a "$NEXT_TAG" -m "Release $NEXT_VERSION"
   echo "Tag created: $NEXT_TAG"
