@@ -7,6 +7,19 @@ Each skill is versioned independently. Versions are assigned when skills are rel
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## 2026.04.7 — 2026-04-11
+
+### Fixed
+
+- **beads-workflow/cmux-reviewer**: Route all Codex review calls through direct Bash invocation
+  of `codex-companion.mjs` instead of `Skill("codex:adversarial-review", ...)` and
+  `Skill("codex:review", ...)`. The openai-codex slash-commands set `disable-model-invocation:
+  true`, which causes Skill() to be rejected when invoked from any agent. All three review
+  calls (adversarial iter 1, adversarial iter 2, neutral iter 3) now use
+  `node "$CODEX_COMPANION" <subcommand> --background --base <sha> --scope branch`.
+  Phase 1 Setup gains a runtime discovery step for `codex-companion.mjs` and aborts clearly
+  if the openai-codex plugin is not installed.
+
 ## 2026.04.6 — 2026-04-11
 
 ### Fixed
