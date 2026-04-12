@@ -7,6 +7,13 @@ Each skill is versioned independently. Versions are assigned when skills are rel
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## 2026.04.9 — 2026-04-12
+
+### Added
+
+- **beads-workflow**: Multi-model orchestration strategy (CCP-80r) — model-strategy.yml with fixed per-phase model assignments (Opus orchestrator, Codex implementation, Sonnet fix), structured Codex briefing template, metrics.db extended with 6 new columns (wave_id, model_impl, model_review, phase2_triggered, phase2_findings, phase2_critical), wave-dispatch writes wave_id, bead-metrics supports wave queries
+- **beads-workflow**: Test quality gates, scope analysis, and learnings report in bead-orchestrator Phase 4
+
 ## 2026.04.8 — 2026-04-12
 
 ### Fixed
