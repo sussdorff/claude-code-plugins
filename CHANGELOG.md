@@ -7,6 +7,12 @@ Each skill is versioned independently. Versions are assigned when skills are rel
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## 2026.04.11 — 2026-04-12
+
+### Fixed
+
+- **beads-workflow/cmux**: Replace `\n` in double-quoted bash strings with the reliable two-command pattern (`cmux send "text" && cmux send-key enter`) across all 7 occurrences in bead-orchestrator, cmux-reviewer, error-recovery, and wave-dispatch.sh. The `\n` in bash double-quotes is NOT a newline character — it was sent literally to the pane, so Enter was never pressed and the receiving pane never processed the input.
+
 ## 2026.04.9 — 2026-04-12
 
 ### Added
