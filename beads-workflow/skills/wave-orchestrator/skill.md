@@ -152,6 +152,80 @@ the limit.
 
 ---
 
+## Phase 1.5: Scope Analysis (Compound Bead Detection)
+
+Before dispatching, analyze each bead's scope to detect compound beads that are likely
+to oscillate in review. Compound beads cover multiple orthogonal concerns and reliably
+cause review ping-pong because fixing one dimension introduces regressions in another.
+
+### Scope Signals
+
+For each bead in the wave, check these signals:
+
+| Signal | Weight | How to detect |
+|--------|--------|---------------|
+| **Compound title** | Strong | Title contains "and", "+", commas, or multiple verb phrases (e.g. "Fix X + refactor Y") |
+| **Independent ACs** | Strong | Acceptance criteria can be satisfied without touching each other's code. If AC-1 and AC-3 modify different files/functions, they're independent → should be separate beads |
+| **Multi-directory scope** | Medium | Description implies changes in 3+ unrelated directories or packages |
+| **Historical oscillation** | Medium | Similar beads in the project previously had 3+ iterations or SCOPE-EXPAND (check `bd search` for related closed beads) |
+| **Multiple verb phrases in description** | Weak | "Implement X, migrate Y, and update Z" |
+
+### Detection Process
+
+For each bead, spawn a **haiku-class subagent** to keep the analysis cheap and fast:
+
+```
+Agent(model="haiku", prompt="
+  Analyze this bead for scope complexity:
+
+  <bd show output>
+
+  Questions:
+  1. Does the title contain compound indicators (and, +, commas, multiple verbs)?
+  2. Can each acceptance criterion be satisfied independently (different files/functions)?
+  3. Does the description span 3+ unrelated modules or directories?
+
+  If the bead covers 2+ orthogonal concerns, suggest a split with:
+  - Sub-bead A: title, which ACs, which files
+  - Sub-bead B: title, which ACs, which files
+  - Dependencies between sub-beads (if any)
+
+  If the bead is well-scoped (single concern), say: SCOPE OK.
+
+  Keep response under 150 words.
+")
+```
+
+Run these subagents in parallel (one per bead in the wave).
+
+### Acting on Results
+
+**If split recommended:**
+1. Present the split suggestion to the user with the sub-bead breakdown
+2. If user approves:
+   ```bash
+   bd create --title="<sub-bead-A title>" --description="<ACs for A>" --type=<type> --priority=<same>
+   bd create --title="<sub-bead-B title>" --description="<ACs for B>" --type=<type> --priority=<same>
+   bd dep add <sub-bead-B> <sub-bead-A>  # if B depends on A
+   bd supersede <original-id> --with=<sub-bead-A>  # mark original as superseded
+   ```
+3. Re-run wave planning (Phase 1) with the new sub-beads replacing the original
+4. If user rejects: proceed with the original bead but add an annotation:
+   ```bash
+   bd update <id> --append-notes="⚠ Compound scope detected — risk of review oscillation. Consider SCOPE-EXPAND after iteration 2 if review ping-pongs."
+   ```
+
+**If SCOPE OK:** proceed to Phase 2 without changes.
+
+### Skip Conditions
+
+Skip scope analysis for:
+- Beads with only 1-2 acceptance criteria (too small to be compound)
+- Type `bug` with a clear single root cause in the title
+- Type `chore` (typically mechanical, low oscillation risk)
+
+---
+
 ## Phase 2: Scenario Pre-Check
 
 Before dispatching, every **feature** bead needs a `## Scenario` section in its description.
@@ -434,20 +508,110 @@ Then repeat from Phase 3+4 with `wave-dispatch.sh` for the next set of beads.
 
 ---
 
-## Phase 7: Completion Report
+## Phase 7: Learnings Report
 
-After all waves finish:
+After each wave completes (all beads closed, all surfaces idle), generate a structured
+learnings report BEFORE surfaces are cleaned up. The reviewer scrollback is the primary
+data source and is lost once surfaces close.
+
+### Data Collection (per bead)
+
+For each completed bead, collect:
+
+1. **Bead notes**: `bd show <id>` — close reason, iteration count, quality grade
+2. **Reviewer findings** (if cmux-reviewer was used):
+   ```bash
+   # Read reviewer surface scrollback before it's cleaned up
+   cmux read-screen --surface <reviewer-surface> --scrollback --lines 100
+   ```
+   Extract: BLOCKING findings (fixed), ADVISORY findings (deferred), Codex findings
+3. **Implementation commits**: `git log --oneline <branch>` — what actually changed
+4. **Follow-up beads created**: beads with `discovered-from: <bead-id>` in the wave
+
+### Report Structure
+
+The report focuses on **what was learned**, not what was done. Completion status is
+secondary to architectural insights and process learnings.
+
+```markdown
+## Wave N — Learnings Report
+
+### Architecture Insights
+[Numbered. Each entry answers: What was previously invisible? Why is it visible now?
+What's the consequence? Who found it (Codex/Opus/Sonnet)?]
+
+1. **<topic>**: <insight>
+   - Found by: <Codex adversarial / Opus review / Sonnet impl / verification-agent>
+   - Consequence: <what changes because of this insight>
+
+### Process Learnings
+[Where did the multi-agent workflow catch something that would have slipped through?
+Where did it create unnecessary work?]
+
+- **Caught**: <what was caught, by which stage>
+- **Overhead**: <where the process added cost without proportional benefit>
+
+### Codex Adversarial Highlights
+[If Codex was used: findings that were qualitatively different from Opus/Sonnet reviews.
+These are often the most valuable — they reveal systematic issues.]
+
+- <bead-id>: <finding summary>
+
+### Bead Recommendations from Reviews
+[Concrete next steps distilled from review findings, with source bead]
+
+| Source | Recommendation | Type |
+|--------|---------------|------|
+| <bead> | <what to do next> | task/feature/refactor |
+
+### Completion Table
+[Per-bead summary — secondary to the sections above]
+
+| Bead | Iterations | Grade | Key Finding |
+|------|-----------|-------|-------------|
+| <id> | <N> | <A/B/C> | <one-line summary> |
+
+### CLAUDE.md Updates Made
+[List any project CLAUDE.md changes made during this wave]
+```
+
+### Where to Store the Report
+
+1. **User output**: Display the full report in the wave orchestrator conversation
+2. **open-brain**: Save as a memory for cross-session recall:
+   ```
+   mcp__open-brain__save_memory({
+     content: "<report content>",
+     metadata: { tags: ["wave-report", "learnings", "<project-name>"], source: "wave-orchestrator" }
+   })
+   ```
+3. **Bead notes**: For each closed bead, append a one-line summary referencing the wave report:
+   ```bash
+   bd update <id> --append-notes="Wave N report: <key learning for this bead>"
+   ```
+
+### Timing
+
+Generate the report AFTER `wave-completion.sh` returns exit 0 but BEFORE starting the
+next wave. The reviewer scrollback must still be accessible — if surfaces have already
+been cleaned up, fall back to bead notes and git log (less rich but still useful).
+
+### After All Waves
+
+After all waves are complete, produce a final summary aggregating across waves:
 
 ```
 ## Wave Orchestration Complete
 
-| Wave | Beads | Duration | Status |
-|------|-------|----------|--------|
-| 1 | 0al, doq | ~22 min | all closed |
-| 2 | n4r, 0r0 | ~18 min | all closed |
+| Wave | Beads | Status |
+|------|-------|--------|
+| 1 | 0al, doq | all closed |
+| 2 | n4r, 0r0 | all closed |
 
-Total: 4 beads, 2 waves, ~40 min
-Remaining open beads for this area: none
+Total: 4 beads, 2 waves
+Key insights across all waves: <2-3 bullet points>
+Follow-up beads created: <count> (<list IDs>)
+Remaining open beads for this area: <count or "none">
 ```
 
 ---

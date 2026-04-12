@@ -199,6 +199,58 @@ Read the diff and evaluate as a senior engineer would in a PR review. Flag every
 
 **Every issue in these areas is a FIX finding.** Flag it, say what to change. The only exception is a genuine tradeoff with no clear winner → DECIDE.
 
+**Pre-existing issues:** If the diff touches a file and you notice issues in the changed context (even if they pre-date this bead), flag them. Touching a file means owning its quality in the changed regions. Do not flag issues in untouched files or untouched sections.
+
+#### B2. Mock-Interface Consistency
+
+When the diff changes an interface, type, or class signature, verify that all mock/stub implementations of that interface in test files still match.
+
+**How to check:**
+
+1. From `git diff <diff_range> --stat`, identify files containing interface/type/class changes (look for `export interface`, `export type`, `export class`, method signature changes).
+2. For each changed interface/type, extract the name.
+3. Search test files for mock implementations:
+   ```bash
+   git diff <diff_range> --name-only | xargs grep -l "interface\|type\|class" 2>/dev/null
+   # For each INTERFACE_NAME found:
+   grep -rn "$INTERFACE_NAME" --include="*.test.*" --include="*.spec.*" | grep -iE "mock|stub|fake|as unknown as|as any"
+   ```
+4. If mock implementations exist, verify their shape matches the updated interface:
+   - Return types match (e.g. `void` → `Promise<void>` must be reflected in mock)
+   - New required properties are present in mock objects
+   - Removed properties are not relied upon in mocks
+
+**Report:** `[MOCK-CONSISTENCY] FIX: <Interface> changed in <file> but mock in <test-file:line> still uses old shape — <specific mismatch>`
+
+**Why this matters:** Mock objects typically use `as unknown as <Type>` casts that bypass TypeScript's type checker. Interface changes silently drift from their mocks, causing test failures that surface much later as follow-up beads.
+
+#### B3. Async Pollution Detection
+
+When the diff modifies handler code that contains fire-and-forget patterns, verify that corresponding tests have proper cleanup.
+
+**Patterns to detect in changed handler/service code:**
+
+| Pattern | Risk |
+|---------|------|
+| `.then(` without `await` | Background promise escapes test boundary |
+| `.catch(() => {})` / `.catch(() => undefined)` | Silent error swallowing — observability blind spot |
+| `setTimeout` / `setInterval` without cleanup | Timer leaks across tests |
+| `Promise` constructor without `await` on result | Fire-and-forget async work |
+| `void someAsyncFunction()` | Intentional fire-and-forget — needs drain in tests |
+
+**How to check:**
+
+1. Identify changed handler/service files from the diff (non-test files).
+2. Search for the patterns above in those files.
+3. If found, check the corresponding test files for cleanup:
+   - `afterEach` / `afterAll` with drain/cleanup logic
+   - `vi.useFakeTimers()` / `vi.useRealTimers()` for timer management
+   - `await flushPromises()` or equivalent drain pattern
+
+**Report:** `[ASYNC-POLLUTION] FIX: <file:line> has fire-and-forget <pattern> but <test-file> has no afterEach cleanup — tests will leak background work into subsequent test files`
+
+**Note:** `.catch(() => {})` is ALWAYS a finding regardless of test cleanup — silent error swallowing is an anti-pattern in production code. Report as `[CODE-QUALITY] FIX` (not async-pollution) with guidance to handle the error properly (log, rethrow with context, or reset state).
+
 ### Phase C: Healthcare Compliance (Conditional)
 
 **Run Phase C only when the diff contains files matching healthcare-relevant patterns:**
@@ -251,6 +303,8 @@ TDD: A | B | C
 
 ### Phase B: Code Quality (omit section if all pass)
 - [CODE-QUALITY] FIX: <specific finding with file/line reference> → <what to change>
+- [MOCK-CONSISTENCY] FIX: <Interface> changed but mock in <test-file:line> still uses old shape
+- [ASYNC-POLLUTION] FIX: <file:line> fire-and-forget pattern without test cleanup
 
 ### Phase C: Healthcare Compliance (omit section if skipped or all pass)
 - [COMPLIANCE] FIX: <finding with regulatory reference>

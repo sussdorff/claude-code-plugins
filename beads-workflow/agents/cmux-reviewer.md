@@ -253,22 +253,64 @@ cmux send --surface IMPL_SURFACE "$(cat /tmp/review-fix-BEAD_ID-iN.md)\n" || { s
 
 **If `impl_surface` is unknown:** Print the full findings in your output and tell the user to apply them manually.
 
-## CLEAN -> Trigger Session Close
+## CLEAN -> Persist Learnings, Then Trigger Session Close
 
-When review is CLEAN, send session-close to the impl surface:
+When review is CLEAN, persist review learnings to open-brain **before** triggering
+session close. This is "session-close light" — only the memory persistence step, no
+git/tag/merge (that's the impl-agent's session-close responsibility).
+
+### Step 1: Collect Review Findings
+
+Aggregate all findings from the review session:
+
+```
+findings = {
+  bead_id: <bead_id>,
+  iterations: <N>,
+  blocking_findings_fixed: [<list of REGRESSION findings that were fixed>],
+  advisory_findings: [<list of PRE_EXISTING / OUT_OF_SCOPE findings for user>],
+  codex_highlights: [<Codex-specific findings that differed from standard review>],
+  oscillation_detected: <true/false>,
+  final_quality: <A/B/C>,
+  key_learning: "<one sentence: what was the most valuable insight from this review?>"
+}
+```
+
+### Step 2: Save to open-brain
+
+```
+mcp__open-brain__save_memory({
+  content: "Review findings for bead <bead_id> (<bead_title>):\n\n<structured findings>",
+  metadata: {
+    tags: ["wave-review", "<bead_id>", "<project-name>", "review-finding"],
+    source: "cmux-reviewer"
+  }
+})
+```
+
+This ensures review findings survive surface cleanup and are available for the wave
+orchestrator's Phase 7 learnings report, even if the scrollback is gone.
+
+### Step 3: Trigger Session Close
+
+Send session-close to the impl surface:
 
 ```bash
 cmux send --surface IMPL_SURFACE "session close\n" || { sleep 2; cmux send --surface IMPL_SURFACE "session close\n"; }
 ```
 
-Then output a final summary:
+### Step 4: Output Summary
 
 ```
 ## Review Complete
 - Bead: <bead_id>
 - Iterations: <N>
 - Findings fixed: <count>
-- Final quality: A
+- Advisory for user: <count>
+- Codex highlights: <count>
+- Final quality: <A/B/C>
+- Key learning: <one sentence>
+- Learnings saved to open-brain: yes
 - Session close triggered in impl tab
 ```
 
@@ -297,3 +339,4 @@ Then output a final summary:
 - **DECIDE items are for humans.** Only inject FIX items to the impl surface. DECIDE items appear in your output for the user to see.
 - **The impl-agent is autonomous.** After receiving fixes, it commits and triggers re-review. Do not micromanage -- wait for the callback.
 - **THREE dots in diff_range, ALWAYS.** Extract the left ref (start commit) for `--base`. If the input uses two dots, fix to three before use.
+- **Always persist learnings before session-close.** The "session-close light" step (save review findings to open-brain) MUST run before triggering session close on the impl surface. This is the only way review findings survive surface cleanup — the wave orchestrator's Phase 7 report depends on these memories when scrollback is gone.

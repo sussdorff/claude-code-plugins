@@ -101,6 +101,68 @@ Run ALL test commands to get a fresh, post-implementation test report:
 - Any new test failures (compare against claim)
 - Exact command and output
 
+### Failure Baseline Tracking
+
+Compare pre- and post-implementation failure counts to detect regressions that hide
+behind pre-existing failures:
+
+1. Check if a baseline was recorded before implementation started:
+   ```bash
+   cat /tmp/test-baseline-<bead_id>.txt 2>/dev/null
+   ```
+2. If no baseline exists, check git stash or the bead notes for a pre-implementation count.
+3. Compare current failure count against baseline:
+   - **Failures increased**: DISPUTED — the implementation introduced regressions even if
+     the total count is still "high" (e.g. 48 → 52 is a regression of 4, not "still 48 fails").
+   - **Failures decreased**: Note as a bonus — the bead fixed pre-existing issues.
+   - **Failures unchanged**: Neutral — no regression from this bead.
+
+**Record in the Verification Report:**
+```
+### Failure Baseline
+Baseline: <N> failures (recorded before implementation)
+Current:  <M> failures (post-implementation)
+Delta:    <+/- difference> (<regression / improvement / neutral>)
+```
+
+If the failure count increased, list the NEW failures specifically (diff the test output).
+
+### Test Isolation Check
+
+After the full test suite passes (or records its baseline failures), run each changed
+test file in isolation to detect cross-test pollution:
+
+```bash
+# Find test files changed in this bead
+git diff <diff_range> --name-only | grep -E "\.(test|spec)\.(ts|tsx|js|jsx|py)$"
+
+# Run each one individually
+for f in <changed-test-files>; do
+  <test-command> "$f" 2>&1
+done
+```
+
+**What to look for:**
+
+| Symptom | Meaning |
+|---------|---------|
+| Passes in suite, fails in isolation | Test depends on side effects from another test (missing setup) |
+| Fails in suite, passes in isolation | Another test pollutes shared state (mock leak, global mutation) |
+| Timeout in isolation but not in suite | Test depends on setup from a prior test (e.g. server start) |
+
+**Report isolated failures as:**
+```
+AK<N>: "<criterion>"
+CLAIM: Tests pass
+RAN: <test-command> <file> (isolated)
+SAW: <failure output>
+VERDICT: DISPUTED — test passes in suite but fails in isolation (cross-test dependency)
+```
+
+**Performance note:** Only run isolation checks on changed test files (not the entire suite).
+This typically adds <30s per bead. Skip isolation checks if there are more than 10 changed
+test files (diminishing returns — flag for manual review instead).
+
 ## Unclaimed Work Check
 
 Scan for acceptance criteria that are NOT marked in the Completion Report:
@@ -136,6 +198,15 @@ AK3: "<text>" — UNVERIFIABLE
 Command: `<test command>`
 Output: <N> passed, <M> failed, <K> skipped
 <List any failures with test name and error>
+
+### Failure Baseline
+Baseline: <N> failures (pre-implementation)
+Current:  <M> failures (post-implementation)
+Delta:    <+/- difference>
+
+### Test Isolation
+<List any files that pass in suite but fail in isolation, or vice versa>
+<"All changed test files pass in isolation" if no issues found>
 
 ### Unclaimed Work
 <Any AKs found implemented but not in Completion Report>
