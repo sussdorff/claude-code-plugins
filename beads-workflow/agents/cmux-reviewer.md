@@ -227,8 +227,7 @@ cat > /tmp/review-fix-BEAD_ID-iN.md << 'FIXEOF'
 ### After fixing
 After ALL fixes are committed, trigger re-review by running:
 ```
-cmux send --surface REVIEW_SURFACE "re-review"
-cmux send-key --surface REVIEW_SURFACE enter
+cmux send --surface REVIEW_SURFACE "re-review\n" || { sleep 2; cmux send --surface REVIEW_SURFACE "re-review\n"; }
 ```
 This is mandatory -- do NOT skip the re-review trigger.
 FIXEOF
@@ -240,8 +239,7 @@ Replace `BEAD_ID` with bead_id, `N` with iteration.
 ### Step 2: Send to impl surface
 
 ```bash
-cmux send --surface IMPL_SURFACE "$(cat /tmp/review-fix-BEAD_ID-iN.md)"
-cmux send-key --surface IMPL_SURFACE enter
+cmux send --surface IMPL_SURFACE "$(cat /tmp/review-fix-BEAD_ID-iN.md)\n" || { sleep 2; cmux send --surface IMPL_SURFACE "$(cat /tmp/review-fix-BEAD_ID-iN.md)\n"; }
 ```
 
 ### Rules
@@ -260,8 +258,7 @@ cmux send-key --surface IMPL_SURFACE enter
 When review is CLEAN, send session-close to the impl surface:
 
 ```bash
-cmux send --surface IMPL_SURFACE "session close"
-cmux send-key --surface IMPL_SURFACE enter
+cmux send --surface IMPL_SURFACE "session close\n" || { sleep 2; cmux send --surface IMPL_SURFACE "session close\n"; }
 ```
 
 Then output a final summary:
