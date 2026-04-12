@@ -7,6 +7,16 @@ Each skill is versioned independently. Versions are assigned when skills are rel
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## 2026.04.8 — 2026-04-12
+
+### Fixed
+
+- **beads-workflow/cmux-reviewer**: Replace two-call `send` + `send-key enter` pattern with
+  atomic `send "text\n"` plus a 2-second retry fallback at all 3 cmux send sites (re-review
+  trigger, fix prompt delivery, session-close trigger). Eliminates the race condition where
+  the enter keypress was processed before the text rendered in the target surface input buffer,
+  causing ~50% of reviewer-to-impl transitions to silently fail during wave orchestration.
+
 ## 2026.04.7 — 2026-04-11
 
 ### Fixed
