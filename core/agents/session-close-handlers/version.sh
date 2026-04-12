@@ -112,6 +112,9 @@ echo "Next tag: $NEXT_TAG"
 if $DRY_RUN; then
   echo ""
   echo "[DRY-RUN] Would write $NEXT_VERSION to $VERSION_FILE"
+  while IFS= read -r -d '' pj; do
+    echo "[DRY-RUN] Would update ${pj#$REPO_ROOT/}"
+  done < <(find "$REPO_ROOT" -maxdepth 3 -path '*/.claude-plugin/plugin.json' -print0 2>/dev/null)
   echo "[DRY-RUN] Would create git tag $NEXT_TAG"
 else
   # Write VERSION file
@@ -127,13 +130,18 @@ else
     git -C "$REPO_ROOT" add "$SUSHI_CONFIG"
   fi
 
-  # Sync version into plugin/.claude-plugin/plugin.json if present (single-plugin layout)
-  PLUGIN_JSON="$REPO_ROOT/plugin/.claude-plugin/plugin.json"
-  if [[ -f "$PLUGIN_JSON" ]]; then
-    sed -i '' "s/\"version\": \".*\"/\"version\": \"$NEXT_VERSION\"/" "$PLUGIN_JSON"
-    echo "plugin.json updated: $NEXT_VERSION"
+  # Sync version into all .claude-plugin/plugin.json files
+  # Supports both single-plugin (plugin/.claude-plugin/) and multi-plugin (*/.claude-plugin/) layouts
+  while IFS= read -r -d '' PLUGIN_JSON; do
+    if grep -q '"version"' "$PLUGIN_JSON"; then
+      sed -i '' "s/\"version\": \".*\"/\"version\": \"$NEXT_VERSION\"/" "$PLUGIN_JSON"
+    else
+      # Insert version after "name" line
+      sed -i '' "s/\"name\": \(.*\)/\"name\": \1\n  \"version\": \"$NEXT_VERSION\",/" "$PLUGIN_JSON"
+    fi
+    echo "plugin.json updated: ${PLUGIN_JSON#$REPO_ROOT/}"
     git -C "$REPO_ROOT" add "$PLUGIN_JSON"
-  fi
+  done < <(find "$REPO_ROOT" -maxdepth 3 -path '*/.claude-plugin/plugin.json' -print0 2>/dev/null)
 
   # Create annotated tag
   git -C "$REPO_ROOT" tag -a "$NEXT_TAG" -m "Release $NEXT_VERSION"
