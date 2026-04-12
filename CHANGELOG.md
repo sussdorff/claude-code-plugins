@@ -7,6 +7,12 @@ Each skill is versioned independently. Versions are assigned when skills are rel
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## 2026.04.13 — 2026-04-12
+
+### Added
+
+- **beads-workflow/wave-orchestrator**: Effort estimation for unset beads in Phase 1 Dispatch Mode Classification. When a bead has no effort set, haiku subagents are spawned in parallel to estimate effort before classifying dispatch mode (quick vs full). Estimated effort is written back via `bd update --metadata` and shown in the Wave Table with a `*` marker. The dispatch mode table no longer allows `empty` in the `full` row — estimation is now enforced.
+
 ## 2026.04.12 — 2026-04-12
 
 ### Added
