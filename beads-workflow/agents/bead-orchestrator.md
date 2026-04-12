@@ -8,7 +8,7 @@ description: >-
 tools: Read, Write, Edit, Bash, Grep, Glob, Agent
 mcpServers:
   - open-brain
-model: sonnet
+model: opus
 system_prompt_file: malte/system-prompts/agents/bead-orchestrator.md
 cache_control: ephemeral
 ---
@@ -351,9 +351,88 @@ If specialized agents exist, match the bead's scope against agent descriptions:
 - Specialized agent matches → use `subagent_type: "<agent-name>"` (e.g. `pvs-adapter-impl`)
 - No match or no agents dir → use `subagent_type: "general-purpose"` (default)
 
+**Model routing (from model-strategy.yml):**
+
+The implementation subagent uses Codex by default (per `config/model-strategy.yml`).
+Read the model strategy to determine the implementation model:
+
+```bash
+cat "$CLAUDE_PLUGIN_ROOT/config/model-strategy.yml" 2>/dev/null || echo "# not found"
+```
+
+If `phase1.implementation: codex`, the subagent prompt is sent to Codex via the
+`codex:codex-cli-runtime` skill (not as a Claude subagent). This means:
+- The prompt must be **completely self-contained** — Codex has no access to Claude context
+- All file paths, acceptance criteria, standards, and constraints must be explicit
+- Use the **Structured Codex Briefing Template** below (Codex follows structured formats precisely)
+
+If `phase1.implementation: sonnet` (or config not found), fall back to the standard
+Claude subagent pattern (`subagent_type: "general-purpose"`).
+
 Spawn ONE subagent per bead (or per child bead if parallelizable).
 
-**Subagent prompt template:**
+**Structured Codex Briefing Template:**
+
+When the implementation model is `codex`, use this structured format. Codex follows
+structured instructions with high fidelity — the more explicit, the better.
+
+```
+## Ziel
+{1-2 sentences: What to implement and why. Include bead ID and title.}
+
+## Dateien
+{List ALL files that need to be created or modified, with full paths.}
+{For each file: what changes are expected (new file, add function, modify class, etc.)}
+
+## TDD-Plan
+
+### Red (Tests schreiben)
+{For each acceptance criterion:}
+- Test file: {path}
+- Test name: {descriptive name}
+- Assertion: {what the test checks}
+- Expected failure reason: {why it should fail before implementation}
+
+### Green (Implementation)
+{For each acceptance criterion:}
+- File: {path}
+- Change: {what to implement}
+- Pattern: {which pattern to follow — reference existing code if possible}
+
+### Refactor
+{What to clean up after green phase, if anything. "None" is valid.}
+
+## Injections
+{Standard injections the implementation needs:}
+- Standards: {paths to load}
+- Existing patterns: {reference files showing the project's conventions}
+- Dependencies: {what's already available, what needs importing}
+
+## Constraints
+{What NOT to do:}
+- Do NOT modify files outside the listed scope
+- Do NOT add features beyond the acceptance criteria
+- Do NOT skip the Red phase — every test must fail first
+- {Project-specific constraints}
+
+## Acceptance Criteria
+{Verbatim from bd show — the definitive checklist}
+
+## Git Workflow
+For each acceptance criterion:
+1. Write failing test → `git add <test-files> && git commit -m "test({BEAD_ID}): red — <what>"`
+2. Write production code → `git add <files> && git commit -m "feat({BEAD_ID}): green — <what>"`
+COMMIT IS MANDATORY. Uncommitted work is lost.
+
+## Output Format
+At the end, ALWAYS include:
+## Completion Report
+- [x] Criterion 1: <what was done>
+- [x] Criterion 2: <what was done>
+- [ ] Criterion 3: NOT DONE — <reason>
+```
+
+**Standard Claude Subagent Prompt Template (for non-Codex):**
 
 ```
 ## Bead: {BEAD_ID} — {TITLE}
@@ -549,6 +628,12 @@ After the review loop completes, persist token usage to `~/.claude/metrics.db` f
 - UAT validator (if PAUL mode): `uat_tokens`
 - Constraint checker: `constraint_tokens`
 
+**Determine model assignments** from the model strategy config that was read in Phase 3:
+- `MODEL_IMPL`: the model used for implementation (e.g. `codex`, `sonnet`)
+- `MODEL_REVIEW`: the model used for review (e.g. `opus`, `sonnet`)
+- `WAVE_ID`: if set by the wave-orchestrator via the `WAVE_ID` environment variable, capture it.
+  Check: `echo $WAVE_ID`. If empty, use empty string.
+
 **Write the row:**
 ```bash
 uv run python -c "
@@ -572,11 +657,18 @@ run = BeadRun(
     quality_grade='{QUALITY_GRADE}',  # Sanitize: strip any single-quotes from grade strings before substituting
     tdd_grade='{TDD_GRADE}',  # Sanitize: strip any single-quotes from grade strings before substituting
     ak_count={AK_COUNT},
+    wave_id='{WAVE_ID}',
+    model_impl='{MODEL_IMPL}',
+    model_review='{MODEL_REVIEW}',
 )
 insert_bead_run(conn, run)
-print(f'Metrics saved: {run.total_tokens:,} total tokens')
+print(f'Metrics saved: {run.total_tokens:,} total tokens (impl={MODEL_IMPL}, review={MODEL_REVIEW})')
 "
 ```
+
+**Note:** `phase2_triggered`, `phase2_findings`, and `phase2_critical` are written by
+the cmux-reviewer after Phase 2 completes. The orchestrator writes 0 defaults; the
+cmux-reviewer updates the row via `update_phase2_metrics()` (see metrics.py).
 
 **If the script fails** (DB not writable, import error): log a warning to bead notes and continue. Token capture is non-blocking.
 
@@ -946,6 +1038,52 @@ When the review finds issues, it injects fixes into this impl session via cmux a
 - Status: in_progress (bead will be closed by session-close agent after merge+push)
 ```
 
+### Phase 6: Handling cmux-reviewer Fix Requests (Phase 2)
+
+After Phase 5 hands off to the cmux-reviewer (via `cld -br`), this session goes idle.
+When the cmux-reviewer finds issues, it injects fix instructions into this session via
+`cmux send`. These arrive as new user input.
+
+**Recognition:** Fix requests from the cmux-reviewer start with `# Review Fix:` followed
+by the bead ID and iteration number.
+
+**Model strategy for Phase 2 fixes:**
+
+Read the model strategy config to determine the fix model:
+```bash
+cat "$CLAUDE_PLUGIN_ROOT/config/model-strategy.yml" 2>/dev/null || echo "# not found"
+```
+
+Per `phase2.fix` in the config (default: `sonnet`), spawn a **Sonnet** subagent to apply
+the fixes. This is deliberate model diversity: Phase 1 used Codex for implementation,
+Phase 2 uses Sonnet for fixes — a different model catches different patterns.
+
+**Fix subagent spawn:**
+
+```
+Agent(subagent_type="general-purpose", model="sonnet", prompt="""
+## Fix Request from Adversarial Review
+
+{PASTE THE FULL FIX REQUEST TEXT HERE}
+
+### Additional Context
+- Working directory: {CWD}
+- You are in a worktree on branch: {BRANCH}
+- COMMIT every fix. Uncommitted work is lost.
+- After ALL fixes committed, trigger re-review as instructed in the fix request.
+""")
+```
+
+**After the fix subagent returns:**
+1. Verify commits were made (`git log --oneline -5`)
+2. The fix subagent should have triggered the re-review via `cmux send` to the reviewer surface
+3. Wait for next input (either another fix round, or "session close" from the reviewer)
+
+**Do NOT:**
+- Apply fixes yourself (delegate to Sonnet subagent)
+- Spawn Codex for fixes (defeats the model-diversity purpose)
+- Re-run your own review loop — the cmux-reviewer handles Phase 2 review iterations
+
 ## Error Handling
 
 | Situation | Action |
@@ -955,6 +1093,7 @@ When the review finds issues, it injects fixes into this impl session via cmux a
 | Tests remain FAILED | Stop, leave in_progress, report |
 | Git conflict | Report to user, do not force |
 | Subagent reduces scope | Orchestrator completes gaps (Phase 4) |
+| Phase 2 fix subagent fails | Log warning, send raw fix text to reviewer as "fix failed" |
 
 ## Constraints
 

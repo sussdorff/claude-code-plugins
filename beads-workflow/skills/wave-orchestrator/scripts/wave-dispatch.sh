@@ -13,6 +13,7 @@ set -euo pipefail
 BEAD_IDS=()
 WORKSPACE=""
 BASE_PANE=""
+WAVE_ID=""
 
 # Parse arguments
 while [[ $# -gt 0 ]]; do
@@ -25,12 +26,21 @@ while [[ $# -gt 0 ]]; do
       BASE_PANE="$2"
       shift 2
       ;;
+    --wave-id)
+      WAVE_ID="$2"
+      shift 2
+      ;;
     *)
       BEAD_IDS+=("$1")
       shift
       ;;
   esac
 done
+
+# Auto-generate wave_id if not provided
+if [[ -z "$WAVE_ID" ]]; then
+  WAVE_ID="wave-$(date -u +%Y%m%d-%H%M%S)"
+fi
 
 if [[ ${#BEAD_IDS[@]} -eq 0 ]]; then
   echo "Error: no bead IDs provided" >&2
@@ -85,8 +95,8 @@ for i in "${!BEAD_IDS[@]}"; do
   # Rename the surface tab for observability
   cmux rename-tab --surface "$SURFACE" "${SHORT_ID}-impl" 2>/dev/null || true
 
-  # Dispatch cld -b (the \n is interpreted by cmux as Enter)
-  cmux send --surface "$SURFACE" "cld -b ${BEAD_ID}\n" 2>/dev/null || {
+  # Dispatch cld -b with WAVE_ID env var (the \n is interpreted by cmux as Enter)
+  cmux send --surface "$SURFACE" "WAVE_ID=${WAVE_ID} cld -b ${BEAD_ID}\n" 2>/dev/null || {
     echo "Warning: failed to send command to $SURFACE for bead $BEAD_ID" >&2
     continue
   }
@@ -104,9 +114,11 @@ done
 jq -n \
   --arg dispatch_time "$DISPATCH_TIME" \
   --arg workspace "$WORKSPACE" \
+  --arg wave_id "$WAVE_ID" \
   --argjson beads "$BEADS_JSON" \
   '{
     dispatch_time: $dispatch_time,
     workspace: $workspace,
+    wave_id: $wave_id,
     beads: $beads
   }'

@@ -30,9 +30,25 @@ CREATE TABLE IF NOT EXISTS bead_runs (
     total_tokens INTEGER DEFAULT 0,
     quality_grade TEXT DEFAULT '',
     tdd_grade TEXT DEFAULT '',
-    ak_count INTEGER DEFAULT 0
+    ak_count INTEGER DEFAULT 0,
+    wave_id TEXT DEFAULT '',
+    model_impl TEXT DEFAULT '',
+    model_review TEXT DEFAULT '',
+    phase2_triggered INTEGER DEFAULT 0,
+    phase2_findings INTEGER DEFAULT 0,
+    phase2_critical INTEGER DEFAULT 0
 )
 """
+
+# Migration: add new columns to existing databases that lack them.
+_MIGRATE_COLUMNS = [
+    ("wave_id", "TEXT DEFAULT ''"),
+    ("model_impl", "TEXT DEFAULT ''"),
+    ("model_review", "TEXT DEFAULT ''"),
+    ("phase2_triggered", "INTEGER DEFAULT 0"),
+    ("phase2_findings", "INTEGER DEFAULT 0"),
+    ("phase2_critical", "INTEGER DEFAULT 0"),
+]
 
 _USAGE_RE = re.compile(r"<usage>(.*?)</usage>", re.DOTALL)
 
@@ -61,13 +77,24 @@ class BeadRun:
     quality_grade: str = ""
     tdd_grade: str = ""
     ak_count: int = 0
+    wave_id: str = ""
+    model_impl: str = ""
+    model_review: str = ""
+    phase2_triggered: int = 0
+    phase2_findings: int = 0
+    phase2_critical: int = 0
 
 
 def init_db(db_path: Path = DB_PATH) -> sqlite3.Connection:
-    """Initialize DB and ensure bead_runs table exists. Returns connection."""
+    """Initialize DB and ensure bead_runs table exists. Migrates schema if needed."""
     db_path.parent.mkdir(parents=True, exist_ok=True)
     conn = sqlite3.connect(str(db_path))
     conn.execute(CREATE_TABLE_SQL)
+    # Migrate existing tables: add new columns if missing
+    existing = {row[1] for row in conn.execute("PRAGMA table_info(bead_runs)")}
+    for col_name, col_def in _MIGRATE_COLUMNS:
+        if col_name not in existing:
+            conn.execute(f"ALTER TABLE bead_runs ADD COLUMN {col_name} {col_def}")
     conn.commit()
     return conn
 
@@ -116,8 +143,10 @@ def insert_bead_run(conn: sqlite3.Connection, run: BeadRun) -> None:
         INSERT INTO bead_runs (
             bead_id, date, impl_tokens, impl_duration_ms, review_iterations,
             review_tokens, verification_tokens, uat_tokens, constraint_tokens,
-            total_tokens, quality_grade, tdd_grade, ak_count
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            total_tokens, quality_grade, tdd_grade, ak_count,
+            wave_id, model_impl, model_review,
+            phase2_triggered, phase2_findings, phase2_critical
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """,
         (
             run.bead_id,
@@ -133,9 +162,42 @@ def insert_bead_run(conn: sqlite3.Connection, run: BeadRun) -> None:
             run.quality_grade,
             run.tdd_grade,
             run.ak_count,
+            run.wave_id,
+            run.model_impl,
+            run.model_review,
+            run.phase2_triggered,
+            run.phase2_findings,
+            run.phase2_critical,
         ),
     )
     conn.commit()
+
+
+def update_phase2_metrics(
+    bead_id: str,
+    triggered: bool,
+    findings: int,
+    critical: int,
+    db_path: Path = DB_PATH,
+) -> None:
+    """Update phase2 columns on the most recent row for a bead."""
+    if not db_path.exists():
+        return
+    conn = sqlite3.connect(str(db_path))
+    try:
+        conn.execute(
+            """
+            UPDATE bead_runs
+            SET phase2_triggered = ?, phase2_findings = ?, phase2_critical = ?
+            WHERE id = (
+                SELECT id FROM bead_runs WHERE bead_id = ? ORDER BY id DESC LIMIT 1
+            )
+            """,
+            (int(triggered), findings, critical, bead_id),
+        )
+        conn.commit()
+    finally:
+        conn.close()
 
 
 def query_report(
@@ -245,8 +307,8 @@ def query_report(
 
 def _render_table(rows: list[sqlite3.Row]) -> str:
     """Render a markdown table of bead_runs rows."""
-    header = "| Bead | Date | Impl | Review (N iter) | Verify | Total | Ratio |"
-    sep = "|------|------|------|----------------|--------|-------|-------|"
+    header = "| Bead | Date | Impl | Review (N iter) | Verify | Total | Ratio | Models | P2 |"
+    sep = "|------|------|------|----------------|--------|-------|-------|--------|-----|"
     table_rows = []
     for r in rows:
         ratio = (
@@ -254,12 +316,53 @@ def _render_table(rows: list[sqlite3.Row]) -> str:
             if r["review_tokens"] > 0
             else "N/A"
         )
+        model_impl = r["model_impl"] if r["model_impl"] else "-"
+        model_review = r["model_review"] if r["model_review"] else "-"
+        models = f"{model_impl}/{model_review}"
+        p2 = f"{r['phase2_critical']}C/{r['phase2_findings']}F" if r["phase2_triggered"] else "-"
         table_rows.append(
             f"| {r['bead_id']} | {r['date']} "
             f"| {r['impl_tokens']:,} "
             f"| {r['review_tokens']:,} ({r['review_iterations']}x) "
             f"| {r['verification_tokens']:,} "
             f"| {r['total_tokens']:,} "
-            f"| {ratio} |"
+            f"| {ratio} "
+            f"| {models} "
+            f"| {p2} |"
         )
     return "\n".join([header, sep] + table_rows)
+
+
+def query_wave_report(wave_id: str, db_path: Path = DB_PATH) -> str:
+    """Query metrics for a specific wave and return a formatted report."""
+    if not db_path.exists():
+        return "No data yet."
+
+    conn = sqlite3.connect(str(db_path))
+    conn.row_factory = sqlite3.Row
+    try:
+        rows = conn.execute(
+            "SELECT * FROM bead_runs WHERE wave_id=? ORDER BY date DESC",
+            (wave_id,),
+        ).fetchall()
+    finally:
+        conn.close()
+
+    if not rows:
+        return f"No data for wave '{wave_id}'."
+
+    total_tokens = sum(r["total_tokens"] for r in rows)
+    p2_triggered = sum(1 for r in rows if r["phase2_triggered"])
+    p2_critical = sum(r["phase2_critical"] for r in rows)
+    p2_findings = sum(r["phase2_findings"] for r in rows)
+
+    lines = [
+        f"## Wave Report: {wave_id}\n",
+        f"Beads: {len(rows)}",
+        f"Total tokens: {total_tokens:,}",
+        f"Phase 2 triggered: {p2_triggered}/{len(rows)} beads",
+        f"Phase 2 findings: {p2_findings} total, {p2_critical} CRITICAL",
+        "",
+        _render_table(rows),
+    ]
+    return "\n".join(lines)

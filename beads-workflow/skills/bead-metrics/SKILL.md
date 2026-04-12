@@ -16,12 +16,14 @@ Query `~/.claude/metrics.db` and output a formatted cost report.
 - *(empty)* — Full report (all beads)
 - `--top=N` — Show only top N most expensive beads (default: all)
 - `--bead=<id>` — Show single bead details
+- `--wave=<id>` — Show wave-aggregated report (Phase 2 findings, model attribution)
 
 ## Workflow
 
 Parse arguments from `{ARGS}`:
 - If `--top=N` present, extract N as integer and pass as `top=N`
 - If `--bead=<id>` present, extract id and pass as `bead_id="<id>"`
+- If `--wave=<id>` present, extract id and use `query_wave_report(wave_id="<id>")`
 - Otherwise pass no arguments (full report)
 
 Run the query script:
@@ -64,6 +66,15 @@ uv run python -c "
 import os, sys; sys.path.insert(0, os.path.join(os.environ['CLAUDE_PLUGIN_ROOT'], 'lib'))
 from orchestrator.metrics import query_report
 print(query_report(bead_id='claude-i7it'))
+"
+```
+
+Wave report:
+```bash
+uv run python -c "
+import os, sys; sys.path.insert(0, os.path.join(os.environ['CLAUDE_PLUGIN_ROOT'], 'lib'))
+from orchestrator.metrics import query_wave_report
+print(query_wave_report(wave_id='wave-20260412-140000'))
 "
 ```
 

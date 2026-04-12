@@ -291,7 +291,35 @@ mcp__open-brain__save_memory({
 This ensures review findings survive surface cleanup and are available for the wave
 orchestrator's Phase 7 learnings report, even if the scrollback is gone.
 
-### Step 3: Trigger Session Close
+### Step 3: Write Phase 2 Metrics
+
+Before triggering session close, persist Phase 2 metrics to `~/.claude/metrics.db`.
+This updates the bead's existing row (written by the orchestrator in Phase 3.6) with
+Phase 2 data.
+
+```bash
+uv run python -c "
+import os, sys
+sys.path.insert(0, os.path.join(os.environ['CLAUDE_PLUGIN_ROOT'], 'lib'))
+from orchestrator.metrics import update_phase2_metrics
+
+update_phase2_metrics(
+    bead_id='{BEAD_ID}',
+    triggered=True,
+    findings={TOTAL_REGRESSION_FINDINGS},  # Total REGRESSION findings across all iterations
+    critical={CRITICAL_FINDINGS_COUNT},     # Findings that required fixes (BLOCKING)
+)
+print('Phase 2 metrics saved')
+"
+```
+
+Count `findings` as the total number of REGRESSION-classified findings across all iterations.
+Count `critical` as the number of findings that actually required fix injection (i.e. BLOCKING
+findings, not advisory ones).
+
+**If the script fails:** Log a warning and continue. Metrics are non-blocking.
+
+### Step 4: Trigger Session Close
 
 Send session-close to the impl surface:
 
@@ -299,7 +327,7 @@ Send session-close to the impl surface:
 cmux send --surface IMPL_SURFACE "session close\n" || { sleep 2; cmux send --surface IMPL_SURFACE "session close\n"; }
 ```
 
-### Step 4: Output Summary
+### Step 5: Output Summary
 
 ```
 ## Review Complete

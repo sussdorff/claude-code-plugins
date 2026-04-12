@@ -1,0 +1,18 @@
+# Model Strategy Configuration
+# Defines which LLM model is used at each workflow stage.
+# Referenced by bead-orchestrator and cmux-reviewer agents.
+#
+# Valid model values: opus, sonnet, haiku, codex
+# "codex" means delegate to the Codex CLI runtime (OpenAI models).
+
+phase1:  # Bead Orchestrator Loop
+  orchestrator: opus       # Collects context, writes detailed impl instructions
+  implementation: codex    # Follows instructions precisely, executes TDD
+  review: opus             # Code review of implementation
+  verification: sonnet     # Post-impl verification (tests pass, ACs met)
+
+phase2:  # CMUX Reviewer Loop (deliberately inverted model assignment)
+  reviewer: opus           # Orchestrates the adversarial review
+  adversarial: codex       # Reviews entire worktree adversarially
+  fix: sonnet              # Applies fixes (different model than original impl)
+  fix_review: codex        # Re-reviews fixes adversarially (quality gate)
