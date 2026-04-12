@@ -131,13 +131,50 @@ EFFORT=$(bd show <id> --json | jq -r '.metadata.effort // ""')
 TYPE=$(bd show <id> --json | jq -r '.type // ""')
 ```
 
+**If `EFFORT` is empty**, do NOT default to `full`. Instead, estimate the effort first
+(see "Effort Estimation for Unset Beads" below), then apply the table.
+
 | Effort | Type | Mode |
 |--------|------|------|
 | `micro`, `small` | `bug`, `chore`, `task` | **quick** (`cld -bq`) |
-| `medium`, `large`, `xl`, empty | any | **full** (`cld -b`) |
+| `medium`, `large`, `xl` | any | **full** (`cld -b`) |
 | any | `feature` | **full** (`cld -b`) |
 
 Store the mode per bead — it's used in the Wave Table display and in Phase 3+4 dispatch.
+
+### Effort Estimation for Unset Beads
+
+When a bead has no `effort` field set, spawn a **haiku-class subagent** per bead to
+estimate effort before classification. Run all estimations in parallel.
+
+```
+Agent(model="haiku", prompt="
+  Estimate the implementation effort for this bead. Read the title, description,
+  and acceptance criteria carefully.
+
+  <bd show output>
+
+  Effort scale:
+  - micro (XS): 1 file change, < 30 lines, no logic branches, no test changes needed
+  - small (S): 2-5 files, < 100 lines total, straightforward logic, minimal test changes
+  - medium (M): 5-15 files, non-trivial logic, requires tests/schema changes, or unclear scope
+  - large (L): 15+ files, architectural impact, significant test coverage needed
+  - xl (XL): multiple subsystems, migration required, high coordination cost
+
+  Answer ONLY: micro | small | medium | large | xl
+  Then one sentence justification.
+")
+```
+
+After estimation, set the effort on the bead so it's visible in future sessions:
+
+```bash
+bd update <id> --metadata='{"effort": "<estimated>"}'
+```
+
+Use the estimated value in the dispatch mode table. Show the estimated effort in the
+Wave Table with a `*` marker (e.g. `S*`) to indicate it was auto-estimated, not set
+by the user.
 
 ### Wave Table
 
@@ -150,11 +187,12 @@ Present the plan before executing. The **Mode** column shows quick vs full routi
 |------|------|------|--------|------|-------|------------|
 | 1 | mira-adapters-0al | task | M | full | KBV eUeberweisung Types | — |
 | 1 | mira-fix-x3r | bug | XS | quick | Fix null check in router | — |
-| 1 | mira-adapters-doq | task | S | quick | fhir-dental-de import | — |
-| 2 | mira-adapters-n4r | task | M | full | Fachrichtung kodieren | 0al |
+| 1 | mira-adapters-doq | task | S* | quick | fhir-dental-de import | — |
+| 2 | mira-adapters-n4r | task | M* | full | Fachrichtung kodieren | 0al |
 | 2 | mira-adapters-0r0 | task | S | quick | ServiceRequest.reasonCode | 0al |
 
 Max parallel: 4 | Waves: 2 | Quick: 3 | Full: 2
+* = effort auto-estimated (not set in bead metadata)
 Warning: Conflict risk — 0al, doq both modify pvs-router.ts
 ```
 
