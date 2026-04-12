@@ -25,7 +25,7 @@ was closed or became unreachable.
 1. Read the reviewer surface to understand what fixes are needed
 2. If the reviewer already sent a cmux command that didn't arrive, re-send it:
    ```bash
-   cmux send --surface surface:<reviewer> "re-review\n"
+   cmux send --surface surface:<reviewer> "re-review" && cmux send-key --surface surface:<reviewer> enter
    ```
 3. If the reviewer is waiting for fixes that the implementer already committed,
    trigger re-review directly
@@ -74,7 +74,7 @@ more closely for merge errors.
 Common cause: merge conflict from parallel worktrees touching the same file.
 Read the error, report it, let the user resolve. After resolution:
 ```bash
-cmux send --surface surface:<N> "session close\n"
+cmux send --surface surface:<N> "session close" && cmux send-key --surface surface:<N> enter
 ```
 
 ## cmux Pane Becomes Unresponsive

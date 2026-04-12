@@ -1029,7 +1029,7 @@ cmux new-split down
 
 # Call 3: Launch standalone review — use the FULL surface ref (surface:N) from Call 2, NOT just the number
 # Example: if Call 2 returned "OK surface:92 workspace:15", use --surface surface:92
-cmux send --surface <SURFACE_REF from Call 2> "cd <MAIN_REPO from Call 1> && cld -br <BEAD_ID>\n"
+cmux send --surface <SURFACE_REF from Call 2> "cd <MAIN_REPO from Call 1> && cld -br <BEAD_ID>" && cmux send-key --surface <SURFACE_REF from Call 2> enter
 ```
 
 Fire-and-forget: do NOT wait for or process the result.

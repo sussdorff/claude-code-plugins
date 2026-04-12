@@ -95,8 +95,8 @@ for i in "${!BEAD_IDS[@]}"; do
   # Rename the surface tab for observability
   cmux rename-tab --surface "$SURFACE" "${SHORT_ID}-impl" 2>/dev/null || true
 
-  # Dispatch cld -b with WAVE_ID env var (the \n is interpreted by cmux as Enter)
-  cmux send --surface "$SURFACE" "WAVE_ID=${WAVE_ID} cld -b ${BEAD_ID}\n" 2>/dev/null || {
+  # Dispatch cld -b with WAVE_ID env var (send text + explicit enter key)
+  { cmux send --surface "$SURFACE" "WAVE_ID=${WAVE_ID} cld -b ${BEAD_ID}" && cmux send-key --surface "$SURFACE" enter; } 2>/dev/null || {
     echo "Warning: failed to send command to $SURFACE for bead $BEAD_ID" >&2
     continue
   }
