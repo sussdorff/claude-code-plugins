@@ -34,6 +34,7 @@ directly for dispatch, monitoring, and completion checks.
 | `--dry-run` | Plan waves and show layout, don't dispatch |
 | `--max-parallel=N` | Limit concurrent panes (default: 4) |
 | `--skip-scenarios` | Don't check/generate scenarios for feature beads |
+| `--skip-review` | Skip architecture review (Phase 1.5b) for all beads. Logged to audit. |
 
 Examples:
 ```
@@ -223,6 +224,155 @@ Skip scope analysis for:
 - Beads with only 1-2 acceptance criteria (too small to be compound)
 - Type `bug` with a clear single root cause in the title
 - Type `chore` (typically mechanical, low oscillation risk)
+
+---
+
+## Phase 1.5b: Architecture Review (Design-Doc Gate)
+
+After scope analysis (Phase 1.5), assess each bead for architectural complexity. Beads
+that involve design decisions (boundaries, state machines, API contracts) get a structured
+architecture review BEFORE implementation — preventing costly review oscillation.
+
+**Skip this phase if `--skip-review` is set.** Log the skip:
+```bash
+bd update <id> --append-notes="⚠ Architecture review skipped (--skip-review flag). User: $(whoami), $(date -u +%Y-%m-%dT%H:%M:%SZ)"
+```
+
+### Signal Detection
+
+Run the bundled detection script on all beads in the current wave:
+
+```bash
+./scripts/arch-signal-detect.sh <bead-id1> <bead-id2> ... > /tmp/arch-signals.json
+```
+
+The script outputs a JSON array with per-bead scores:
+```json
+[
+  {"id": "mira-0al", "title": "...", "score": 9, "verdict": "REVIEW_YES", "signals": [...]},
+  {"id": "mira-doq", "title": "...", "score": 2, "verdict": "REVIEW_NO", "signals": []},
+  {"id": "mira-n4r", "title": "...", "score": 4, "verdict": "REVIEW_MAYBE", "signals": [...]}
+]
+```
+
+**Verdicts:**
+- `REVIEW_YES` (score >= 6): Architecture Council is triggered
+- `REVIEW_MAYBE` (score 3-5): Haiku fallback classifies (see below)
+- `REVIEW_NO` (score < 3): No review needed
+- Bug/chore beads are auto-skipped (score 0)
+
+### Haiku Fallback for REVIEW_MAYBE
+
+For beads with `REVIEW_MAYBE`, spawn a haiku-class subagent to make the final call:
+
+```
+Agent(model="haiku", prompt="
+  Read this bead description and decide: does this bead involve architectural decisions
+  that should be reviewed before implementation?
+
+  Bead: <bd show output>
+  Signal score: <score> (threshold is 6, this bead scored <score>)
+  Matched signals: <signals list>
+
+  Answer ONLY: REVIEW_YES or REVIEW_NO with a one-sentence reason.
+")
+```
+
+Run these in parallel (one per REVIEW_MAYBE bead). Fast and cheap.
+
+### Architecture Council Execution
+
+For all beads with final verdict `REVIEW_YES`, run the Architecture Council.
+
+**Model**: Use `architecture_review.council` from `model-strategy.yml` (default: opus).
+This is different from the standard /council which uses haiku — architecture decisions
+need deeper reasoning.
+
+**Council roles** are loaded from `council-roles.yml` under the `architecture` profile:
+1. **Architect** — Boundaries, interfaces, extensibility, dependency direction
+2. **Operations** — Failure modes, monitoring, rollback, deployment risks
+3. **Reviewer** — Testing strategy, edge cases, regression risks
+4. **Integration** — Cross-bead dependencies, shared infrastructure, migration
+
+**Execution**: If multiple beads need review, run **parallel councils** (one per bead).
+Each council runs 4 sequential agents internally.
+
+```
+# For each REVIEW_YES bead, spawn in parallel:
+Agent(subagent_type="general-purpose", model="opus", prompt="
+  Du fuehrst ein Architecture Council Review fuer dieses Bead durch.
+
+  ## Bead
+  <bd show output>
+
+  ## Rollen (architecture profile)
+  <4 roles from council-roles.yml>
+
+  ## Instruktionen
+  Fuehre 4 Reviews sequenziell durch (jeder Agent sieht vorherige Kritiken).
+  Jeder Agent: max 1500 Zeichen, NUR Findings, kein Prozess.
+  Output-Format: COUNCIL-REVIEW: [Rollenname] + Findings + Staerken (max 2).
+
+  Konsolidiere am Ende in eine Findings-Tabelle:
+  | # | Severity | Agent | Thema | Finding | Empfehlung |
+
+  Letztes Token: COUNCIL_BLOCKED: true/false
+
+  ## Design Doc
+  Schreibe nach dem Review ein Design-Doc als temporaere Datei:
+  /tmp/arch-design-<bead-id>.md
+
+  Das Design-Doc enthaelt:
+  1. Current State: Wie funktioniert das System heute?
+  2. Problem: Was ist falsch / was fehlt?
+  3. Recommendation: Welcher Ansatz und warum
+  4. Boundary Decisions: Welches Modul besitzt welche Verantwortung
+  5. Council Findings: Konsolidierte Tabelle
+  6. COUNCIL_BLOCKED Status
+
+  WICHTIG: Die Datei ist temporaer und wird NICHT committed.
+  Bei grundsaetzlichen Architekturentscheidungen: empfehle ein separates ADR-Bead.
+")
+```
+
+### Presenting Results
+
+After all councils complete, present results inline in the wave overview:
+
+```
+## Architecture Review Results
+
+| Bead | Score | Verdict | Findings | Status |
+|------|-------|---------|----------|--------|
+| mira-0al | 9 | REVIEW_YES | 2C, 1W | COUNCIL_BLOCKED |
+| mira-n4r | 4→YES | REVIEW_YES (Haiku) | 0C, 2W | OK |
+| mira-doq | 2 | REVIEW_NO | — | skipped |
+
+BLOCKED beads: mira-0al (2 CRITICAL findings)
+Design docs: /tmp/arch-design-mira-0al.md, /tmp/arch-design-mira-n4r.md
+```
+
+**If any bead is COUNCIL_BLOCKED:**
+1. Show the CRITICAL findings to the user
+2. Ask: "Trotzdem dispatchen? (Escape Hatch)" or "Findings zuerst adressieren?"
+3. If user chooses escape hatch, log:
+   ```bash
+   bd update <id> --append-notes="⚠ Architecture Council BLOCKED but user overrode. Findings: <summary>. $(date -u +%Y-%m-%dT%H:%M:%SZ)"
+   ```
+
+**If no beads are blocked:** proceed to Phase 2 automatically.
+
+### Design Doc Lifecycle
+
+The design doc (`/tmp/arch-design-<bead-id>.md`) is:
+- **Written** by the Architecture Council agent
+- **Read** by the bead-orchestrator when it starts implementation (if the file exists)
+- **Deleted** automatically when the worktree is cleaned up after session close
+- **NOT committed** to git — these are implementation-level details, not persistent architecture
+
+If the council identifies fundamental architectural decisions that affect multiple beads:
+- Recommend creating an ADR (Architecture Decision Record) as a separate bead
+- The ADR bead should block the implementation beads
 
 ---
 

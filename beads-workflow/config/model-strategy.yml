@@ -11,6 +11,9 @@ phase1:  # Bead Orchestrator Loop
   review: opus             # Code review of implementation
   verification: sonnet     # Post-impl verification (tests pass, ACs met)
 
+architecture_review:  # Pre-wave Architecture Council (Phase 1.5b)
+  council: opus              # Architecture Council agents run on Opus (not Haiku)
+
 phase2:  # CMUX Reviewer Loop (deliberately inverted model assignment)
   reviewer: opus           # Orchestrates the adversarial review
   adversarial: codex       # Reviews entire worktree adversarially

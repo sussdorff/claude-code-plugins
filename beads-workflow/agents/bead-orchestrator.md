@@ -294,7 +294,17 @@ Before spawning subagent, gather:
    - **NOTE:** Full TDD pipeline routing (test-author → implementer → holdout-validator) belongs to claude-rxm (not yet implemented)
    - **For now:** use `general-purpose` subagent for all beads as before
 
-→ **Record phase_summary**: key files identified, relevant standards, external API status.
+6. **Architecture Design Doc (optional):** Check if the wave orchestrator generated a design doc:
+   ```bash
+   cat /tmp/arch-design-<bead-id>.md 2>/dev/null
+   ```
+   If found: include the design doc in the subagent prompt under `### Architecture Context`.
+   The design doc contains boundary decisions, council findings, and recommended approach.
+   This is a temporary file created by Phase 1.5b of the wave orchestrator — it will be
+   cleaned up after session close. Treat its recommendations as strong guidance, not hard rules.
+   If not found: skip silently — not all beads go through architecture review.
+
+→ **Record phase_summary**: key files identified, relevant standards, external API status, arch design doc (if present).
 
 ### Phase 2.5: Break Analysis (Pre-Mortem)
 

@@ -44,6 +44,20 @@ healthcare:
     description: "DPIA requirements, data subject rights, cross-border transfers, lawful basis, consent management"
     focus: "Art. 35 DPIA triggers, Art. 15/17/20 implementation, processor agreements, data flow documentation, retention policy codification"
 
+architecture:
+  - name: Architect
+    description: "Boundaries, Interfaces, Erweiterbarkeit, Dependency-Richtung, Layer-Trennung"
+    focus: "Module boundaries, interface contracts, dependency direction, layer separation, extensibility, coupling vs cohesion"
+  - name: Operations
+    description: "Failure Modes, Monitoring, Rollback, Observability, Deployment-Risiken"
+    focus: "Failure modes, error propagation, monitoring gaps, rollback strategy, deployment risks, observability"
+  - name: Reviewer
+    description: "Teststrategie, Edge Cases, Regressionsrisiken, Review-Oszillation"
+    focus: "Testing strategy, edge cases, regression risks, review oscillation patterns, what could break"
+  - name: Integration
+    description: "Abhaengigkeiten zu anderen Beads, shared Infrastructure, Migration, Backwards Compatibility"
+    focus: "Cross-bead dependencies, shared file conflicts, migration path, backwards compatibility, integration points"
+
 deliverable:
   - name: Client-Skeptiker
     description: "Einwaende, Widerstaende, politische Risiken, blinde Flecken"
