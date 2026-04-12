@@ -7,6 +7,14 @@ Each skill is versioned independently. Versions are assigned when skills are rel
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## 2026.04.12 — 2026-04-12
+
+### Added
+
+- **beads-workflow/quick-fix**: New lightweight agent for XS/S beads (bugs, chores, tasks). 4-phase design (Claim/Implement/Review/Handoff) vs 13-phase full orchestrator. Single-pane, max 2 review iterations, guard rail refuses M+ effort or feature-type beads.
+- **beads-workflow/wave-orchestrator**: `--quick <id>` parameter in wave-dispatch.sh routes individual beads to `cld -bq`. Mixed waves (full + quick beads) supported. Added dispatch mode classification table and Mode column in Wave Table to skill.md.
+- **core/skills/beads**: Auto-routing based on effort+type in SKILL.md. New `--full` and `--quick` override flags.
+
 ## 2026.04.11 — 2026-04-12
 
 ### Fixed
