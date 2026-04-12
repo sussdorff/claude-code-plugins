@@ -2,8 +2,8 @@
 name: beads
 model: sonnet
 description: >-
-  Dispatch bead implementation to the bead-orchestrator agent (Phase 0–5 workflow).
-  Use when implementing a bead by ID, or to list ready beads.
+  Dispatch bead implementation to the bead-orchestrator (full, Phase 0–5) or quick-fix agent
+  (lightweight, Phase 0–3). Use when implementing a bead by ID, or to list ready beads.
   Triggers on implementiere bead, arbeite an bead, slice bead, bead zu gross.
 ---
 
@@ -18,7 +18,9 @@ description: >-
 
 | ARGUMENTS | Action |
 |-----------|--------|
-| `<bead-id>` | Spawn `bead-orchestrator` agent |
+| `<bead-id>` | Auto-route: quick-fix (XS/S bug/chore/task) or full orchestrator |
+| `<bead-id> --full` | Force full `bead-orchestrator` (skip auto-routing) |
+| `<bead-id> --quick` | Force `quick-fix` agent (skip auto-routing) |
 | `<bead-id> --dry-run` | Spawn orchestrator with `--dry-run` |
 | `<bead-id> --skip-tests` | Spawn orchestrator with `--skip-tests` |
 | `<bead-id> --skip-slicing` | Spawn orchestrator with `--skip-slicing` |
@@ -26,16 +28,37 @@ description: >-
 
 ## If bead ID in ARGUMENTS
 
-Spawn a `general-purpose` agent with this prompt:
+### Step 1: Auto-Route (unless `--full` or `--quick` forced)
 
+```bash
+bd show <id> --json | jq -r '.type, .metadata.effort // ""'
 ```
-Read ~/.claude/agents/bead-orchestrator/agent.md for your workflow instructions.
 
-Bead ID: {BEAD_ID}
-Flags: {FLAGS}
+**Quick-fix routing** (spawn `quick-fix` agent):
+- `effort` is `micro` or `small` AND `type` is `bug`, `chore`, or `task`
 
-Execute the full orchestration workflow (Phase 0–5) for this bead.
+**Full orchestrator** (spawn `bead-orchestrator` agent):
+- Everything else: `type: feature`, effort M+, or empty effort on features
+
+### Step 2: Spawn the agent
+
+**Quick-fix path:**
 ```
+Agent(subagent_type="beads-workflow:quick-fix", prompt="
+  Bead ID: {BEAD_ID}. Execute quick-fix workflow (Phase 0–3).
+")
+```
+
+**Full orchestrator path:**
+```
+Agent(subagent_type="beads-workflow:bead-orchestrator", prompt="
+  Bead ID: {BEAD_ID}
+  Flags: {FLAGS}
+  Execute the full orchestration workflow (Phase 0–5) for this bead.
+")
+```
+
+Announce the routing decision: "Routing {BEAD_ID} → quick-fix (XS bug)" or "Routing {BEAD_ID} → full orchestrator (feature, M)".
 
 ## If ARGUMENTS is empty
 

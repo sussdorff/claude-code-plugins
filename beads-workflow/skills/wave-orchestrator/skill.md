@@ -122,23 +122,48 @@ identify the specific shared hotspots.
 - If the user accepts the risk, proceed — but be prepared for merge conflicts
   (see `references/error-recovery.md`)
 
+### Dispatch Mode Classification
+
+During wave planning, classify each bead's dispatch mode. For each bead:
+
+```bash
+EFFORT=$(bd show <id> --json | jq -r '.metadata.effort // ""')
+TYPE=$(bd show <id> --json | jq -r '.type // ""')
+```
+
+| Effort | Type | Mode |
+|--------|------|------|
+| `micro`, `small` | `bug`, `chore`, `task` | **quick** (`cld -bq`) |
+| `medium`, `large`, `xl`, empty | any | **full** (`cld -b`) |
+| any | `feature` | **full** (`cld -b`) |
+
+Store the mode per bead — it's used in the Wave Table display and in Phase 3+4 dispatch.
+
 ### Wave Table
 
-Present the plan before executing:
+Present the plan before executing. The **Mode** column shows quick vs full routing:
 
 ```
 ## Wave Plan: eUeberweisung (6 beads)
 
-| Wave | Bead | Type | Title | Depends on |
-|------|------|------|-------|------------|
-| 1 | mira-adapters-0al | task | KBV eUeberweisung Types | — |
-| 1 | mira-adapters-doq | task | fhir-dental-de import | — |
-| 2 | mira-adapters-n4r | task | Fachrichtung kodieren | 0al |
-| 2 | mira-adapters-0r0 | task | ServiceRequest.reasonCode | 0al |
+| Wave | Bead | Type | Effort | Mode | Title | Depends on |
+|------|------|------|--------|------|-------|------------|
+| 1 | mira-adapters-0al | task | M | full | KBV eUeberweisung Types | — |
+| 1 | mira-fix-x3r | bug | XS | quick | Fix null check in router | — |
+| 1 | mira-adapters-doq | task | S | quick | fhir-dental-de import | — |
+| 2 | mira-adapters-n4r | task | M | full | Fachrichtung kodieren | 0al |
+| 2 | mira-adapters-0r0 | task | S | quick | ServiceRequest.reasonCode | 0al |
 
-Max parallel: 4 | Waves: 2
+Max parallel: 4 | Waves: 2 | Quick: 3 | Full: 2
 Warning: Conflict risk — 0al, doq both modify pvs-router.ts
 ```
+
+Quick-fix beads typically complete faster (no plan gate, no UAT, 2 review iterations max).
+This is visible in monitoring — quick-fix surfaces show `<id>-qf` labels.
+
+**Pane budget:** Quick-fix beads use 1 pane each (Codex review runs inline, no separate
+review pane). Full beads use 2 panes (impl + review via `cld -br`). Factor this into
+`max-parallel` calculations: a wave of 2 full + 2 quick needs 6 panes, not 8.
 
 Wait for user confirmation before proceeding. If `--dry-run`, stop here.
 
@@ -423,22 +448,46 @@ If `--skip-scenarios` is set, skip this phase entirely.
 ## Phase 3+4: Dispatch (using wave-dispatch.sh)
 
 Instead of manually creating splits, naming surfaces, and sending commands one by one,
-use the bundled dispatch script. It handles the full Phase 3 + Phase 4 sequence in one call:
+use the bundled dispatch script. It handles the full Phase 3 + Phase 4 sequence in one call.
+
+### Routing: Full vs Quick-Fix
+
+Before dispatching, classify each bead for routing:
 
 ```bash
-SKILL_DIR="$(dirname "$(readlink -f "$0")")"  # or use the known skill path
-./scripts/wave-dispatch.sh <bead-id1> <bead-id2> ... > /tmp/wave-config.json
+# For each bead in the wave, check effort and type
+EFFORT=$(bd show <id> --json | jq -r '.metadata.effort // ""')
+TYPE=$(bd show <id> --json | jq -r '.type // ""')
+```
+
+**Quick-Fix routing** (use `--quick <id>`):
+- `effort` is `micro` or `small` AND `type` is `bug`, `chore`, or `task`
+- No external API changes (no new integrations in the bead description)
+
+**Full orchestrator** (default, no flag needed):
+- `type` is `feature`
+- `effort` is `medium`, `large`, `xl`, or empty
+- Bead involves external API integrations
+
+### Dispatch Command
+
+Build the dispatch command from the Wave Table classifications. Full-mode beads are
+positional args, quick-mode beads use `--quick <id>`:
+
+```bash
+# Mixed wave: some full, some quick-fix (from Wave Table modes)
+./scripts/wave-dispatch.sh mira-adapters-0al --quick mira-fix-x3r --quick mira-adapters-doq > /tmp/wave-config.json
 ```
 
 Or with an explicit workspace:
 ```bash
-./scripts/wave-dispatch.sh <bead-id1> <bead-id2> --workspace workspace:5 > /tmp/wave-config.json
+./scripts/wave-dispatch.sh mira-adapters-0al --quick mira-fix-x3r --workspace workspace:5 > /tmp/wave-config.json
 ```
 
 The script:
 1. Creates horizontal splits (`cmux new-split right`) with 3s delays between them
-2. Renames each surface tab to `<short-id>-impl`
-3. Dispatches `cld -b <bead-id>` to each surface
+2. Renames each surface tab to `<short-id>-impl` (full) or `<short-id>-qf` (quick-fix)
+3. Dispatches `cld -b <bead-id>` (full) or `cld -bq <bead-id>` (quick-fix) to each surface
 4. Outputs a wave config JSON to stdout (save this — it's the input for monitoring)
 
 **Output format** (saved to `/tmp/wave-config.json`):
@@ -446,17 +495,18 @@ The script:
 {
   "dispatch_time": "2026-03-30T14:00:00",
   "workspace": "workspace:5",
+  "wave_id": "wave-20260330-140000",
   "beads": [
-    {"id": "mira-adapters-0al", "surface": "surface:3"},
-    {"id": "mira-adapters-doq", "surface": "surface:5"}
+    {"id": "mira-adapters-0al", "surface": "surface:3", "mode": "full"},
+    {"id": "mira-fix1", "surface": "surface:5", "mode": "quick"}
   ]
 }
 ```
 
-After dispatch, confirm to the user which beads were dispatched to which surfaces.
+After dispatch, confirm to the user which beads were dispatched to which surfaces and in which mode.
 
 **Important**: Do NOT use `cld -br` — that's for review-only sessions. The dispatch script
-uses `cld -b` which is the full implementation dispatch.
+uses `cld -b` (full) or `cld -bq` (quick-fix) based on the `--quick` flag.
 
 ---
 
