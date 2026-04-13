@@ -143,7 +143,7 @@ else
     git -C "$REPO_ROOT" add "$PLUGIN_JSON"
   done < <(find "$REPO_ROOT" -maxdepth 3 -path '*/.claude-plugin/plugin.json' -print0 2>/dev/null)
 
-  # Create annotated tag
-  git -C "$REPO_ROOT" tag -a "$NEXT_TAG" -m "Release $NEXT_VERSION"
-  echo "Tag created: $NEXT_TAG"
+  # Output tag info for the caller (agent creates tag AFTER the version bump commit)
+  echo "TAG_PENDING=$NEXT_TAG"
+  echo "TAG_MESSAGE=Release $NEXT_VERSION"
 fi

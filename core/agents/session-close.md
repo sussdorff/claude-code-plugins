@@ -296,7 +296,14 @@ git -C "$WORK_DIR" add VERSION sushi-config.yaml 2>/dev/null; true
 git -C "$WORK_DIR" commit -m "chore: bump version to $(cat VERSION)"
 ```
 
-The tag is created by the handler script.
+The handler outputs `TAG_PENDING=<tag>` and `TAG_MESSAGE=<msg>`. Create the tag
+**after** the commit so it points to the version bump commit (not the changelog):
+```bash
+# Parse from handler output
+TAG=$(grep 'TAG_PENDING=' <<< "$VERSION_OUTPUT" | cut -d= -f2)
+MSG=$(grep 'TAG_MESSAGE=' <<< "$VERSION_OUTPUT" | cut -d= -f2)
+git -C "$WORK_DIR" tag -a "$TAG" -m "$MSG"
+```
 
 ### Step 16: Push & Sync
 
