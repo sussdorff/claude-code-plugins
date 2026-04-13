@@ -31,6 +31,11 @@
             "type": "command",
             "command": "python3 \"${CLAUDE_PLUGIN_ROOT}/hooks/bd-cache-invalidator.py\"",
             "timeout": 5
+          },
+          {
+            "type": "command",
+            "command": "python3 \"${CLAUDE_PLUGIN_ROOT}/hooks/feature-scenario-reminder.py\"",
+            "timeout": 5
           }
         ]
       }
