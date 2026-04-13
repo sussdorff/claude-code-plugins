@@ -211,6 +211,8 @@ Estimated effort: <value> (auto-estimated)
 
 The caller (skill dispatcher or `cld`) should then spawn `beads-workflow:quick-fix` instead.
 
+**CRITICAL**: REROUTE_QUICK_FIX means STOP HERE. There is no exception for "already being in the orchestrator" or "having already started Phase 0". Stop at the point of detection — do not continue past this line regardless of how far the orchestrator has already run. The routing decision overrides all prior work in this session.
+
 **If effort is medium or larger, or type is feature**: continue with the full orchestrator below.
 
 → **Record phase_summary**: sizing decision, effort (pre-set or estimated*), routing mode (GSD/PAUL/REROUTE_QUICK_FIX), any slicing performed.
