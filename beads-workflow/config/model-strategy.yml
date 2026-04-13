@@ -6,7 +6,8 @@
 # "codex" means delegate to the Codex CLI runtime (OpenAI models).
 
 phase1:  # Bead Orchestrator Loop
-  orchestrator: opus       # Collects context, writes detailed impl instructions
+  orchestrator: sonnet     # Orchestrates phases, collects context, writes briefings
+  test_author: codex       # Writes failing TDD tests from acceptance criteria
   implementation: codex    # Follows instructions precisely, executes TDD
   review: opus             # Code review of implementation
   verification: sonnet     # Post-impl verification (tests pass, ACs met)

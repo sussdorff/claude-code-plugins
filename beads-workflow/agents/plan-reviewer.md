@@ -6,6 +6,7 @@ description: >-
   Appends structured review to plan files. Read-only for codebase — can only
   edit plan documents.
 tools: Read, Glob, Grep, Edit
+model: opus
 ---
 
 # Plan Reviewer Agent

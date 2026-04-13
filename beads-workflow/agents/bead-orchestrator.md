@@ -8,7 +8,7 @@ description: >-
 tools: Read, Write, Edit, Bash, Grep, Glob, Agent
 mcpServers:
   - open-brain
-model: opus
+model: sonnet
 system_prompt_file: malte/system-prompts/agents/bead-orchestrator.md
 cache_control: ephemeral
 ---
@@ -344,12 +344,12 @@ Before spawning subagent, gather:
    If not found: skip silently — not all projects have UAT configs.
 5. Check for project-specific TDD agents: `ls .claude/agents/`
    - Known specialized agents (as of claude-72p):
-     - `test-author` (sonnet) — writes TDD tests from spec/AK; barrier: no holdout, no impl source
-     - `implementer` (sonnet) — develops code against existing tests; barrier: no holdout, no bead description
+     - `test-author` (codex) — writes TDD tests from spec/AK; barrier: no holdout, no impl source
+     - `implementer` (codex) — develops code against existing tests; barrier: no holdout, no bead description
      - `holdout-validator` (sonnet) — runs holdout scenarios, read-only; barrier: no unit test source
      - `constraint-checker` (haiku) — verifies SLOs/security/perf and code quality, read-only
    - **NOTE:** Full TDD pipeline routing (test-author → implementer → holdout-validator) belongs to claude-rxm (not yet implemented)
-   - **For now:** use `general-purpose` subagent for all beads as before
+   - **For now:** use the Codex routing path (see Phase 3) for all beads
 
 6. **Architecture Design Doc (optional):** Check if the wave orchestrator generated a design doc:
    ```bash
@@ -427,13 +427,17 @@ Read the model strategy to determine the implementation model:
 cat "$CLAUDE_PLUGIN_ROOT/config/model-strategy.yml" 2>/dev/null || echo "# not found"
 ```
 
-If `phase1.implementation: codex`, the subagent prompt is sent to Codex via the
-`codex:codex-cli-runtime` skill (not as a Claude subagent). This means:
-- The prompt must be **completely self-contained** — Codex has no access to Claude context
-- All file paths, acceptance criteria, standards, and constraints must be explicit
-- Use the **Structured Codex Briefing Template** below (Codex follows structured formats precisely)
+**If `phase1.implementation: codex`** (default):
+- If a specialized agent matched (e.g. `pvs-adapter-impl`): spawn that agent — it handles Codex delegation internally.
+- Otherwise: spawn `codex:codex-rescue` directly as the implementation agent:
+  ```
+  Agent(subagent_type="codex:codex-rescue", prompt=<Structured Codex Briefing>)
+  ```
+- The Codex briefing must be **completely self-contained** — Codex has no access to Claude context.
+- All file paths, acceptance criteria, standards, and constraints must be explicit.
+- Use the **Structured Codex Briefing Template** below (Codex follows structured formats precisely).
 
-If `phase1.implementation: sonnet` (or config not found), fall back to the standard
+**If `phase1.implementation: sonnet`** (or config not found): fall back to the standard
 Claude subagent pattern (`subagent_type: "general-purpose"`).
 
 Spawn ONE subagent per bead (or per child bead if parallelizable).
