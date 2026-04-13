@@ -1,3 +1,21 @@
+## [unreleased]
+
+### 🚀 Features
+
+- *(bead-orchestrator)* Add effort estimation and quick-fix reroute in Phase 0
+
+### 🚜 Refactor
+
+- *(bead-workflow)* Establish opus/sonnet/codex tier architecture
+## [unreleased]
+
+### 🚀 Features
+
+- *(bead-orchestrator)* Add effort estimation and quick-fix reroute in Phase 0
+
+### 🚜 Refactor
+
+- *(bead-workflow)* Establish opus/sonnet/codex tier architecture
 # Changelog
 
 All notable changes to the Claude Code Plugins collection.
