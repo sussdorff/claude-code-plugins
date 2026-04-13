@@ -157,7 +157,63 @@ This includes child beads from slicing (which are `type: task`). Child beads inh
 the parent feature's scenario — the review-agent receives it via the `scenario:` field
 in its Input Contract, which the orchestrator populates from the parent bead's description.
 
-→ **Record phase_summary**: sizing decision, routing mode (GSD/PAUL), any slicing performed.
+### Effort Estimation & Quick-Fix Reroute
+
+Before routing, check if the bead has an effort estimate. If not, estimate it — this prevents
+full-orchestrator overhead for micro/small beads that arrive via `cld -b` without prior sizing.
+
+```bash
+EFFORT=$(bd show <id> --json | jq -r '.metadata.effort // ""')
+TYPE=$(bd show <id> --json | jq -r '.type // ""')
+```
+
+**If `EFFORT` is empty**, spawn a **haiku-class subagent** to estimate effort:
+
+```
+Agent(model="haiku", prompt="
+  Estimate the implementation effort for this bead. Read the title, description,
+  and acceptance criteria carefully.
+
+  <bd show output>
+
+  Effort scale:
+  - micro (XS): 1 file change, < 30 lines, no logic branches, no test changes needed
+  - small (S): 2-5 files, < 100 lines total, straightforward logic, minimal test changes
+  - medium (M): 5-15 files, non-trivial logic, requires tests/schema changes, or unclear scope
+  - large (L): 15+ files, architectural impact, significant test coverage needed
+  - xl (XL): multiple subsystems, migration required, high coordination cost
+
+  Answer ONLY: micro | small | medium | large | xl
+  Then one sentence justification.
+")
+```
+
+After estimation, persist the effort so future sessions don't re-estimate:
+
+```bash
+bd update <id> --metadata='{"effort": "<estimated>"}'
+```
+
+Log the estimation: `"Effort auto-estimated: <value> — <justification>"`
+
+**Quick-Fix Reroute**: If the estimated (or pre-set) effort is `micro` or `small` AND the type
+is `bug`, `chore`, or `task` (NOT `feature`), this bead is too lightweight for the full
+orchestrator. **Stop and return to the caller** with status `REROUTE_QUICK_FIX`:
+
+```
+## Reroute: Quick-Fix
+
+Bead <id> has effort <micro|small> and type <type>. Routing to quick-fix agent
+for a lightweight 4-phase workflow instead of the full 5-phase orchestrator.
+
+Estimated effort: <value> (auto-estimated)
+```
+
+The caller (skill dispatcher or `cld`) should then spawn `beads-workflow:quick-fix` instead.
+
+**If effort is medium or larger, or type is feature**: continue with the full orchestrator below.
+
+→ **Record phase_summary**: sizing decision, effort (pre-set or estimated*), routing mode (GSD/PAUL/REROUTE_QUICK_FIX), any slicing performed.
 
 ### Routing Decision: PAUL vs GSD
 
@@ -197,7 +253,9 @@ working on the same bead before the claim is visible.
 
 ### Phase 1.5: Plan Review Gate
 
-**Run only for M+ beads (medium, large effort; or feature beads with unknown effort). Skip for S/XS (micro, small, non-feature with empty effort).**
+**Run only for M+ beads. Skip for S/XS.** Note: effort is always set at this point —
+Phase 0's Effort Estimation fills in empty values (and reroutes micro/small non-features
+to quick-fix before reaching this phase).
 
 #### Step 1: Determine bead size
 
@@ -209,8 +267,7 @@ TYPE=$(bd show <id> --json | jq -r '.type // ""')
 Size rules:
 - `effort` is `micro` or `small` → **S** (skip gate, proceed to Phase 2)
 - `effort` is `medium`, `large`, `xl`, or `extra-large` → **M+** (run gate)
-- `effort` is empty and `type` is `feature` → **M+** (run gate)
-- `effort` is empty and `type` is anything else → **S** (skip gate)
+- `effort` is empty (should not happen — Phase 0 estimates it) → treat as **M+** (run gate, be safe)
 
 If `--skip-gates` flag was passed to the orchestrator: log `Gate skipped via --skip-gates` and proceed to Phase 2.
 

@@ -38,7 +38,13 @@ bd show <id> --json | jq -r '.type, .metadata.effort // ""'
 - `effort` is `micro` or `small` AND `type` is `bug`, `chore`, or `task`
 
 **Full orchestrator** (spawn `bead-orchestrator` agent):
-- Everything else: `type: feature`, effort M+, or empty effort on features
+- `type: feature` (any effort)
+- `effort` is `medium`, `large`, or `xl`
+- `effort` is **empty** (orchestrator will auto-estimate and reroute to quick-fix if appropriate)
+
+**Note:** When effort is empty, the bead-orchestrator runs a haiku estimator in Phase 0. If the
+estimated effort is micro/small and type is bug/chore/task, it returns `REROUTE_QUICK_FIX`.
+In that case, spawn the quick-fix agent as a follow-up.
 
 ### Step 2: Spawn the agent
 
