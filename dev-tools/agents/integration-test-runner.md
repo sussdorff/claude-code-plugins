@@ -3,7 +3,7 @@ name: integration-test-runner
 description: |
   Autonomous agent that analyzes code changes, determines appropriate test targets, and executes
   integration tests to validate user-facing behavior.
-tools: Bash, Read, Grep, Glob
+tools: Bash, Read, Grep, Glob, mcp__open-brain__save_memory, mcp__open-brain__search, mcp__open-brain__timeline, mcp__open-brain__get_context
 mcpServers:
   - open-brain
 model: sonnet

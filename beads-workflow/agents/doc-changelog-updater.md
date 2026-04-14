@@ -6,7 +6,7 @@ description: |
   via git diff, identifies which documentation files need updates, and adds properly formatted changelog entries.
   MUST BE USED when user asks to "update documentation", "add changelog entry", "document changes", or after
   feature implementation is complete.
-tools: Read, Write, Edit, Bash, Grep, Glob
+tools: Read, Write, Edit, Bash, Grep, Glob, mcp__open-brain__save_memory, mcp__open-brain__search, mcp__open-brain__timeline, mcp__open-brain__get_context
 mcpServers:
   - open-brain
 model: sonnet

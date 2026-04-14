@@ -5,7 +5,7 @@ description: >-
   claiming, implementation subagent spawning, review loop (review-agent, max 3
   iterations), verification, and handoff. Does NOT close beads — session-close
   handles closing after merge+push.
-tools: Read, Write, Edit, Bash, Grep, Glob, Agent
+tools: Read, Write, Edit, Bash, Grep, Glob, Agent, mcp__open-brain__save_memory, mcp__open-brain__search, mcp__open-brain__timeline, mcp__open-brain__get_context
 mcpServers:
   - open-brain
 model: sonnet

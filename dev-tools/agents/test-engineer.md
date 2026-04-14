@@ -5,7 +5,7 @@ description: |
   test framework automatically and applies appropriate patterns. Use PROACTIVELY when user requests:
   write unit tests, review test code, identify redundant tests, run tests, fix test failures, or
   analyze test results. MUST BE USED for all unit testing tasks.
-tools: Read, Write, Edit, Bash, Grep, Glob
+tools: Read, Write, Edit, Bash, Grep, Glob, mcp__open-brain__save_memory, mcp__open-brain__search, mcp__open-brain__timeline, mcp__open-brain__get_context
 mcpServers:
   - open-brain
 model: sonnet
