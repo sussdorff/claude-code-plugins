@@ -11,6 +11,10 @@
 ### 🚜 Refactor
 
 - *(bead-workflow)* Establish opus/sonnet/codex tier architecture
+
+### Bug Fixes
+
+- *(session-close)* Add MCP tool names to agent `tools:` allowlist — `mcpServers:` loads the server but each tool (e.g. `mcp__open-brain__save_memory`) must also appear in `tools:` or the subagent cannot call it
 # Changelog
 
 All notable changes to the Claude Code Plugins collection.
