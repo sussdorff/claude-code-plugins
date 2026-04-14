@@ -52,6 +52,33 @@ See `references/doc-index.md` for curated paths to key documentation pages.
 
 These prevent repeated mistakes specific to the mira deployment.
 
+### ALWAYS use /fhir base — aidbox-format endpoint is obsolete
+
+**Rule**: ALL Aidbox API calls from adapter code MUST use the `/fhir` base path.
+The aidbox-format endpoint (`/`) is becoming obsolete per Health Samurai and has
+resource-specific bugs that will NOT be fixed there.
+
+**Verified broken on Aidbox 2602.3 (2026-04-14)**:
+- `POST /AidboxTopicDestination` with a `header` parameter → **422 NPE**
+  `Cannot invoke "java.lang.CharSequence.length()" because "this.text" is null`
+- `POST /fhir/AidboxTopicDestination` with `header` parameter → **201 Created** (works)
+
+**Env var semantics** (mira-adapters):
+- `AIDBOX_BASE_URL` = root without `/fhir` (e.g. `http://localhost:8080`)
+- `AIDBOX_FHIR_URL` = convenience alias = `AIDBOX_BASE_URL + /fhir` — for tooling only
+- `AidboxClient` always appends `/fhir/` per method — never call `AIDBOX_BASE_URL` directly
+
+**Prior bad assumption (bead mira-adapters-lnut, reversed in mira-adapters-xzjk)**:
+The lnut bead routed `AidboxTopicDestination` to the admin path (`/AidboxTopicDestination/{id}`)
+due to a misread 405 error. The 405 was PUT-only on the aidbox-format path; POST on `/fhir` works
+fine. The lnut workaround was reverted in bead mira-adapters-xzjk.
+
+**Admin-only resources** (genuinely not on /fhir — stay on admin path):
+- `Client` (OAuth2 clients) → `PUT /{id}` via `putAdmin()`
+- `AccessPolicy` → `PUT /{id}` via `putAdmin()`
+- `$sql` → `POST /$sql` (special endpoint, not a FHIR resource)
+- `BulkImportStatus` → `GET /BulkImportStatus/{id}` (Aidbox-internal, not FHIR)
+
 ### AidboxTrigger setup (mira flat tables)
 
 SQL execution on FHIR CRUD, in-transaction:
