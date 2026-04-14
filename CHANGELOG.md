@@ -1,13 +1,8 @@
 ## [unreleased]
 
-### 🚀 Features
+### 📚 Documentation
 
-- *(bead-orchestrator)* Add effort estimation and quick-fix reroute in Phase 0
-
-### 🚜 Refactor
-
-- *(bead-workflow)* Establish opus/sonnet/codex tier architecture
-## [unreleased]
+- *(architecture)* Add 2026-04-14 session documents: bowser comparison, scenario-generator refactor, just+HOP 4-layer architecture, Claude+Codex+pi orchestration, Shikigami vs AFK Dispatcher split, bead generation plan
 
 ### 🚀 Features
 
