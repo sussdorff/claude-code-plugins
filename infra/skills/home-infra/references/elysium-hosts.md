@@ -36,6 +36,23 @@
 | 114 | mira | 192.168.60.24 | — | MIRA |
 | 115 | netbird | — | — | NetBird routing peer |
 | 116 | services | 192.168.60.30 | 3307 | Dolt Server |
+| 119 | kaji | — | — | Self-hosted GitHub Actions runner (cognovis org) |
+
+### LXC 119 — kaji (GitHub Actions Runner)
+
+- **Purpose**: Self-hosted runner for cognovis org repos (mira, mira-adapters, fhir-terminology-de). Replaces `ubuntu-latest` for all Linux CI jobs to avoid GitHub-hosted minute costs and speed up Docker builds.
+- **Registration**: https://github.com/organizations/cognovis/settings/actions/runners
+- **Labels**: `self-hosted, Linux, X64, docker, elysium`
+- **Usage in workflows**: `runs-on: [self-hosted, Linux, X64, elysium]`
+- **OS**: Debian 12 (bookworm)
+- **Pre-installed tooling** (manually installed 2026-04-14):
+  - `unzip`, `zip`, `jq`, `curl`, `ca-certificates`, `make`, `build-essential`, `locales-all`
+  - `nodejs 20.x` (NodeSource — required for inline `node -e "..."` workflow steps)
+  - `docker`, `docker buildx`, `git` (came with runner setup)
+  - `bun` is per-job via `oven-sh/setup-bun@v2`, cached in `~/.bun`
+- **Adding new packages**: `ssh elysium "pct exec 119 -- apt-get install -y <pkg>"` — then update this list.
+- **Companion runner**: macOS Darwin builds use `[self-hosted, macOS, ARM64, m4max]` (Malte's MacBook). Together they fully bypass GitHub-hosted runners.
+- **Known gotchas**: pvs-x-isynet has 20 unit tests that pass on macOS but fail on Debian/LXC (path traversal, timing-sensitive) — environment-sensitive test bugs, not runner bugs.
 
 ## IP Ranges (VLAN 60)
 
