@@ -6,7 +6,7 @@ description: >-
   extracts learnings, saves session summary, and pushes. Use when ending a session,
   releasing, or creating a versioned checkpoint. Triggers on: session-close,
   session close, release, rc, session beenden.
-tools: Read, Write, Edit, Bash, Grep, Glob, Agent
+tools: Read, Write, Edit, Bash, Grep, Glob, Agent, mcp__open-brain__save_memory, mcp__open-brain__search, mcp__open-brain__timeline, mcp__open-brain__get_context
 mcpServers:
   - open-brain
 model: sonnet
