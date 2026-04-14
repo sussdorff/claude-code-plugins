@@ -15,6 +15,7 @@
 ### Bug Fixes
 
 - *(session-close)* Add MCP tool names to agent `tools:` allowlist — `mcpServers:` loads the server but each tool (e.g. `mcp__open-brain__save_memory`) must also appear in `tools:` or the subagent cannot call it
+- *(agent-allowlists)* Extend MCP tool allowlist fix to doc-changelog-updater, bead-orchestrator, test-engineer, and integration-test-runner agents (CCP-8t0)
 # Changelog
 
 All notable changes to the Claude Code Plugins collection.
