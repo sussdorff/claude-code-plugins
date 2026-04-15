@@ -1,5 +1,9 @@
 ## [unreleased]
 
+### Bug Fixes
+
+- *(wave-orchestrator)* Fix idle detection in wave-status: use position-based approach instead of bag-of-clues to correctly identify idle agents; guard against stale terminal history with thinking/tool-call markers; check 2 preceding lines for thinking markers to handle extra status lines
+
 ### Features
 
 - *(dev-tools)* New `/project-context` skill: 4-phase workflow (Scan, Distill, Draft, Validate) for generating docs/project-context.md from a codebase (Constitution Pattern). Includes golden output template with 5 required sections (Tech-Stack, Architecture Principles, Module Map, Patterns, Invariants) and 7 structural tests.

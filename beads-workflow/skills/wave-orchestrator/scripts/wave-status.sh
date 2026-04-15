@@ -111,10 +111,28 @@ for i in $(seq 0 $((BEAD_COUNT - 1))); do
     fi
 
     # Check for idle shell (done) — empty prompt, no Claude session
-    # Look at the last few lines for a bare prompt
-    LAST_LINES=$(echo "$SCREEN" | tail -3)
-    if echo "$LAST_LINES" | grep -qE '^\s*(\$|❯|➜|%)\s*$'; then
-      # Bare prompt with nothing after it — likely done
+    # Position-based idle check: last non-empty line must be the prompt,
+    # and the line immediately before it must NOT be an active-thinking marker.
+    _surface_is_idle() {
+      local lines="$1"
+      local last_nonempty
+      last_nonempty=$(echo "$lines" | grep -v '^\s*$' | tail -1)
+      if ! echo "$last_nonempty" | grep -qE '^\s*(\$|❯|➜|%)\s*$'; then
+        return 1  # not idle — no prompt on last non-empty line
+      fi
+      # Check the 2 non-empty lines immediately preceding the prompt.
+      # Using 2 lines (not 1) covers cases where Claude renders an extra status
+      # line (e.g. "Press Ctrl+C to interrupt") between the thinking indicator
+      # and the prompt row.
+      local preceding_lines
+      preceding_lines=$(echo "$lines" | grep -v '^\s*$' | tail -3 | head -2)
+      if echo "$preceding_lines" | grep -qE 'Newspapering|Baking|Crunched|Churned|Thinking|[0-9]+m\s*[0-9]+s|[⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏]'; then
+        return 1  # not idle — active thinking visible adjacent to prompt
+      fi
+      return 0  # idle — prompt is last, no active thinking immediately before it
+    }
+    LAST_LINES=$(echo "$SCREEN" | tail -5)
+    if _surface_is_idle "$LAST_LINES"; then
       STATUS="done"
       DETAIL="Shell idle, no active session"
     fi
