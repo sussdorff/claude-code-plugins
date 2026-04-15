@@ -1,13 +1,15 @@
 {
   "name": "dev-tools",
   "version": "2026.04.25",
-  "description": "Development tooling \u2014 playwright-cli, bug-triage, codex, project-health, project-setup, spec-developer, test agents",
+  "description": "Development tooling — playwright-cli, bug-triage, codex, project-health, project-setup, project-context, spec-developer, test agents",
   "keywords": [
     "development",
     "testing",
     "codex",
     "playwright",
     "bug-triage",
-    "scaffolding"
+    "scaffolding",
+    "project-context",
+    "documentation"
   ]
 }
