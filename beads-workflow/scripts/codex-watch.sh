@@ -88,23 +88,19 @@ while true; do
         CMD_ARGS+=(--cwd "$WORKTREE_DIR")
     fi
 
-    # Run status; collect stderr for error reporting
-    POLL_STDERR_FILE=$(mktemp /tmp/codex-watch-err.XXXXXX)
+    # Run status; suppress stderr to avoid noise on transient errors.
+    # We rely on the retry budget (POLL_ERROR_MAX) to distinguish transient
+    # from permanent failures — no temp files needed.
     STATUS_OUTPUT=""
     POLL_OK=true
-    STATUS_OUTPUT=$(node "${CMD_ARGS[@]}" 2>"$POLL_STDERR_FILE") || POLL_OK=false
-    POLL_STDERR=$(cat "$POLL_STDERR_FILE" 2>/dev/null || true)
-    rm -f "$POLL_STDERR_FILE"
+    STATUS_OUTPUT=$(node "${CMD_ARGS[@]}" 2>/dev/null) || POLL_OK=false
 
     if [[ "$POLL_OK" == "false" ]]; then
         poll_error_count=$(( poll_error_count + 1 ))
         if [[ "$poll_error_count" -ge "$POLL_ERROR_MAX" ]]; then
             # Repeated failures — not transient. Emit error and exit.
             terminal_emitted=true
-            REASON="${POLL_STDERR:-companion exited non-zero ${poll_error_count} times in a row}"
-            # Truncate to one line for structured output
-            REASON_ONELINE=$(echo "$REASON" | head -1 | tr -d '\n')
-            echo "CODEX_WATCH_ERROR jobId=${JOB_ID} reason=${REASON_ONELINE}"
+            echo "CODEX_WATCH_ERROR jobId=${JOB_ID} reason=companion-poll-failed-${poll_error_count}-times"
             exit 1
         fi
         # Transient: wait and retry
