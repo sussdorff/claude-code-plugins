@@ -5,6 +5,14 @@
 - *(dev-tools)* New `/project-context` skill: 4-phase workflow (Scan, Distill, Draft, Validate) for generating docs/project-context.md from a codebase (Constitution Pattern). Includes golden output template with 5 required sections (Tech-Stack, Architecture Principles, Module Map, Patterns, Invariants) and 7 structural tests.
 - *(bead-orchestrator)* Inject Project Architecture Context and Bead Architecture Notes blocks into subagent prompt templates (Phase 2) — reads project-context.md or CLAUDE.md fallback, plus bead design field via JSON
 
+## [2026-04-15]
+
+### Documentation
+
+- *(docs)* Add `docs/project-context.md`: generated via `/project-context` skill — Tech Stack, 7 Architecture Principles, 12-row Module Map, 7 Patterns, 9 Invariants
+- *(readme)* Refresh README to match 8-plugin bundle layout: replace legacy per-tool catalog, fix install suffix from `@claude-code-plugins` to `@sussdorff-plugins`, add Repo Conventions and Development sections
+- *(beads-workflow)* Clarify cmux surface detection logic in quick-fix agent
+
 ### Bug Fixes
 
 - *(cmux-reviewer)* Replace blind background Codex wait with Monitor-based event loop using codex-watch.sh — STALL_DETECTED triggers cancel+retry, CODEX_FAILED reads log, hard timeout at 40min
