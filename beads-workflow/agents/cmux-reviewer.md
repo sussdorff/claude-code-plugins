@@ -4,7 +4,7 @@ description: >-
   Standalone cmux-based code reviewer for bead worktrees. Orchestrates the
   Codex adversarial-review runtime and handles fix injection via cmux surfaces,
   the re-review loop, and session-close triggering. Launched by `cld -br`.
-tools: Read, Bash, Grep, Glob, Agent
+tools: Read, Bash, Grep, Glob, Agent, Monitor
 model: opus
 color: red
 ---
@@ -88,7 +88,35 @@ Where `<diff_range_start>` is the left side of `diff_range` (e.g. `abc1234` from
 
 **Why the focus block matters:** Codex has no knowledge of the bead scope, the iteration history, or the difference between regressions and pre-existing issues. Without this block, it will find real issues in pre-existing code and flag them as blocking — leading to scope creep and review oscillation. You MUST include the focus block on every `adversarial-review` invocation in this agent.
 
-After spawning, wait for Codex to report back automatically. `--background` makes the runtime spawn a job and report completion asynchronously; the Bash call returns a job id and the final result is delivered via the Codex plugin's reporting channel. Parse the returned output:
+After spawning, capture the jobId from the output line: `"<title> started in the background as <jobId>."`. Then launch a Monitor to watch for Codex progress events.
+
+**Locate watch script:**
+```bash
+WATCH_SCRIPT=$(find ~/.claude/plugins -path '*/beads-workflow/scripts/codex-watch.sh' -type f 2>/dev/null | head -1)
+[ -z "$WATCH_SCRIPT" ] && WATCH_SCRIPT="$(dirname "$CODEX_COMPANION")/../../../beads-workflow/scripts/codex-watch.sh"
+```
+
+**Launch Monitor** (timeout_ms = 2400000 = 40 minutes):
+```
+Monitor(
+  command="bash \"$WATCH_SCRIPT\" \"$JOB_ID\" \"$CODEX_COMPANION\" \"$WORKTREE_DIR\"",
+  timeout_ms=2400000
+)
+```
+
+**React to each event type:**
+
+| Event | Action |
+|-------|--------|
+| `CODEX_DONE jobId=... elapsed=...` | Read result: `node "$CODEX_COMPANION" result "$JOB_ID" --json`. Parse findings. Filter by classification. Proceed to Phase 3. |
+| `CODEX_FAILED jobId=... elapsed=...` | Read log: `node "$CODEX_COMPANION" result "$JOB_ID" --json`. If recoverable (auth/timeout), retry once with a new Monitor. If not, escalate to user: *"Codex review failed for bead <BEAD_ID>. Manual review required."* |
+| `CODEX_CANCELLED jobId=... elapsed=...` | If cancelled by stall-retry logic (see STALL_DETECTED below), retry is already in progress. If manually cancelled by user, escalate: *"Review cancelled for bead <BEAD_ID>."* |
+| `STALL_DETECTED jobId=... elapsed=...` | **First stall:** Cancel + retry once: `node "$CODEX_COMPANION" cancel "$JOB_ID" --json`, then re-launch the same `adversarial-review` command and start a new Monitor. **Second stall:** Escalate to user: *"Codex review stalled twice for bead <BEAD_ID>. Manual review required."* |
+| `PHASE_CHANGE jobId=... phase=...` | Informational — log to output. No action needed. |
+| `CODEX_WATCH_EXIT jobId=...` | Watch script exited unexpectedly. Check: `node "$CODEX_COMPANION" status "$JOB_ID" --json`. If terminal state, handle as DONE/FAILED/CANCELLED. If still running, re-launch watch script. |
+| Monitor timeout (2400000ms elapsed) | Hard timeout hit. Cancel: `node "$CODEX_COMPANION" cancel "$JOB_ID" --json`. Escalate: *"Codex review timed out after 40 minutes for bead <BEAD_ID>."* |
+
+Once `CODEX_DONE` is received and results are read:
 
 1. **Filter by classification first.** Only `REGRESSION` findings become fix-injection candidates. `PRE_EXISTING` and `OUT_OF_SCOPE` findings go to the user report, not the impl surface.
 2. **Then decide status:**
@@ -167,6 +195,8 @@ node "$CODEX_COMPANION" adversarial-review \
   "$FOCUS_ITER2"
 ```
 
+Capture the jobId from the output and launch Monitor exactly as in Phase 2 (same event table, same timeout_ms=2400000, same STALL_DETECTED/CODEX_FAILED/CODEX_DONE/CODEX_CANCELLED/CODEX_WATCH_EXIT handlers). On `CODEX_DONE`, read results with `node "$CODEX_COMPANION" result "$JOB_ID" --json`.
+
 **Iteration 3 — neutral final review:**
 
 ```bash
@@ -175,6 +205,8 @@ node "$CODEX_COMPANION" review \
   --base <last_reviewed_sha> \
   --scope branch
 ```
+
+Capture the jobId from the output and launch Monitor exactly as in Phase 2 (same event table, same timeout_ms=2400000). On `CODEX_DONE`, read results with `node "$CODEX_COMPANION" result "$JOB_ID" --json`.
 
 Note: the `review` subcommand does NOT accept focus text. That's the point: no custom framing, no adversarial lens, no classification instructions — just a standard neutral review. Use this to answer the single question *"is the current state shippable?"*
 
@@ -417,3 +449,4 @@ cmux send --surface IMPL_SURFACE "session close" && cmux send-key --surface IMPL
 - **THREE dots in diff_range, ALWAYS.** Extract the left ref (start commit) for `--base`. If the input uses two dots, fix to three before use.
 - **Test-code findings are auto-ACCEPT at iter 2+ unless the test is actually broken.** "Could false-pass on the original bug" = fix (the test is structured so the bug slips through). "Could false-fail on some valid data shape" = accept (speculative flakiness, not a regression). Uncompilable / always-pass / always-fail = fix. Everything else on test paths (tests/, test_*.py, *_test.py, *.test.ts, *.spec.ts, __tests__/, conftest.py) is advisory and goes to the user DECIDE block, not the impl surface. This rule exists because the impl-agent already gates on tests passing — a theoretical "might be flaky" concern is not worth a re-review cycle.
 - **Always persist learnings before session-close.** The "session-close light" step (save review findings to open-brain) MUST run before triggering session close on the impl surface. This is the only way review findings survive surface cleanup — the wave orchestrator's Phase 7 report depends on these memories when scrollback is gone.
+- **Use Monitor, never blind-wait.** All Codex job waits in this agent use Monitor with timeout_ms=2400000 and explicit event handlers for CODEX_DONE, CODEX_FAILED, CODEX_CANCELLED, STALL_DETECTED, CODEX_WATCH_EXIT, and Monitor timeout. Never rely on Codex auto-reporting — it can hang silently in the 'starting' phase for 25+ minutes with no signal to the agent.
