@@ -41,6 +41,7 @@ last_phase=""
 stall_emitted=false
 poll_error_count=0
 terminal_emitted=false    # set to true before any terminal exit
+LAST_POLL_ERROR=""        # last non-zero companion error message
 
 # EXIT trap — fires ONLY for abnormal exits (crash, signal).
 # We clear it before normal terminal exits so it does not fire there.
@@ -88,19 +89,30 @@ while true; do
         CMD_ARGS+=(--cwd "$WORKTREE_DIR")
     fi
 
-    # Run status; suppress stderr to avoid noise on transient errors.
-    # We rely on the retry budget (POLL_ERROR_MAX) to distinguish transient
-    # from permanent failures — no temp files needed.
-    STATUS_OUTPUT=""
+    # Run status and capture combined stdout+stderr (no temp files).
+    # On success, stdout is JSON and stderr (if any) is harmless.
+    # On failure, the combined output is the error message.
+    COMBINED_OUTPUT=""
     POLL_OK=true
-    STATUS_OUTPUT=$(node "${CMD_ARGS[@]}" 2>/dev/null) || POLL_OK=false
+    COMBINED_OUTPUT=$(node "${CMD_ARGS[@]}" 2>&1) || POLL_OK=false
+
+    # On success, stdout is the JSON we care about.
+    # On failure, preserve full combined output as the error reason.
+    if [[ "$POLL_OK" == "true" ]]; then
+        STATUS_OUTPUT="$COMBINED_OUTPUT"
+    else
+        STATUS_OUTPUT=""
+        LAST_POLL_ERROR="$COMBINED_OUTPUT"
+    fi
 
     if [[ "$POLL_OK" == "false" ]]; then
         poll_error_count=$(( poll_error_count + 1 ))
         if [[ "$poll_error_count" -ge "$POLL_ERROR_MAX" ]]; then
             # Repeated failures — not transient. Emit error and exit.
             terminal_emitted=true
-            echo "CODEX_WATCH_ERROR jobId=${JOB_ID} reason=companion-poll-failed-${poll_error_count}-times"
+            # Truncate to single line for structured output
+            REASON_ONELINE=$(printf '%s' "${LAST_POLL_ERROR:-no output}" | head -1 | tr -d '\n\r')
+            echo "CODEX_WATCH_ERROR jobId=${JOB_ID} reason=${REASON_ONELINE}"
             exit 1
         fi
         # Transient: wait and retry
