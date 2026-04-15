@@ -374,7 +374,7 @@ Before spawning subagent, gather:
 
 8. **Bead Design Notes (optional):** Read the bead's design field:
    ```bash
-   BEAD_DESIGN=$(bd show <bead-id> | grep -A100 "^DESIGN" | tail -n +2 2>/dev/null || echo "")
+   BEAD_DESIGN=$(bd show <bead-id> --json | jq -r '.[0].design // ""' 2>/dev/null || echo "")
    ```
    If non-empty: include in the subagent prompt under `### Bead Architecture Notes`.
    If empty: omit the block entirely.
@@ -503,6 +503,13 @@ structured instructions with high fidelity — the more explicit, the better.
 - Do NOT add features beyond the acceptance criteria
 - Do NOT skip the Red phase — every test must fail first
 - {Project-specific constraints}
+
+### Project Architecture Context
+{Content of project-context.md or CLAUDE.md — always include. Gives implementer module boundaries, tech stack, and project conventions.}
+
+### Bead Architecture Notes
+{Include ONLY if bead has a non-empty design field. Contains bead-specific architecture decisions.}
+{Omit this block entirely if the design field is empty.}
 
 ## Acceptance Criteria
 {Verbatim from bd show — the definitive checklist}
