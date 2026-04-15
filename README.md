@@ -1,247 +1,148 @@
-# Claude Code Plugins Marketplace
+# sussdorff-plugins
 
-Professional Claude Code marketplace with 11 plugins and skills for shell scripting, git workflows, browser automation, and development tools.
+Personal Claude Code plugin bundles — 8 category plugins covering infrastructure, business
+operations, content creation, healthcare/FHIR, development tooling, harness authoring, core
+session essentials, and beads-workflow orchestration.
+
+Repository: https://github.com/sussdorff/claude-code-plugins
 
 ## Installation
 
-### Quick Start
-
-Add this marketplace to Claude Code:
-
-```bash
-/plugin marketplace add sussdorff/claude-code-plugins
-```
-
-Browse available plugins:
-
-```bash
-/plugin
-```
-
-Install specific plugins:
-
-```bash
-/plugin install plugin-name@claude-code-plugins
-```
-
-### Example Installation
+Add the marketplace and install plugins by name:
 
 ```bash
 # Add the marketplace
 /plugin marketplace add sussdorff/claude-code-plugins
 
-# Install bash best practices
-/plugin install bash-best-practices@claude-code-plugins
+# Browse
+/plugin
 
-# Install git workflow tools
-/plugin install git-operations@claude-code-plugins
-/plugin install git-worktree-tools@claude-code-plugins
-
-# Install plugin developer toolkit
-/plugin install plugin-developer@claude-code-plugins
+# Install individual bundles
+/plugin install core@sussdorff-plugins
+/plugin install dev-tools@sussdorff-plugins
+/plugin install beads-workflow@sussdorff-plugins
 ```
 
-## Marketplace Information
+## Plugins
 
-This repository is configured as an official Claude Code marketplace containing 11 plugins and skills organized by category:
+Each plugin is a category bundle of skills, agents, and (where applicable) lifecycle hooks.
+Install only the bundles you need — bundles are independent.
 
-- **Shell Scripting** (3): bash-best-practices, zsh-best-practices, powershell-pragmatic
-- **Git Workflow** (3): git-operations, git-worktree-tools, branch-synchronizer
-- **Automation** (1): playwright-mcp
-- **Development Tools** (2): plugin-developer, reference-file-compactor
-- **Productivity** (2): timing-matcher, youtube-music-updater
+### core
 
-All plugins are maintained in this monorepo with consistent structure and can be installed individually or as a collection.
+Essential skills for every session: beads, dolt, standards injection, cmux, prompt-refiner,
+summarize, vision, event-log. Ships `session-close` and git-operations agents, plus
+`read-before-edit` and `rules-loader` hooks.
 
-## Available Plugins
+Key skills: `beads`, `dolt`, `standards`, `cmux`, `prompt-refiner`, `summarize`, `vision`,
+`event-log`, `inject-standards`.
 
-### Shell Scripting Best Practices
+### beads-workflow
 
-#### bash-best-practices (v1.2.0)
+Beads orchestration and lifecycle — wave-orchestrator, epic-init, retro, compound,
+bead-metrics, workplan, intake. Ships bead-orchestrator, quick-fix, review-agent,
+verification-agent, plan-reviewer and session-context hooks.
 
-Cross-platform Bash scripting guide with comprehensive best practices.
+Key skills: `wave-orchestrator`, `epic-init`, `plan`, `impl`, `retro`, `compound`,
+`bead-metrics`, `workplan`, `intake`, `factory-check`, `stringer`.
 
-**Features:**
-- ShellCheck integration for linting
-- Tree-sitter-based function discovery
-- 20 comprehensive reference guides covering strict mode, arrays, error handling, and more
-- Common patterns and code review checklists
-- Works on macOS, Linux, and WSL
+### dev-tools
 
-See [bash-best-practices/SKILL.md](./bash-best-practices/SKILL.md)
+Development tooling — browser automation via `playwright-cli`, OpenAI Codex CLI wrapper
+(`codex`), `bug-triage`, `project-health`, `project-setup`, `project-context`, `spec-developer`.
+Ships 16 test/review agents (implementer, test-author, test-engineer, scenario-generator,
+holdout-validator, UAT validator, chrome-devtools-tester, etc.) and `anatomy-index` / `buglog`
+hooks.
 
----
+Key skills: `playwright-cli`, `codex`, `bug-triage`, `project-health`, `project-setup`,
+`project-context`, `spec-developer`.
 
-#### zsh-best-practices (v1.4.0)
+### infra
 
-macOS ZSH scripting best practices with automated function discovery.
+Infrastructure management — Hetzner Cloud and UniFi CLIs, home network topology, local VMs,
+document archives (Paperless, Piler), `portless` reverse-tunnel management, deployment
+principles.
 
-**Features:**
-- ZSH-specific patterns (typeset, 1-based arrays, word splitting)
-- Automated function discovery with tree-sitter
-- 10 comprehensive reference guides
-- macOS-specific considerations (BSD vs GNU tools)
-- Code review checklists
+Key skills: `hetzner-cloud`, `ui-cli`, `home-infra`, `infra-principles`, `local-vm`,
+`paperless-cli`, `piler-cli`, `portless`.
 
-See [zsh-best-practices/SKILL.md](./zsh-best-practices/SKILL.md)
+### business
 
----
+Business operations — proposal writing, invoicing (Collmex, Google One), Amazon order history,
+MoneyMoney finance queries, 1Password credentials, email dispatch via Apple Mail, AI readiness
+/ career check, multi-perspective document review (`council`).
 
-#### powershell-pragmatic (v1.0.0)
+Key skills: `angebotserstellung`, `collmex-cli`, `google-invoice`, `amazon`, `mm-cli`,
+`op-credentials`, `mail-send`, `ai-readiness`, `career-check`, `council`.
 
-Production-ready PowerShell coding patterns.
+### content
 
-**Features:**
-- Pragmatic best practices over dogmatic rules
-- PSScriptAnalyzer integration
-- Error handling and logging strategies
-- German output support for user-facing text (ASCII-only)
-- Reusability and modularity patterns
+Content creation and social — LinkedIn automation, brand/voice profiles, Pencil UI design,
+audio transcription via AssemblyAI, cmux browser/markdown surfaces.
 
-See [powershell-pragmatic/SKILL.md](./powershell-pragmatic/SKILL.md)
+Key skills: `linkedin`, `brand-forge`, `pencil`, `transcribe`, `cmux-browser`, `cmux-markdown`.
 
----
+### medical
 
-### Git Workflow Tools
+Healthcare and FHIR — Mira-specific Aidbox configuration, billing catalog review
+(EBM/GOA/HZV), and independent reviewer agents for GDPR/EU AI Act compliance and clinical UX
+human factors.
 
-#### git-operations (v1.0.0)
+Key skills: `mira-aidbox`, `billing-reviewer`. Agents: `compliance-reviewer`,
+`human-factors-reviewer`.
 
-Safe git operations with comprehensive safety checks.
+### meta
 
-**Features:**
-- Git Safety Protocol enforcement (authorship verification, push status checks)
-- Styleable commit messages (6 built-in styles: conventional, pirate, snarky, emoji, minimal, corporate)
-- Branch protection (blocks force-push to main/master)
-- Smart amend logic for pre-commit hooks
-- Configuration via CLAUDE.md
+Harness authoring and audit — agent/hook/skill/plugin creation, entropy scan, NBJ agent
+primitives audit, system prompt audit, token cost measurement, CLAUDE.md pruning, fleet-wide
+skill auditing, standards sync.
 
-See [git-operations/SKILL.md](./git-operations/SKILL.md)
+Key skills: `agent-forge`, `hook-creator`, `plugin-management`, `entropy-scan`, `nbj-audit`,
+`system-prompt-audit`, `token-cost`, `claude-md-pruner`, `skill-auditor`, `sync-standards`.
 
----
+## Repo Conventions
 
-#### git-worktree-tools (v1.0.0)
+- **Issue tracking**: [`beads`](https://github.com/steveyegge/beads) (`bd`) backed by a Dolt
+  remote. Run `bd prime` for the workflow, `bd ready` to find work, `bd show <id>` for detail.
+  Do not use TodoWrite/TaskCreate or markdown TODOs.
+- **Versioning**: CalVer at repo level (`VERSION`, git tag), SemVer in each
+  `plugin.json`.
+- **Python scripts**: Scripts with external dependencies use
+  [PEP 723](https://peps.python.org/pep-0723/) inline metadata with `uv` so they travel
+  self-contained into `~/.claude/`. Stdlib-only scripts use plain `python3`. See
+  [`CLAUDE.md`](./CLAUDE.md) for templates.
+- **Project context**: See [`docs/project-context.md`](./docs/project-context.md) for
+  architecture principles, module map, patterns, and invariants.
+- **Architecture notes**: Design sessions are captured under
+  [`docs/architecture/`](./docs/architecture/) in dated folders.
 
-Git worktree lifecycle management with project-aware configuration syncing.
+## Development
 
-**Features:**
-- Create, validate, and remove worktrees
-- Automatic branch handling and ticket extraction
-- Configuration synchronization (.claude/, CLAUDE.local.md, .env)
-- Black box operation (run from outside worktree)
-- JSON output for programmatic integration
+This repo uses a symlinked `.claude/` pattern — the project's own harness state lives in
+`~/code/claude/claude-code-plugins/` and is git-ignored, so local session state never ships
+with the marketplace.
 
-See [git-worktree-tools/skill.md](./git-worktree-tools/skill.md)
+When developing a new plugin or skill:
 
----
-
-#### branch-synchronizer (v1.0.0)
-
-Intelligent branch synchronization with conflict-aware rebasing.
-
-**Features:**
-- Fetch latest from remote and rebase onto main
-- Auto-stash uncommitted changes before rebase
-- Conflict detection with context-aware handling (agent vs interactive mode)
-- Branch discovery by ticket pattern (PROJ-*, TICKET-*, etc.)
-- Never auto-pushes (safety-first approach)
-
-See [branch-synchronizer/SKILL.md](./branch-synchronizer/SKILL.md)
-
----
-
-### Automation
-
-#### playwright-mcp (v1.0.0)
-
-Complete Playwright MCP toolkit for browser automation with Microsoft Edge.
-
-**Features:**
-- Automated Playwright MCP server installation and configuration
-- Project-specific .mcp.json setup with Edge browser
-- Content extraction and form filling capabilities
-- Authenticated browsing support
-- Testing workflow integration
-- Complete reference documentation and site presets
-
-See [playwright-mcp/README.md](./playwright-mcp/README.md)
-
----
-
-### Development Tools
-
-#### plugin-developer (v1.0.0)
-
-Comprehensive toolkit for creating and managing Claude Code plugins, skills, commands, agents, hooks, and marketplaces.
-
-**Features:**
-- **agent-creator**: Create specialized AI agents with custom prompts and tool access
-- **command-creator**: Build slash commands with parameter handling and model selection
-- **hook-creator**: Implement lifecycle hooks for security and workflow automation
-- **marketplace-manager**: Set up and manage plugin marketplaces
-- **plugin-creator**: Design complete plugins with multiple components
-- **plugin-tester**: Test plugins locally before distribution
-- **skill-tester**: Validate and install skills during development
-
-See [plugin-developer/README.md](./plugin-developer/README.md)
-
----
-
-#### youtube-music-updater (v1.0.0)
-
-Update YouTube Music desktop application from GitHub releases.
-
-**Features:**
-- Version checking and comparison
-- App restart and quarantine attribute removal (macOS)
-- Handles pear-devs GitHub releases
-- macOS focused
-
-See [youtube-music-updater/SKILL.md](./youtube-music-updater/SKILL.md)
-
----
-
-#### reference-file-compactor (v1.0.0)
-
-Optimize and compact skill reference files using validation-driven workflow.
-
-**Features:**
-- Single file or whole skill compaction
-- Validation-driven workflow
-- Context-aware compression
-- Maintains reference integrity
-
-See [reference-file-compactor/SKILL.md](./reference-file-compactor/SKILL.md)
-
----
-
-### Productivity Tools
-
-#### timing-matcher (v1.0.0)
-
-Process large Timing app JSON exports to match unassigned activities to projects using pattern recognition, git commit correlation, and intelligent aggregation.
-
-**Features:**
-- Handles 70k+ entries efficiently with incremental processing
-- Pattern extraction from training data (ticket prefixes, activity patterns)
-- Git commit correlation (±15 min window with commit SHA linking)
-- Intelligent activity aggregation with confidence scoring
-- Timing MCP server integration for bulk time entry creation
-- Duplicate detection and rate limit handling
-
-See [timing-matcher/SKILL.md](./timing-matcher/SKILL.md)
-
----
+1. `bd create --title="..." --description="..."` — file the issue first.
+2. Add skill/agent/hook files under the appropriate plugin directory.
+3. Register the skill in the plugin's manifest if required.
+4. Close the bead and run `session-close` (commits, tags, pushes).
+
+See [`CLAUDE.md`](./CLAUDE.md) for full standards and the
+[`meta` plugin](./meta/) for authoring helpers (`agent-forge`, `hook-creator`,
+`plugin-management`, `skill-auditor`).
 
 ## Contributing
 
-Contributions are welcome! Please feel free to submit issues or pull requests.
+Issues and PRs welcome. For substantive changes, file a bead first so work is trackable.
 
 ## License
 
-MIT License - see [LICENSE](./LICENSE) file for details.
+MIT — see [LICENSE](./LICENSE).
 
-Copyright (c) 2025 Malte Sussdorff
+Copyright © 2025 Malte Sussdorff.
 
 ## Changelog
 
-See [CHANGELOG.md](./CHANGELOG.md) for version history and detailed changes.
+See [CHANGELOG.md](./CHANGELOG.md).
