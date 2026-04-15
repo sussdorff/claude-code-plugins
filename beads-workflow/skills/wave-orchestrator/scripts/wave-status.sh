@@ -111,16 +111,26 @@ for i in $(seq 0 $((BEAD_COUNT - 1))); do
     fi
 
     # Check for idle shell (done) — empty prompt, no Claude session
-    # Look at the last few lines for a bare prompt
-    LAST_LINES=$(echo "$SCREEN" | tail -5)
-    if echo "$LAST_LINES" | grep -qE '^\s*(\$|❯|➜|%)\s*$'; then
-      # Only idle if no active thinking markers are present — Claude Code shows
-      # a bare prompt on the bottom line even while actively thinking (e.g.
-      # "Newspapering... 12m 2s" with ❯ still visible below it).
-      if ! echo "$LAST_LINES" | grep -qE 'Newspapering|Baking|Crunched|Churned|Thinking|[0-9]+m\s*[0-9]+s|[⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏]'; then
-        STATUS="done"
-        DETAIL="Shell idle, no active session"
+    # Position-based idle check: last non-empty line must be the prompt,
+    # and the line immediately before it must NOT be an active-thinking marker.
+    _surface_is_idle() {
+      local lines="$1"
+      local last_nonempty
+      last_nonempty=$(echo "$lines" | grep -v '^\s*$' | tail -1)
+      if ! echo "$last_nonempty" | grep -qE '^\s*(\$|❯|➜|%)\s*$'; then
+        return 1  # not idle — no prompt on last non-empty line
       fi
+      local prev_line
+      prev_line=$(echo "$lines" | grep -v '^\s*$' | tail -2 | head -1)
+      if echo "$prev_line" | grep -qE 'Newspapering|Baking|Crunched|Churned|Thinking|[0-9]+m\s*[0-9]+s|[⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏]'; then
+        return 1  # not idle — active thinking visible before prompt
+      fi
+      return 0  # idle — prompt is last, no active thinking immediately before it
+    }
+    LAST_LINES=$(echo "$SCREEN" | tail -5)
+    if _surface_is_idle "$LAST_LINES"; then
+      STATUS="done"
+      DETAIL="Shell idle, no active session"
     fi
 
     # Detect follow-up beads (bd create in scrollback)

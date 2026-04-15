@@ -25,6 +25,28 @@ ALL_CLOSED=true
 ALL_IDLE=true
 STRAGGLERS="[]"
 
+# Position-based idle check: last non-empty line must be the prompt,
+# and the line immediately before it must NOT be an active-thinking marker.
+_surface_is_idle() {
+  local lines="$1"
+  # Find the last non-empty line
+  local last_nonempty
+  last_nonempty=$(echo "$lines" | grep -v '^\s*$' | tail -1)
+  # Must end with a bare prompt
+  if ! echo "$last_nonempty" | grep -qE '^\s*(\$|❯|➜|%)\s*$'; then
+    return 1  # not idle — no prompt on last non-empty line
+  fi
+  # Get the line immediately before the last non-empty line
+  # (i.e., second-to-last non-empty line)
+  local prev_line
+  prev_line=$(echo "$lines" | grep -v '^\s*$' | tail -2 | head -1)
+  # If the previous line is an active-thinking marker, not idle
+  if echo "$prev_line" | grep -qE 'Newspapering|Baking|Crunched|Churned|Thinking|[0-9]+m\s*[0-9]+s|[⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏]'; then
+    return 1  # not idle — active thinking visible before prompt
+  fi
+  return 0  # idle — prompt is last, no active thinking immediately before it
+}
+
 for i in $(seq 0 $((BEAD_COUNT - 1))); do
   BEAD_ID=$(jq -r ".beads[$i].id" "$CONFIG")
   SURFACE=$(jq -r ".beads[$i].surface" "$CONFIG")
@@ -43,13 +65,8 @@ for i in $(seq 0 $((BEAD_COUNT - 1))); do
     # Surface gone — treat as idle (process exited). The bd status check above
     # is the authoritative completion signal; this is only about liveness.
     SURFACE_IDLE=true
-  elif echo "$LAST_LINES" | grep -qE '^\s*(\$|❯|➜|%)\s*$'; then
-    # Only idle if no active thinking markers are present — Claude Code shows
-    # a bare prompt on the bottom line even while actively thinking (e.g.
-    # "Newspapering... 12m 2s" with ❯ still visible below it).
-    if ! echo "$LAST_LINES" | grep -qE 'Newspapering|Baking|Crunched|Churned|Thinking|[0-9]+m\s*[0-9]+s|[⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏]'; then
-      SURFACE_IDLE=true
-    fi
+  elif _surface_is_idle "$LAST_LINES"; then
+    SURFACE_IDLE=true
   fi
 
   if [[ "$BD_STATUS" != "closed" ]]; then
