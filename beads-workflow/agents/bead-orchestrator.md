@@ -363,7 +363,23 @@ Before spawning subagent, gather:
    cleaned up after session close. Treat its recommendations as strong guidance, not hard rules.
    If not found: skip silently — not all beads go through architecture review.
 
-→ **Record phase_summary**: key files identified, relevant standards, external API status, arch design doc (if present).
+7. **Project Architecture Context (MANDATORY):** Read project architecture for every bead:
+   ```bash
+   # Prefer project-context.md; fall back to CLAUDE.md
+   PROJECT_CONTEXT=$(cat .claude/project-context.md 2>/dev/null || cat CLAUDE.md 2>/dev/null || cat .claude/CLAUDE.md 2>/dev/null || echo "")
+   ```
+   Include the content in the subagent prompt under `### Project Architecture Context`.
+   This ensures every implementer understands module boundaries, tech stack, and naming conventions
+   without having to self-discover them.
+
+8. **Bead Design Notes (optional):** Read the bead's design field:
+   ```bash
+   BEAD_DESIGN=$(bd show <bead-id> | grep -A100 "^DESIGN" | tail -n +2 2>/dev/null || echo "")
+   ```
+   If non-empty: include in the subagent prompt under `### Bead Architecture Notes`.
+   If empty: omit the block entirely.
+
+→ **Record phase_summary**: key files identified, relevant standards, external API status, arch design doc (if present), project context source (project-context.md or CLAUDE.md), bead design field (present/absent).
 
 ### Phase 2.5: Break Analysis (Pre-Mortem)
 
@@ -523,6 +539,13 @@ At the end, ALWAYS include:
 ### Standards
 Load these standards before implementing:
 {STANDARD_PATHS}
+
+### Project Architecture Context
+{Content of .claude/project-context.md or CLAUDE.md — always include. Gives implementer module boundaries, tech stack, and project conventions.}
+
+### Bead Architecture Notes
+{Include ONLY if bead has a non-empty design field. Contains bead-specific architecture decisions, patterns to follow, and design constraints.}
+{Omit this block entirely if the design field is empty.}
 
 ### Environment
 Portless namespace: {BEAD_NS, e.g. mira-92}
