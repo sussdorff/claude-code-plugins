@@ -87,13 +87,6 @@ bd update <id> --status=in_progress
 bd dolt commit && bd dolt pull && bd dolt push --force
 ```
 
-Detect own cmux surface (single-pane design — needed for fix injection and session-close handoff):
-```bash
-IMPL_SURFACE="${CMUX_SURFACE_ID:-}"
-```
-If `IMPL_SURFACE` is empty, you are running standalone (no cmux). In that case, fix injection
-spawns a new subagent and session-close is reported back to the caller (see Phase 3).
-
 Gather minimal context:
 1. Read files mentioned in the bead description
 2. Check for project-specific standards (quick scan only):
@@ -185,22 +178,25 @@ Filter by classification:
 
 **Iteration 1 findings:** Write a fix prompt and inject it.
 
-If running in cmux (`IMPL_SURFACE` non-empty from Phase 0):
-```bash
-cat > /tmp/quick-fix-{BEAD_ID}-i1.md << 'FIXEOF'
-## Review Findings — Quick Fix {BEAD_ID}
+Spawn a new Sonnet subagent with the fix instructions — same pattern as the Phase 1
+implementer. Quick-fix is single-pane, so there is no separate impl surface to message;
+the fix lives inline in the same agent turn.
 
-### FIX
-- [file:line] Finding -> what to change
+```
+Agent(subagent_type="general-purpose", description="Fix review findings {BEAD_ID}", prompt="
+  ## Review Findings — Quick Fix {BEAD_ID} (Iteration 1)
 
-### After fixing
-Commit your changes, then signal done.
-FIXEOF
+  <REGRESSION findings from Codex, one per bullet with file:line>
 
-cmux send --surface "$IMPL_SURFACE" "$(cat /tmp/quick-fix-{BEAD_ID}-i1.md)" && cmux send-key --surface "$IMPL_SURFACE" enter
+  ### Rules
+  - Fix only what is listed above. Do not refactor surrounding code.
+  - Tests must still pass. Re-run the project's test suite.
+  - COMMIT your changes: git add <files> && git commit -m 'fix({BEAD_ID}): <summary>'
+  - Report back: files changed, test result, commit SHA.
+")
 ```
 
-If NOT in cmux (`IMPL_SURFACE` empty, standalone mode): spawn a new Sonnet subagent with the fix instructions.
+Wait for the subagent to return, then proceed to Iteration 2 re-review.
 
 **Iteration 2 (re-review):** After fix is committed, run a neutral `review` (NOT adversarial):
 
@@ -242,20 +238,38 @@ except Exception as e:
 
 #### Trigger Session Close
 
-**MANDATORY** — do not skip and do not just print "Next: session close" in a recap. Either
-invoke the cmux send below, or (standalone) emit the explicit handoff message to the caller.
+**MANDATORY and unconditional.** Spawn the session-close agent directly via the Agent tool —
+quick-fix is single-pane by design, so there is nothing to route to via cmux. No env-var
+detection, no IMPL_SURFACE branching, no HANDOFF message.
 
-If in cmux (`IMPL_SURFACE` non-empty from Phase 0):
-```bash
-cmux send --surface "$IMPL_SURFACE" "session close" && cmux send-key --surface "$IMPL_SURFACE" enter
 ```
-The text is queued in your own pane's terminal buffer and will execute as the next user
-prompt the moment your agent message returns. Do not also print "Next: session close" —
-the cmux send IS the trigger.
+Agent(subagent_type="core:session-close", description="Session close for {BEAD_ID}", prompt="
+  Close session for bead {BEAD_ID} — {TITLE}.
 
-If standalone (`IMPL_SURFACE` empty): print exactly this final line so the caller
-(wave-orchestrator or user) knows to trigger session-close themselves:
-> `QUICK-FIX HANDOFF: trigger 'session close' for {BEAD_ID} — orchestrator will not auto-trigger in standalone mode.`
+  Quick-fix complete:
+  - Review iterations: {N}
+  - Regressions fixed: {count}
+  - Commits on branch: <git log output for the branch>
+
+  Run the full session-close pipeline:
+  1. Double-merge main → feature
+  2. Conventional commit + changelog + CalVer tag
+  3. Learnings + session summary (open-brain)
+  4. Merge feature → main + push + bd dolt commit/push
+  5. Close the bead
+")
+```
+
+Why Agent() and not cmux send:
+- Quick-fix is a single-pane agent. Its "own" surface is the pane it runs in — there is
+  no separate implementer pane to message.
+- `$CMUX_SURFACE_ID` is not reliably propagated into claude-code's Bash tool environment
+  under `cld`. A check for it would often fail and leave the bead stranded.
+- `Agent(subagent_type="core:session-close")` runs inline inside this agent's turn,
+  returns the merge/tag/push result, and lets quick-fix report final status before
+  exiting. No user intervention required.
+
+The old cmux-send-to-self approach is deprecated — do not reintroduce it.
 
 #### Output Summary
 
@@ -307,8 +321,12 @@ If standalone (`IMPL_SURFACE` empty): print exactly this final line so the calle
   redirect to bead-orchestrator. Don't try to quick-fix a complex bead.
 - **Minimal context, not no context.** Read the files mentioned in the bead. Check for obvious
   standards. But don't do a full standards scan, external API lookup, or break analysis.
-- **Always know your own surface.** In single-pane cmux mode, `IMPL_SURFACE=$CMUX_SURFACE_ID`
-  is your handle for both fix injection AND the session-close handoff. Detect it once in
-  Phase 0; never leave the placeholder un-resolved. A recap saying "Next: session close"
-  without the cmux send is a BUG — the wave-orchestrator will see your pane idle and the
-  bead will sit in `in_progress` forever, blocking subsequent waves.
+- **Single-pane means single-pane.** Quick-fix does NOT route to an impl surface via cmux.
+  It IS the pane. Fix injection happens by spawning a subagent inline (Agent tool).
+  Session-close happens by spawning `core:session-close` inline (Agent tool). Never
+  introduce `cmux send --surface $CMUX_SURFACE_ID "..."` style self-messaging — the env
+  var is not reliably exported through `cld`, and even when it is, the self-injection is
+  convoluted compared to just calling the next agent directly.
+- **"Next: session close" in a recap is a BUG** — trigger session-close yourself via
+  `Agent(subagent_type="core:session-close", ...)` before returning. A user-visible
+  HANDOFF message is acceptable only as a last-resort diagnostic, never as the normal path.
