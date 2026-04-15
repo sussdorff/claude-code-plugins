@@ -343,7 +343,12 @@ Phase 2 data.
 ```bash
 uv run python -c "
 import os, sys
-sys.path.insert(0, os.path.join(os.environ['CLAUDE_PLUGIN_ROOT'], 'lib'))
+from pathlib import Path
+_candidates = [os.environ.get('CLAUDE_PLUGIN_ROOT'), str(Path.home()/'code/claude-code-plugins/beads-workflow'), str(Path.home()/'.claude/plugins/beads-workflow')]
+_lib = next((Path(c)/'lib' for c in _candidates if c and (Path(c)/'lib/orchestrator/metrics.py').exists()), None)
+if _lib is None:
+    print('Phase 2 metrics skipped: plugin lib not found', file=sys.stderr); sys.exit(0)
+sys.path.insert(0, str(_lib))
 from orchestrator.metrics import update_phase2_metrics
 
 update_phase2_metrics(
