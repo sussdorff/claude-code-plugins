@@ -24,8 +24,9 @@ and explains how to write project-specific integration checks.
 - The Architecture Council (Phase 1.5b) reviewed the wave but did NOT ask: "Do KBV/DIMDI
   catalogs need a universal scope without adapter-prefix?"
 - After epic close, a manual live-Aidbox invariant query revealed:
-  - KBV Fachrichtungsschlüssel (specialty codes): referenced by both eUeberweisung and
-    eArztbrief, but stored per-adapter → cross-adapter queries broke
+  - KBV Fachabteilungsschlüssel (hospital department codes): the CodeSystem URL returned 0
+    results in a universal scope — because it was only loaded under per-adapter prefixed
+    scopes (`kbv-eueberweisung`, `kbv-earztbrief`), not as a shared universal resource
   - DIMDI ICD catalog: same issue — no shared universal scope
 
 **What went wrong:**
@@ -44,17 +45,21 @@ A council review for any of the 30 beads (or for the epic-level architecture bea
 have flagged: "KBV Fachrichtungsschlüssel requires a universal scope without adapter-prefix".
 
 **Would an integration-verification have caught it?**
-YES. A `.beads/integration-check.sh` for Aidbox would have run:
+YES. A `.beads/integration-check.sh` for Aidbox would have queried the CodeSystem URL in
+universal scope (no adapter-prefix). The check detects absence-of-universal-scope: if
+`.total == 0`, the CodeSystem was never loaded as a shared universal resource — only under
+per-adapter scopes. For example:
 
 ```bash
-# Check: Are KBV specialty codes stored in a universal scope?
+# Check: Is KBV Fachabteilungsschlüssel present in universal scope?
 curl -s "$AIDBOX_URL/fhir/CodeSystem?url=http://fhir.de/CodeSystem/dkgev/Fachabteilungsschluessel" \
-  | jq '.entry | length'
+  | jq '.total // 0'
 # Expected: > 0 (universal scope exists)
-# Actual: 0 (only per-adapter scopes existed)
+# Actual: 0 (only per-adapter scopes existed — universal scope absent)
 ```
 
-Exit code 1 → FAIL → CRITICAL finding → follow-up bead created before epic was declared complete.
+`.total == 0` → CRITICAL finding ("not found in universal scope") → follow-up bead created
+before epic was declared complete.
 
 ## Canonical-Catalog Taxonomy by Domain
 
@@ -63,7 +68,7 @@ Use this as a reference when reviewing beads or writing integration checks.
 ### Medical / Healthcare (Germany)
 | Authority | Catalog | Scope pattern |
 |-----------|---------|---------------|
-| KBV | Fachrichtungsschlüssel, Abrechnungsschlüssel | universal, no adapter-prefix |
+| KBV | Fachabteilungsschlüssel (hospital), Fachgruppenschlüssel (GP) | universal, no adapter-prefix |
 | DIMDI / BfArM | ICD-10-GM, OPS | universal |
 | WHO | ICD-11, ICD-10 international | universal |
 | Regenstrief | LOINC (lab codes) | universal |
@@ -116,7 +121,7 @@ Create this file in the project root under `.beads/` to enable automated integra
 # Must output JSON matching the integration-check schema.
 # Exit 0 = PASS, Exit 1 = FAIL, Exit 2 = error
 
-set -euo pipefail
+set -uo pipefail
 
 FINDINGS="[]"
 STATUS="PASS"
@@ -138,8 +143,8 @@ add_finding() {
 if [[ -n "${AIDBOX_URL:-}" ]]; then
   # KBV Fachrichtungsschlüssel (specialty codes) — must be in universal scope
   KBV_COUNT=$(curl -sf "$AIDBOX_URL/fhir/CodeSystem?url=http://fhir.de/CodeSystem/dkgev/Fachabteilungsschluessel" \
-    | jq '.total // 0' 2>/dev/null || echo "0")
-  if [[ "$KBV_COUNT" -eq 0 ]]; then
+    | jq -r '.total // 0' 2>/dev/null || echo 0)
+  if [[ "${KBV_COUNT:-0}" =~ ^[0-9]+$ ]] && [[ "${KBV_COUNT:-0}" -eq 0 ]]; then
     add_finding "CRITICAL" "missing_scope" \
       "KBV Fachrichtungsschlüssel not found in universal scope" \
       "Create CodeSystem resource at http://fhir.de/CodeSystem/dkgev/Fachabteilungsschluessel without adapter-prefix"

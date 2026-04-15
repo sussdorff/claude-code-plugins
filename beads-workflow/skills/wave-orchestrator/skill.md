@@ -348,6 +348,10 @@ Agent(model="haiku", prompt="
 
 Run these in parallel (one per REVIEW_MAYBE bead). Fast and cheap.
 
+**Note on canonical-catalog coverage:** The Haiku fallback only applies to `REVIEW_MAYBE` beads
+(score 3-5). Low-scoring beads (score < 3) that involve catalog work bypass both checks.
+For epic-level catalog gaps, rely on Phase 6.5 Integration-Verification as the backstop.
+
 ### Architecture Council Execution
 
 For all beads with final verdict `REVIEW_YES`, run the Architecture Council.
@@ -803,19 +807,20 @@ have already closed, triggered by the wave-orchestrator.
 
 **Skip conditions:**
 - `--skip-integration-check` flag set → log skip, proceed to Phase 7
-- No `.beads/integration-check.sh` exists in the project → log advisory, proceed to Phase 7
-- Single-bead waves (no cross-bead invariants to check)
+- Single-bead **epic** (no cross-bead invariants possible)
 
 ### Running the Integration Check
 
 Check for a project-specific integration check script:
 
 ```bash
+# Non-zero exit means FAIL (see JSON status). Do NOT use set -e here.
 if [[ -f .beads/integration-check.sh ]]; then
-  bash .beads/integration-check.sh > /tmp/integration-check-results.json
-  echo "Integration check exit: $?"
+  bash .beads/integration-check.sh > /tmp/integration-check-results.json || true
+  INTEGRATION_EXIT=$?
 else
   echo '{"status": "SKIPPED", "reason": "No .beads/integration-check.sh found"}' > /tmp/integration-check-results.json
+  INTEGRATION_EXIT=0
 fi
 ```
 
@@ -888,7 +893,7 @@ bd create \
 Finding: <description>
 Recommendation: <recommendation>
 
-Discovered by integration-verification after epic close." 2>&1 | grep "Created issue:"
+Discovered by integration-verification after epic close."
 ```
 
 Log the created beads to the wave's bead notes and include them in the Phase 7 Learnings Report.
