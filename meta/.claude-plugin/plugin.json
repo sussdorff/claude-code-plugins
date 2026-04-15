@@ -1,6 +1,6 @@
 {
   "name": "meta",
-  "version": "2026.04.21",
+  "version": "2026.04.22",
   "description": "Harness authoring and audit \u2014 agent/hook/skill/plugin creation, entropy scan, NBJ audit, system prompt audit, token cost measurement, CLAUDE.md pruning, standards sync",
   "keywords": [
     "meta",
