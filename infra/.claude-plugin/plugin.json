@@ -1,6 +1,6 @@
 {
   "name": "infra",
-  "version": "2026.04.28",
+  "version": "2026.04.30",
   "description": "Infrastructure management \u2014 Hetzner Cloud, UniFi, home network, VMs, document archives, and deployment principles",
   "keywords": [
     "infrastructure",

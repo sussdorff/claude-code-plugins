@@ -92,6 +92,12 @@ process serves ALL projects from `~/.beads/shared-server/dolt/`. Push/pull uses 
 protocol which does not dirty the remote working set. `bd` manages the server lifecycle
 automatically.
 
+**Auto-start (v1.0.0+)**: `bd` transparently starts the shared server on first use — do
+NOT add defensive `bd dolt start` calls to every workflow. Only run `bd dolt start`
+explicitly when recovering from `bd dolt stop` or when diagnosing a "server connection
+failed" error. There is no LaunchAgent or launchd keep-alive — the server runs as a
+child of the first `bd` invocation and persists until machine reboot or `bd dolt stop`.
+
 **Embedded Dolt** (`bd init`, the default since v1.0.0) is **NOT WORKING RELIABLY** for
 push/pull when the remote runs a Dolt SQL server (our setup). See
 [Embedded Mode — Known Broken](#embedded-mode--known-broken) for details. Do not use
@@ -162,7 +168,11 @@ All projects should use shared-server mode. Embedded mode has a known remotesapi
 - Missing `"dolt_mode": "server"` in `metadata.json` (required since bd 0.63.3)
 - `metadata.json` contains stale fields: `dolt_server_port`, `backend`, or `database`
 - A dolt process running from `.beads/dolt/` instead of `~/.beads/shared-server/dolt/`
-- Hardcoded port in `.beads/dolt-server.port`
+
+> **Not a red flag anymore**: `.beads/dolt-server.port` exists in shared-server mode —
+> bd 1.0.0+ writes it as runtime state on each invocation (gitignored). Deleting it is
+> harmless; it will be recreated on the next `bd` call. Only worry about it if bd is
+> using the port value to connect somewhere wrong (check `bd dolt show`).
 
 ## Target State
 
