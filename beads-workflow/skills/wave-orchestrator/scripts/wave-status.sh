@@ -50,16 +50,25 @@ for i in $(seq 0 $((BEAD_COUNT - 1))); do
   SURFACE=$(jq -r ".beads[$i].surface" "$CONFIG")
 
   (
-    # Read screen content
-    SCREEN=$(cmux read-screen --surface "$SURFACE" --scrollback --lines 60 2>/dev/null || echo "SURFACE_UNREACHABLE")
+    # The parallel subshell inherits `set -euo pipefail` — if cmux read-screen
+    # exits non-zero (dead pane), the subshell would die before writing its
+    # result file. `|| true` preserves output (via 2>&1) while forcing exit 0.
+    SCREEN=$(cmux read-screen --surface "$SURFACE" --scrollback --lines 60 2>&1 || true)
 
     # Determine status from screen content
     STATUS="unknown"
     DETAIL=""
 
-    if [[ "$SCREEN" == "SURFACE_UNREACHABLE" ]]; then
-      STATUS="unreachable"
-      DETAIL="Surface not found or unresponsive"
+    # Pane-liveness check — a surface that no longer hosts a terminal returns
+    # "Error: invalid_params: Surface is not a terminal" (or similar). This is
+    # distinct from a live pane at idle: live panes return their current buffer
+    # content. Without this check, the status script treats a dead pane's
+    # leftover scrollback as if it were live, producing false "in_progress" or
+    # "session_close" readings.
+    if echo "$SCREEN" | grep -qE "invalid_params|not a terminal|Surface.*not found|no such surface"; then
+      STATUS="dead"
+      DETAIL="Surface terminated (pane closed)"
+      SCREEN=""   # discard error output so downstream greps don't match on it
     elif echo "$SCREEN" | grep -q "BLOCKED: Missing Scenario"; then
       STATUS="blocked"
       DETAIL="Missing scenario section"

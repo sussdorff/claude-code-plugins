@@ -87,6 +87,13 @@ bd update <id> --status=in_progress
 bd dolt commit && bd dolt pull && bd dolt push --force
 ```
 
+Detect own cmux surface (single-pane design — needed for fix injection and session-close handoff):
+```bash
+IMPL_SURFACE="${CMUX_SURFACE_ID:-}"
+```
+If `IMPL_SURFACE` is empty, you are running standalone (no cmux). In that case, fix injection
+spawns a new subagent and session-close is reported back to the caller (see Phase 3).
+
 Gather minimal context:
 1. Read files mentioned in the bead description
 2. Check for project-specific standards (quick scan only):
@@ -178,7 +185,7 @@ Filter by classification:
 
 **Iteration 1 findings:** Write a fix prompt and inject it.
 
-If running in cmux (impl_surface known):
+If running in cmux (`IMPL_SURFACE` non-empty from Phase 0):
 ```bash
 cat > /tmp/quick-fix-{BEAD_ID}-i1.md << 'FIXEOF'
 ## Review Findings — Quick Fix {BEAD_ID}
@@ -190,10 +197,10 @@ cat > /tmp/quick-fix-{BEAD_ID}-i1.md << 'FIXEOF'
 Commit your changes, then signal done.
 FIXEOF
 
-cmux send --surface {IMPL_SURFACE} "$(cat /tmp/quick-fix-{BEAD_ID}-i1.md)" && cmux send-key --surface {IMPL_SURFACE} enter
+cmux send --surface "$IMPL_SURFACE" "$(cat /tmp/quick-fix-{BEAD_ID}-i1.md)" && cmux send-key --surface "$IMPL_SURFACE" enter
 ```
 
-If NOT in cmux (standalone mode): spawn a new Sonnet subagent with the fix instructions.
+If NOT in cmux (`IMPL_SURFACE` empty, standalone mode): spawn a new Sonnet subagent with the fix instructions.
 
 **Iteration 2 (re-review):** After fix is committed, run a neutral `review` (NOT adversarial):
 
@@ -235,12 +242,20 @@ except Exception as e:
 
 #### Trigger Session Close
 
-If in cmux:
-```bash
-cmux send --surface {IMPL_SURFACE} "session close" && cmux send-key --surface {IMPL_SURFACE} enter
-```
+**MANDATORY** — do not skip and do not just print "Next: session close" in a recap. Either
+invoke the cmux send below, or (standalone) emit the explicit handoff message to the caller.
 
-If standalone: report completion to caller. The caller (wave-orchestrator or user) handles session close.
+If in cmux (`IMPL_SURFACE` non-empty from Phase 0):
+```bash
+cmux send --surface "$IMPL_SURFACE" "session close" && cmux send-key --surface "$IMPL_SURFACE" enter
+```
+The text is queued in your own pane's terminal buffer and will execute as the next user
+prompt the moment your agent message returns. Do not also print "Next: session close" —
+the cmux send IS the trigger.
+
+If standalone (`IMPL_SURFACE` empty): print exactly this final line so the caller
+(wave-orchestrator or user) knows to trigger session-close themselves:
+> `QUICK-FIX HANDOFF: trigger 'session close' for {BEAD_ID} — orchestrator will not auto-trigger in standalone mode.`
 
 #### Output Summary
 
@@ -292,3 +307,8 @@ If standalone: report completion to caller. The caller (wave-orchestrator or use
   redirect to bead-orchestrator. Don't try to quick-fix a complex bead.
 - **Minimal context, not no context.** Read the files mentioned in the bead. Check for obvious
   standards. But don't do a full standards scan, external API lookup, or break analysis.
+- **Always know your own surface.** In single-pane cmux mode, `IMPL_SURFACE=$CMUX_SURFACE_ID`
+  is your handle for both fix injection AND the session-close handoff. Detect it once in
+  Phase 0; never leave the placeholder un-resolved. A recap saying "Next: session close"
+  without the cmux send is a BUG — the wave-orchestrator will see your pane idle and the
+  bead will sit in `in_progress` forever, blocking subsequent waves.
