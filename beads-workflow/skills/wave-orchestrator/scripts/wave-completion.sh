@@ -29,18 +29,21 @@ for i in $(seq 0 $((BEAD_COUNT - 1))); do
   BEAD_ID=$(jq -r ".beads[$i].id" "$CONFIG")
   SURFACE=$(jq -r ".beads[$i].surface" "$CONFIG")
 
-  # Check bd status
-  BD_STATUS=$(bd show "$BEAD_ID" 2>/dev/null | grep -oE 'Status:\s+\S+' | sed 's/Status:\s*//' || echo "unknown")
+  # Check bd status. `bd show` prints the status in a bracketed header like
+  # `[● P1 · CLOSED]`, not as a `Status:` line — match that pattern.
+  BD_STATUS=$(bd show "$BEAD_ID" 2>/dev/null | grep -oE '\b(OPEN|CLOSED|IN_PROGRESS|BLOCKED)\b' | head -1 | tr '[:upper:]' '[:lower:]')
+  BD_STATUS="${BD_STATUS:-unknown}"
 
-  # Check surface state (quick — only last 5 lines)
-  LAST_LINES=$(cmux read-screen --surface "$SURFACE" --lines 5 2>/dev/null || echo "UNREACHABLE")
+  # Check surface state (quick — only last 5 lines). Capture stdout+stderr
+  # with `|| true` so set -e doesn't kill us when a pane is dead.
+  LAST_LINES=$(cmux read-screen --surface "$SURFACE" --lines 5 2>&1 || true)
   SURFACE_IDLE=false
 
-  if echo "$LAST_LINES" | grep -qE '^\s*(\$|❯|➜|%)\s*$'; then
+  if echo "$LAST_LINES" | grep -qE "invalid_params|not a terminal|Surface.*not found|no such surface"; then
+    # Surface gone — treat as idle (process exited). The bd status check above
+    # is the authoritative completion signal; this is only about liveness.
     SURFACE_IDLE=true
-  fi
-  if [[ "$LAST_LINES" == "UNREACHABLE" ]]; then
-    # Surface gone — treat as done (process exited)
+  elif echo "$LAST_LINES" | grep -qE '^\s*(\$|❯|➜|%)\s*$'; then
     SURFACE_IDLE=true
   fi
 
@@ -63,13 +66,18 @@ done
 FOLLOW_UPS="[]"
 for i in $(seq 0 $((BEAD_COUNT - 1))); do
   SURFACE=$(jq -r ".beads[$i].surface" "$CONFIG")
-  SCREEN=$(cmux read-screen --surface "$SURFACE" --scrollback --lines 30 2>/dev/null || true)
+  SCREEN=$(cmux read-screen --surface "$SURFACE" --scrollback --lines 30 2>&1 || true)
+  # Skip dead surfaces — their "output" is an error message, not scrollback
+  if echo "$SCREEN" | grep -qE "invalid_params|not a terminal|Surface.*not found|no such surface"; then
+    SCREEN=""
+  fi
   NEW_BEADS=$(echo "$SCREEN" | grep -oE 'Created issue: [a-zA-Z0-9_-]+' | sed 's/Created issue: //' || true)
 
   if [[ -n "$NEW_BEADS" ]]; then
     while IFS= read -r NEW_ID; do
       # Check if this follow-up bead is closed
-      FU_STATUS=$(bd show "$NEW_ID" 2>/dev/null | grep -oE 'Status:\s+\S+' | sed 's/Status:\s*//' || echo "unknown")
+      FU_STATUS=$(bd show "$NEW_ID" 2>/dev/null | grep -oE '\b(OPEN|CLOSED|IN_PROGRESS|BLOCKED)\b' | head -1 | tr '[:upper:]' '[:lower:]')
+      FU_STATUS="${FU_STATUS:-unknown}"
       if [[ "$FU_STATUS" != "closed" ]]; then
         ALL_CLOSED=false
         FOLLOW_UPS=$(echo "$FOLLOW_UPS" | jq \

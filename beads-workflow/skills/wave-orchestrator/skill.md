@@ -585,6 +585,7 @@ status indicators, cross-checks against `bd show`, and returns structured JSON.
 | `pipeline_failed` | Session close completed but CI pipeline failed | Spawn fix agent — see below |
 | `blocked` | Missing scenario | Generate scenario, resend |
 | `failed` | Error/crash detected | See `references/error-recovery.md` |
+| `dead` | Pane closed (cmux returns "not a terminal") | Normal if bead closed, abnormal if bead still in_progress (orphan worktree) |
 | `unreachable` | Surface not found | See `references/error-recovery.md` |
 | `unknown` | Can't determine status | Read surface manually for more context |
 
