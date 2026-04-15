@@ -140,7 +140,25 @@ Only raise a new finding if it is a REGRESSION_FROM_FIX (the fix itself broke so
 Classify findings: VERIFIED (prior finding resolved, not blocking),
 UNRESOLVED (prior finding still present, blocking),
 REGRESSION_FROM_FIX (fix introduced new defect, blocking),
-PRE_EXISTING or OUT_OF_SCOPE (not blocking, goes to user report)."
+PRE_EXISTING or OUT_OF_SCOPE (not blocking, goes to user report).
+
+TEST-CODE POLICY: Tests have already been run by the impl-agent and pass — assume
+they compile and execute. For any finding on test code (see path rules below),
+also tag it as TEST_FINDING and sub-classify:
+  TEST_FALSE_PASS    — test is structured so it would pass even with the original
+                        bug present (no assertions, asserts on constants, mocks
+                        return the assertion target, tautological comparison, etc.).
+                        BLOCKING.
+  TEST_ALWAYS_PASS   — test passes regardless of production code (same shape as
+                        above, generalized). BLOCKING.
+  TEST_ALWAYS_FAIL   — test fails regardless of production code. BLOCKING.
+                        (Unlikely since impl-agent gates on pass, but flag if seen.)
+  TEST_THEORY_FLAKY  — 'could false-fail on some valid data shape', 'may be brittle
+                        under concurrent load', 'fixture assumption may not hold',
+                        or any other 'could / might / may' concern about a test
+                        that currently passes. NOT BLOCKING at iter 2+.
+Test paths: tests/, test_*.py, *_test.py, conftest.py, *.test.ts, *.test.tsx,
+*.spec.ts, *.spec.tsx, __tests__/."
 
 node "$CODEX_COMPANION" adversarial-review \
   --background \
@@ -192,6 +210,31 @@ Decide one of:
 ```
 
 Wait for user decision. Do NOT inject another fix automatically.
+
+### Test-Code Finding Policy (Iter 2+)
+
+At iter 2 and iter 3, findings on test code are **auto-ACCEPT** (moved to the advisory/DECIDE block, not injected as fixes) UNLESS the test is genuinely broken. "Broken" means exactly one of:
+
+1. **Always-passing regardless of production behavior** — no assertions, asserts on constants, mocks return the assertion target, tautological comparisons, etc.
+2. **Always-failing regardless of production behavior** — unreachable assertions, syntactically valid but semantically nonsensical checks, etc.
+3. **Uncompilable / syntactically broken** — doesn't parse, type-check, or import. (Rare at iter 2+ because the impl-agent gates on tests passing before triggering re-review, but still flag if seen.)
+
+**Accept (not blocking):** "Could false-fail on some valid data shape", "may be brittle under load", "fixture assumption may not hold", "should also cover edge case X" — any speculative `could/might/may` concern about a test that currently passes.
+
+**Fix (blocking):** "Could false-pass on the original bug" — i.e. the test is structured so it would have passed even with the bug present. This defeats the purpose of the test and IS a regression.
+
+**Mechanics:**
+
+- **Instruct Codex.** The `FOCUS_ITER2` block above tells Codex to sub-classify test findings as `TEST_FALSE_PASS` / `TEST_ALWAYS_PASS` / `TEST_ALWAYS_FAIL` (blocking) or `TEST_THEORY_FLAKY` (not blocking).
+- **Double-check via path.** Before deciding blocking, re-verify each BLOCKING finding's file path against the test-path heuristic (TS + Python):
+  ```
+  tests/ | test_*.py | *_test.py | conftest.py | *.test.ts | *.test.tsx | *.spec.ts | *.spec.tsx | __tests__/
+  ```
+  If a finding is on a test file AND Codex did NOT tag it as one of the three BLOCKING test-subclasses (or did not tag it at all), demote it to `TEST_THEORY_FLAKY` (advisory).
+- **Iter 3.** The `review` subcommand does not accept focus text, so Codex will not self-classify. Apply the heuristic post-hoc on the reviewer side: any finding on a test-path file at iter 3 is auto-accepted as `TEST_THEORY_FLAKY` UNLESS its text clearly describes case (1), (2), or (3) above (keywords: "no assertion", "tautolog", "constant", "passes even if", "would pass with bug", "doesn't compile", "unreachable assert").
+- **Disposition.** Auto-accepted test findings go into the advisory/DECIDE block of the user report with a `TEST_FLAKINESS_THEORY` tag. They are NOT silently dropped — the user still sees them.
+
+**Rationale:** The impl-agent already gates on tests passing before triggering re-review. A test that "might break under some hypothetical valid input" is a theoretical concern, not a regression caused by this diff. Blocking merge on every speculative test concern at iter 2+ produces review oscillation without improving the code. A test that "passes even with the original bug" is a different story — that's a broken test masquerading as coverage, and it blocks.
 
 ### Iteration Limit (Hard Stop)
 
@@ -367,4 +410,5 @@ cmux send --surface IMPL_SURFACE "session close" && cmux send-key --surface IMPL
 - **DECIDE items are for humans.** Only inject FIX items to the impl surface. DECIDE items appear in your output for the user to see.
 - **The impl-agent is autonomous.** After receiving fixes, it commits and triggers re-review. Do not micromanage -- wait for the callback.
 - **THREE dots in diff_range, ALWAYS.** Extract the left ref (start commit) for `--base`. If the input uses two dots, fix to three before use.
+- **Test-code findings are auto-ACCEPT at iter 2+ unless the test is actually broken.** "Could false-pass on the original bug" = fix (the test is structured so the bug slips through). "Could false-fail on some valid data shape" = accept (speculative flakiness, not a regression). Uncompilable / always-pass / always-fail = fix. Everything else on test paths (tests/, test_*.py, *_test.py, *.test.ts, *.spec.ts, __tests__/, conftest.py) is advisory and goes to the user DECIDE block, not the impl surface. This rule exists because the impl-agent already gates on tests passing — a theoretical "might be flaky" concern is not worth a re-review cycle.
 - **Always persist learnings before session-close.** The "session-close light" step (save review findings to open-brain) MUST run before triggering session close on the impl surface. This is the only way review findings survive surface cleanup — the wave orchestrator's Phase 7 report depends on these memories when scrollback is gone.
