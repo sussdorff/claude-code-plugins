@@ -162,7 +162,7 @@ OUT_OF_SCOPE (unrelated — NOT blocking).
 This is a quick fix — only REGRESSION findings matter."
 
 node "$CODEX_COMPANION" adversarial-review \
-  --background \
+  --json \
   --base {PRE_IMPL_SHA} \
   --scope branch \
   "$FOCUS"
@@ -203,7 +203,7 @@ Wait for the subagent to return, then proceed to Iteration 2 re-review.
 ```bash
 LAST_SHA=$(git rev-parse HEAD~1)  # or the SHA before the fix commit
 node "$CODEX_COMPANION" review \
-  --background \
+  --json \
   --base $LAST_SHA \
   --scope branch
 ```

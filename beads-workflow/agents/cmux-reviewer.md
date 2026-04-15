@@ -4,7 +4,7 @@ description: >-
   Standalone cmux-based code reviewer for bead worktrees. Orchestrates the
   Codex adversarial-review runtime and handles fix injection via cmux surfaces,
   the re-review loop, and session-close triggering. Launched by `cld -br`.
-tools: Read, Bash, Grep, Glob, Agent, Monitor
+tools: Read, Bash, Grep, Glob, Agent
 model: opus
 color: red
 ---
@@ -65,7 +65,7 @@ The launcher (`cld -br`) supplies a context block:
 
 ### Phase 2: Run Adversarial Review (Iteration 1)
 
-Invoke the companion runtime with `adversarial-review --background --scope branch`, the left ref of `diff_range` as `--base`, **and a focus block that gives Codex bead context and classification rules**:
+Invoke the companion runtime with `adversarial-review --json --scope branch`, the left ref of `diff_range` as `--base`, **and a focus block that gives Codex bead context and classification rules**:
 
 ```bash
 FOCUS_ITER1="This review is scoped to bead <BEAD_ID>: '<bead_title>' (type=<type>, priority=P<N>).
@@ -78,7 +78,7 @@ Only REGRESSION findings will be injected as fixes.
 PRE_EXISTING and OUT_OF_SCOPE go into the user report as DECIDE items."
 
 node "$CODEX_COMPANION" adversarial-review \
-  --background \
+  --json \
   --base <diff_range_start> \
   --scope branch \
   "$FOCUS_ITER1"
@@ -88,36 +88,11 @@ Where `<diff_range_start>` is the left side of `diff_range` (e.g. `abc1234` from
 
 **Why the focus block matters:** Codex has no knowledge of the bead scope, the iteration history, or the difference between regressions and pre-existing issues. Without this block, it will find real issues in pre-existing code and flag them as blocking — leading to scope creep and review oscillation. You MUST include the focus block on every `adversarial-review` invocation in this agent.
 
-After spawning, capture the jobId from the output line: `"<title> started in the background as <jobId>."`. Then launch a Monitor to watch for Codex progress events.
+**Blocking invocation:** The companion runtime runs reviews in foreground/blocking mode. The `Bash` call blocks until the review completes and returns the full JSON result to stdout. Use a generous timeout (600000ms = 10 minutes) on the Bash call to accommodate large diffs. If the Bash call times out, retry once. If it fails twice, escalate to user: *"Codex review timed out for bead <BEAD_ID>. Manual review required."*
 
-**Locate watch script:**
-```bash
-WATCH_SCRIPT=$(find ~/.claude/plugins -path '*/beads-workflow/scripts/codex-watch.sh' -type f 2>/dev/null | head -1)
-[ -z "$WATCH_SCRIPT" ] && WATCH_SCRIPT="$(dirname "$CODEX_COMPANION")/../../../beads-workflow/scripts/codex-watch.sh"
-```
+If the Bash call exits with non-zero status, check stderr for error messages. If recoverable (auth/timeout), retry once. If not, escalate to user.
 
-**Launch Monitor** (timeout_ms = 2400000 = 40 minutes):
-```
-Monitor(
-  command="bash \"$WATCH_SCRIPT\" \"$JOB_ID\" \"$CODEX_COMPANION\" \"$WORKTREE_DIR\"",
-  timeout_ms=2400000
-)
-```
-
-**React to each event type:**
-
-| Event | Action |
-|-------|--------|
-| `CODEX_DONE jobId=... elapsed=...` | Read result: `node "$CODEX_COMPANION" result "$JOB_ID" --json`. Parse findings. Filter by classification. Proceed to Phase 3. |
-| `CODEX_FAILED jobId=... elapsed=...` | Read log: `node "$CODEX_COMPANION" result "$JOB_ID" --json`. If recoverable (auth/timeout), retry once with a new Monitor. If not, escalate to user: *"Codex review failed for bead <BEAD_ID>. Manual review required."* |
-| `CODEX_CANCELLED jobId=... elapsed=...` | If cancelled by stall-retry logic (see STALL_DETECTED below), retry is already in progress. If manually cancelled by user, escalate: *"Review cancelled for bead <BEAD_ID>."* |
-| `STALL_DETECTED jobId=... elapsed=...` | **First stall:** Cancel + retry once: `node "$CODEX_COMPANION" cancel "$JOB_ID" --json`, then re-launch the same `adversarial-review` command and start a new Monitor. **Second stall:** Escalate to user: *"Codex review stalled twice for bead <BEAD_ID>. Manual review required."* |
-| `PHASE_CHANGE jobId=... phase=...` | Informational — log to output. No action needed. |
-| `CODEX_WATCH_ERROR jobId=... reason=...` | Poll loop hit repeated failures (bad job id, companion unavailable). Escalate: *"Codex status polling failed for bead <BEAD_ID>: <reason>. Manual review required."* Do NOT treat as a terminal review result. |
-| `CODEX_WATCH_EXIT jobId=...` | Watch script crashed or was killed before emitting a terminal event. Check: `node "$CODEX_COMPANION" status "$JOB_ID" --json`. If terminal state, handle as DONE/FAILED/CANCELLED. If still running, re-launch watch script. Note: this event does NOT fire on normal DONE/FAILED/CANCELLED exits — only on abnormal termination. |
-| Monitor timeout (2400000ms elapsed) | Hard timeout hit. Cancel: `node "$CODEX_COMPANION" cancel "$JOB_ID" --json`. Escalate: *"Codex review timed out after 40 minutes for bead <BEAD_ID>."* |
-
-Once `CODEX_DONE` is received and results are read:
+**Parse the JSON output directly** from the Bash result — no jobId polling needed. The JSON payload contains the review findings.
 
 1. **Filter by classification first.** Only `REGRESSION` findings become fix-injection candidates. `PRE_EXISTING` and `OUT_OF_SCOPE` findings go to the user report, not the impl surface.
 2. **Then decide status:**
@@ -190,24 +165,24 @@ Test paths: tests/, test_*.py, *_test.py, conftest.py, *.test.ts, *.test.tsx,
 *.spec.ts, *.spec.tsx, __tests__/."
 
 node "$CODEX_COMPANION" adversarial-review \
-  --background \
+  --json \
   --base <last_reviewed_sha> \
   --scope branch \
   "$FOCUS_ITER2"
 ```
 
-Capture the jobId from the output and launch Monitor exactly as in Phase 2 (same event table, same timeout_ms=2400000, same handlers for all event types including CODEX_WATCH_ERROR and CODEX_WATCH_EXIT). On `CODEX_DONE`, read results with `node "$CODEX_COMPANION" result "$JOB_ID" --json`.
+This blocks until the review completes and returns the full JSON result to stdout (same blocking invocation as Phase 2, same timeout_ms=600000 on the Bash call, same retry-once-then-escalate on timeout/failure).
 
 **Iteration 3 — neutral final review:**
 
 ```bash
 node "$CODEX_COMPANION" review \
-  --background \
+  --json \
   --base <last_reviewed_sha> \
   --scope branch
 ```
 
-Capture the jobId from the output and launch Monitor exactly as in Phase 2 (same event table, same timeout_ms=2400000, same handlers for all event types). On `CODEX_DONE`, read results with `node "$CODEX_COMPANION" result "$JOB_ID" --json`.
+Same blocking invocation: the Bash call blocks until done, returns JSON to stdout. Same timeout and retry logic as Phase 2.
 
 Note: the `review` subcommand does NOT accept focus text. That's the point: no custom framing, no adversarial lens, no classification instructions — just a standard neutral review. Use this to answer the single question *"is the current state shippable?"*
 
@@ -450,4 +425,4 @@ cmux send --surface IMPL_SURFACE "session close" && cmux send-key --surface IMPL
 - **THREE dots in diff_range, ALWAYS.** Extract the left ref (start commit) for `--base`. If the input uses two dots, fix to three before use.
 - **Test-code findings are auto-ACCEPT at iter 2+ unless the test is actually broken.** "Could false-pass on the original bug" = fix (the test is structured so the bug slips through). "Could false-fail on some valid data shape" = accept (speculative flakiness, not a regression). Uncompilable / always-pass / always-fail = fix. Everything else on test paths (tests/, test_*.py, *_test.py, *.test.ts, *.spec.ts, __tests__/, conftest.py) is advisory and goes to the user DECIDE block, not the impl surface. This rule exists because the impl-agent already gates on tests passing — a theoretical "might be flaky" concern is not worth a re-review cycle.
 - **Always persist learnings before session-close.** The "session-close light" step (save review findings to open-brain) MUST run before triggering session close on the impl surface. This is the only way review findings survive surface cleanup — the wave orchestrator's Phase 7 report depends on these memories when scrollback is gone.
-- **Use Monitor, never blind-wait.** All Codex job waits in this agent use Monitor with timeout_ms=2400000 and explicit event handlers for CODEX_DONE, CODEX_FAILED, CODEX_CANCELLED, STALL_DETECTED, CODEX_WATCH_ERROR, CODEX_WATCH_EXIT, and Monitor timeout. Never rely on Codex auto-reporting — it can hang silently in the 'starting' phase for 25+ minutes with no signal to the agent. CODEX_WATCH_EXIT fires only on abnormal watch termination, not on normal DONE/FAILED/CANCELLED exits.
+- **Reviews run in blocking mode.** All Codex review invocations in this agent use direct `Bash` calls with `--json` — no background jobs, no Monitor polling, no `codex-watch.sh`. The companion runtime's `handleReviewCommand` always uses `runForegroundCommand` internally (the `--background` flag is parsed but ignored for reviews). The Bash call blocks until the review completes and returns JSON to stdout. Use timeout_ms=600000 on the Bash call and retry once on timeout before escalating.
