@@ -4,6 +4,7 @@
 
 - *(dev-tools)* New `/project-context` skill: 4-phase workflow (Scan, Distill, Draft, Validate) for generating docs/project-context.md from a codebase (Constitution Pattern). Includes golden output template with 5 required sections (Tech-Stack, Architecture Principles, Module Map, Patterns, Invariants) and 7 structural tests.
 - *(bead-orchestrator)* Inject Project Architecture Context and Bead Architecture Notes blocks into subagent prompt templates (Phase 2) — reads project-context.md or CLAUDE.md fallback, plus bead design field via JSON
+- *(bead-orchestrator)* Add Phase 2.6 Module Impact Analysis: identify affected modules, grep 3-5 existing patterns per module before implementation; new-file fallback scans siblings; dedicated Module Impact and Existing Patterns sections in both Codex and Standard Claude prompt templates
 
 ## [2026-04-15]
 
