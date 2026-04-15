@@ -1,5 +1,11 @@
 ## [unreleased]
 
+### Bug Fixes
+
+- *(cmux-reviewer)* Replace blind background Codex wait with Monitor-based event loop using codex-watch.sh — STALL_DETECTED triggers cancel+retry, CODEX_FAILED reads log, hard timeout at 40min
+- *(cmux-reviewer)* Remove mktemp dependency from poll loop to fix crashes in locked-down environments
+- *(cmux-reviewer)* Restore actionable error reason in CODEX_WATCH_ERROR events (regression fix)
+
 ### 📚 Documentation
 
 - *(cmux-reviewer)* Add test-code finding policy for iter 2+: auto-accept test findings unless genuinely broken (TEST_FALSE_PASS, TEST_ALWAYS_PASS, TEST_ALWAYS_FAIL block; TEST_THEORY_FLAKY is advisory only)
