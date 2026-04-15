@@ -434,6 +434,16 @@ project-established patterns rather than introducing new styles.
    ```
    Capture the actual output — these become the `### Existing Patterns` block.
 
+   **New file fallback:** If a target file does not exist yet (new file bead), do NOT grep the missing path.
+   Instead, scan sibling files in the same module/package directory:
+   ```bash
+   # Find siblings in the same directory for pattern reference
+   ls <target-directory>/
+   grep -n "^def \|^class \|^fn \|^function \|^const " <sibling-file> | head -5
+   ```
+   Record findings as: `new file; patterns sourced from <sibling-file-path>`.
+   If no sibling files exist either (entirely new module), record: `new module; no existing patterns`.
+
 3. **Record findings:**
    Store both lists (affected modules + pattern excerpts) in your agent context.
    You will inject them into the subagent prompt as two blocks:
@@ -531,8 +541,6 @@ structured instructions with high fidelity — the more explicit, the better.
 - Standards: {paths to load}
 - Existing patterns: {reference files showing the project's conventions}
 - Dependencies: {what's already available, what needs importing}
-- Module Impact: {list of modules to be changed — from Phase 2.6}
-- Existing Patterns: {grep excerpts from affected modules — from Phase 2.6. Follow these patterns exactly.}
 
 ## Constraints
 {What NOT to do:}
@@ -547,6 +555,17 @@ structured instructions with high fidelity — the more explicit, the better.
 ### Bead Architecture Notes
 {Include ONLY if bead has a non-empty design field. Contains bead-specific architecture decisions.}
 {Omit this block entirely if the design field is empty.}
+
+### Module Impact
+{List of modules/files to be changed, generated in Phase 2.6.
+For each: full path + 1-line description of the change (e.g. "add function X", "modify class Y").
+Include new files, marked as "new file".}
+
+### Existing Patterns
+{3–5 grep excerpts per affected module showing existing conventions:
+logging style, error handling, naming, imports, type annotations.
+For new files: patterns sourced from sibling files in the same module/package.
+The implementer MUST follow these patterns — do NOT introduce new styles.}
 
 ## Acceptance Criteria
 {Verbatim from bd show — the definitive checklist}
