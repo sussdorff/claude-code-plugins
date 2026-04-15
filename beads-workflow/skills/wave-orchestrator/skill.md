@@ -35,6 +35,7 @@ directly for dispatch, monitoring, and completion checks.
 | `--max-parallel=N` | Limit concurrent panes (default: 4) |
 | `--skip-scenarios` | Don't check/generate scenarios for feature beads |
 | `--skip-review` | Skip architecture review (Phase 1.5b) for all beads. Logged to audit. |
+| `--skip-integration-check` | Skip Phase 6.5 integration-verification (cross-bead invariant check after final wave) |
 
 Examples:
 ```
@@ -337,6 +338,10 @@ Agent(model="haiku", prompt="
   Signal score: <score> (threshold is 6, this bead scored <score>)
   Matched signals: <signals list>
 
+  Additional check: Does this bead involve external authority catalogs (medical codes,
+  legal registries, financial identifiers) that would require a dedicated scope without
+  adapter-prefix? If yes, lean toward REVIEW_YES regardless of score.
+
   Answer ONLY: REVIEW_YES or REVIEW_NO with a one-sentence reason.
 ")
 ```
@@ -370,6 +375,38 @@ Agent(subagent_type="general-purpose", model="opus", prompt="
 
   ## Rollen (architecture profile)
   <4 roles from council-roles.yml>
+
+  ## Canonical-Catalog-Detection (Pre-Check vor den Rollen)
+  Bevor die Review-Runden starten, pruefe:
+
+  **Schritt 1 — Domain identifizieren:**
+  Welche Fachdomaene betrifft dieses Bead?
+  (Medical, Legal, Finance, Logistics, Identity, oder andere)
+
+  **Schritt 2 — Externe Autoritaeten pruefen:**
+  Existieren in dieser Domain kanonische Referenzkataloge externer Autoritaeten?
+
+  Bekannte Beispiele:
+  - Medical: KBV-Schluessel, DIMDI-Kataloge, ICD (WHO), LOINC, SNOMED CT, IFA-Artikelstamm
+  - Legal: Gesetzessammlungen (BGBl, EUR-Lex), Gerichtsregister
+  - Finance: IBAN/BIC (SWIFT), ISIN (ISO 6166), MCC-Codes, LEI
+  - Logistics: UN/LOCODE, HS-Codes (WCO), EAN/GTIN
+  - Identity: EIN, ORCID, GLN
+  - (Fuer andere Domains: analoge Muster anwenden)
+
+  Falls KEINE externen Kataloge existieren: kurz begruenden und zu Schritt 3 uebergehen.
+
+  **Schritt 3 — Universal-Scope-Pruefung:**
+  Falls externe Kataloge existieren:
+  - Brauchen sie einen eigenen Scope OHNE adapter-prefix? (d.h. eine universal-Kategorie?)
+  - Ist dieser Scope in der vorgeschlagenen Architektur bereits vorgesehen?
+  - Falls NICHT vorgesehen: CRITICAL-Finding eintragen:
+    "Fehlender Universal-Scope fuer <Katalog-Name>: Kanonische Referenzdaten benoetigen
+     einen eigenstaendigen Scope ohne adapter-prefix, damit alle Adapter denselben
+     Referenz-Datensatz nutzen."
+
+  Eintrag in Findings-Tabelle (Zeile 0, vor den Rollen-Findings):
+  | 0 | INFO/CRITICAL | Pre-Check | Canonical-Catalog | <Ergebnis> | <Empfehlung> |
 
   ## Instruktionen
   Fuehre 4 Reviews sequenziell durch (jeder Agent sieht vorherige Kritiken).
@@ -747,6 +784,124 @@ Then repeat from Phase 3+4 with `wave-dispatch.sh` for the next set of beads.
 
 ---
 
+## Phase 6.5: Integration-Verification (Final Wave Gate)
+
+After all beads in an epic are closed and CI passes, run a cross-bead invariant check
+before declaring the epic complete. This catches gaps that individual bead reviews cannot
+see — specifically: missing scopes, broken cross-bead contracts, and data-model
+inconsistencies that only surface when all implementations are combined.
+
+**This phase is NOT a gate for individual session-close calls.** Each bead-orchestrator
+manages its own session-close lifecycle. Integration-Verification runs AFTER all beads
+have already closed, triggered by the wave-orchestrator.
+
+**When to run:**
+- `wave-completion.sh` returns exit code 0 (all beads closed, all surfaces idle)
+- All CI pipelines for the wave have passed (see Pipeline Check above)
+- This is the **final wave** of the epic (user confirmed no further waves)
+- `--skip-integration-check` flag is NOT set
+
+**Skip conditions:**
+- `--skip-integration-check` flag set → log skip, proceed to Phase 7
+- No `.beads/integration-check.sh` exists in the project → log advisory, proceed to Phase 7
+- Single-bead waves (no cross-bead invariants to check)
+
+### Running the Integration Check
+
+Check for a project-specific integration check script:
+
+```bash
+if [[ -f .beads/integration-check.sh ]]; then
+  bash .beads/integration-check.sh > /tmp/integration-check-results.json
+  echo "Integration check exit: $?"
+else
+  echo '{"status": "SKIPPED", "reason": "No .beads/integration-check.sh found"}' > /tmp/integration-check-results.json
+fi
+```
+
+The script must output JSON with this structure:
+```json
+{
+  "status": "PASS | FAIL | SKIPPED",
+  "findings": [
+    {
+      "severity": "CRITICAL | WARNING | INFO",
+      "category": "missing_scope | broken_contract | data_inconsistency | other",
+      "description": "What the check found",
+      "recommendation": "What to do about it"
+    }
+  ],
+  "environment": "production | staging | local",
+  "checked_at": "ISO-8601 timestamp"
+}
+```
+
+### Spawning the Verification Agent
+
+If `.beads/integration-check.sh` does NOT exist, spawn a general-purpose subagent to
+attempt automated discovery of cross-bead invariants from the codebase:
+
+```
+Agent(subagent_type="general-purpose", prompt="
+  ## Cross-Bead Integration Verification
+
+  All beads in this wave are now closed. Perform a cross-bead invariant check to
+  catch gaps that individual bead reviews cannot see.
+
+  ## Wave Summary
+  Beads completed: <list from wave-config.json>
+
+  ## What to check (in priority order)
+  1. Shared scopes / categories: Are there external authority catalogs (medical codes,
+     legal registries, financial identifiers) that should have a universal scope
+     (no adapter-prefix) but were implemented with per-adapter scopes instead?
+  2. Cross-bead contracts: Do any two beads share an interface? If so, are both sides
+     consistent (field names, types, optional/required)?
+  3. Data consistency: Are there any entities that are written by one bead and read by
+     another? Check that the schema is consistent.
+  4. Missing types/categories: Compare the expected value set (from domain knowledge
+     or CLAUDE.md) against what was actually implemented. Are any values missing?
+
+  ## Output
+  Return JSON matching the integration-check.sh schema above.
+  Status PASS if no CRITICAL findings. FAIL if one or more CRITICAL findings.
+")
+```
+
+### Processing Results
+
+| Status | Action |
+|--------|--------|
+| `PASS` | Log results to bead notes, proceed to Phase 7 |
+| `FAIL` | Create follow-up beads for each CRITICAL finding, then proceed to Phase 7 |
+| `SKIPPED` | Log advisory: "No integration check available for this project. Consider adding .beads/integration-check.sh for automated cross-bead invariant checks." |
+
+**Creating follow-up beads from CRITICAL findings:**
+```bash
+# For each CRITICAL finding from integration check results:
+bd create \
+  --title="[INTEGRATION] Fix <finding category>: <short description>" \
+  --type=task \
+  --priority=1 \
+  --description="Found during integration-verification of wave N.
+
+Finding: <description>
+Recommendation: <recommendation>
+
+Discovered by integration-verification after epic close." 2>&1 | grep "Created issue:"
+```
+
+Log the created beads to the wave's bead notes and include them in the Phase 7 Learnings Report.
+
+### Reference
+
+See `references/integration-verification-guide.md` for:
+- Domain-specific canonical-catalog taxonomy
+- Example `.beads/integration-check.sh` for live environment queries (Aidbox, Postgres, etc.)
+- Regression scenario: How the KBV/DIMDI universal-category gap would have been caught
+
+---
+
 ## Phase 7: Learnings Report
 
 After each wave completes (all beads closed, all surfaces idle), generate a structured
@@ -874,6 +1029,7 @@ For all error scenarios, read `references/error-recovery.md`. It covers:
 - **Use the scripts**: Prefer `wave-dispatch.sh`, `wave-status.sh`, and `wave-completion.sh` over manual cmux calls. They're faster, produce structured output, and reduce context usage.
 - **NEVER session close**: The wave orchestrator must never trigger or send `session close`. The bead-orchestrator/cmux-reviewer handles this autonomously.
 - **NEVER reuse surfaces**: Always dispatch to fresh surfaces via `wave-dispatch.sh`.
+- **Integration-verification after epic**: After the final wave closes, always run Phase 6.5 to catch cross-bead gaps. Skip only with `--skip-integration-check` and only when there are no cross-bead invariants to check (e.g. single-bead waves).
 - **Delegate scenarios**: Delegate scenario generation to subagents, not inline.
 - **Check conflict risk upfront**: Before wave dispatch, check if beads will modify the same files. If so: max 2 parallel or use sub-waves.
 - **Stuck = 2x identical**: A bead is only "stuck" after two consecutive identical status checks with no CPU usage. A single unchanged check is normal.
