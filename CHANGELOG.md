@@ -1,5 +1,9 @@
 ## [unreleased]
 
+### Features
+
+- *(bead-orchestrator)* Inject Project Architecture Context and Bead Architecture Notes blocks into subagent prompt templates (Phase 2) — reads project-context.md or CLAUDE.md fallback, plus bead design field via JSON
+
 ### Bug Fixes
 
 - *(cmux-reviewer)* Replace blind background Codex wait with Monitor-based event loop using codex-watch.sh — STALL_DETECTED triggers cancel+retry, CODEX_FAILED reads log, hard timeout at 40min
