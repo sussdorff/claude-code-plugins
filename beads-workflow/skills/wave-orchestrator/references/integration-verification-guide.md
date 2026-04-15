@@ -173,13 +173,28 @@ fi
 
 # Example: Check that universal CodeSystems exist in Aidbox
 if [[ -n "${AIDBOX_URL:-}" ]]; then
-  # KBV Fachabteilungsschlüssel (specialty codes) — must be in universal scope
-  KBV_COUNT=$(curl -sf "$AIDBOX_URL/fhir/CodeSystem?url=http://fhir.de/CodeSystem/dkgev/Fachabteilungsschluessel" \
-    | jq -r '.total // 0' 2>/dev/null)
-  if [[ "${KBV_COUNT:-0}" =~ ^[0-9]+$ ]] && [[ "${KBV_COUNT:-0}" -eq 0 ]]; then
-    add_finding "CRITICAL" "missing_scope" \
-      "KBV Fachabteilungsschlüssel not found in universal scope" \
-      "Create CodeSystem resource at http://fhir.de/CodeSystem/dkgev/Fachabteilungsschluessel without adapter-prefix"
+  # Per-catalog query — capture exit status explicitly (don't swallow auth/timeout errors)
+  KBV_RESPONSE=$(curl -fsS --max-time 10 \
+    "$AIDBOX_URL/fhir/CodeSystem?url=http://fhir.de/CodeSystem/dkgev/Fachabteilungsschluessel" \
+    2>/dev/null) || true
+  KBV_RC=$?
+  if [[ $KBV_RC -ne 0 ]]; then
+    add_finding "ERROR" "infrastructure" \
+      "KBV Fachabteilungsschlüssel query failed (rc=$KBV_RC) — possible auth or network error" \
+      "Verify AIDBOX_URL credentials and endpoint access, then re-run integration check"
+    STATUS="ERROR"
+  else
+    KBV_COUNT=$(echo "$KBV_RESPONSE" | jq -r '.total // 0' 2>/dev/null || echo "")
+    if ! [[ "${KBV_COUNT:-}" =~ ^[0-9]+$ ]]; then
+      add_finding "ERROR" "infrastructure" \
+        "KBV Fachabteilungsschlüssel response unparseable — unexpected response format" \
+        "Check Aidbox FHIR API version compatibility"
+      STATUS="ERROR"
+    elif [[ "$KBV_COUNT" -eq 0 ]]; then
+      add_finding "CRITICAL" "missing_scope" \
+        "KBV Fachabteilungsschlüssel not found in universal scope" \
+        "Create CodeSystem resource at http://fhir.de/CodeSystem/dkgev/Fachabteilungsschluessel without adapter-prefix"
+    fi
   fi
 fi
 

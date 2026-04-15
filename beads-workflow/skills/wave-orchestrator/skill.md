@@ -878,7 +878,7 @@ Agent(subagent_type="general-purpose", prompt="
 |--------|--------|
 | `PASS` | Log results to bead notes, proceed to Phase 7 |
 | `FAIL` | Create follow-up beads for each CRITICAL finding. Do NOT proceed to Phase 7. Schedule a remediation wave for the follow-up beads. The epic is not complete until the remediation wave has been run and Phase 6.5 returns PASS or SKIPPED. Exception: `--skip-integration-check` bypasses this gate. |
-| `SKIPPED` | Log advisory: "No integration check available for this project. Consider adding .beads/integration-check.sh for automated cross-bead invariant checks." |
+| `SKIPPED` | `--skip-integration-check` flag was set, or single-bead epic. Log advisory and proceed to Phase 7. |
 | `ERROR` | Infrastructure issue — do NOT create follow-up beads. Alert operator. Re-run manually once infrastructure is restored. Do NOT advance to Phase 7. |
 
 **Creating follow-up beads from CRITICAL findings:**
