@@ -120,10 +120,14 @@ for i in $(seq 0 $((BEAD_COUNT - 1))); do
       if ! echo "$last_nonempty" | grep -qE '^\s*(\$|❯|➜|%)\s*$'; then
         return 1  # not idle — no prompt on last non-empty line
       fi
-      local prev_line
-      prev_line=$(echo "$lines" | grep -v '^\s*$' | tail -2 | head -1)
-      if echo "$prev_line" | grep -qE 'Newspapering|Baking|Crunched|Churned|Thinking|[0-9]+m\s*[0-9]+s|[⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏]'; then
-        return 1  # not idle — active thinking visible before prompt
+      # Check the 2 non-empty lines immediately preceding the prompt.
+      # Using 2 lines (not 1) covers cases where Claude renders an extra status
+      # line (e.g. "Press Ctrl+C to interrupt") between the thinking indicator
+      # and the prompt row.
+      local preceding_lines
+      preceding_lines=$(echo "$lines" | grep -v '^\s*$' | tail -3 | head -2)
+      if echo "$preceding_lines" | grep -qE 'Newspapering|Baking|Crunched|Churned|Thinking|[0-9]+m\s*[0-9]+s|[⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏]'; then
+        return 1  # not idle — active thinking visible adjacent to prompt
       fi
       return 0  # idle — prompt is last, no active thinking immediately before it
     }

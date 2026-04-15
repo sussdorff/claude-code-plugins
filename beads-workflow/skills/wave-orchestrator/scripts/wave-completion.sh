@@ -36,13 +36,15 @@ _surface_is_idle() {
   if ! echo "$last_nonempty" | grep -qE '^\s*(\$|❯|➜|%)\s*$'; then
     return 1  # not idle — no prompt on last non-empty line
   fi
-  # Get the line immediately before the last non-empty line
-  # (i.e., second-to-last non-empty line)
-  local prev_line
-  prev_line=$(echo "$lines" | grep -v '^\s*$' | tail -2 | head -1)
-  # If the previous line is an active-thinking marker, not idle
-  if echo "$prev_line" | grep -qE 'Newspapering|Baking|Crunched|Churned|Thinking|[0-9]+m\s*[0-9]+s|[⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏]'; then
-    return 1  # not idle — active thinking visible before prompt
+  # Check the 2 non-empty lines immediately preceding the prompt.
+  # Using 2 lines (not 1) covers cases where Claude renders an extra status
+  # line (e.g. "Press Ctrl+C to interrupt") between the thinking indicator
+  # and the prompt row.
+  local preceding_lines
+  preceding_lines=$(echo "$lines" | grep -v '^\s*$' | tail -3 | head -2)
+  # If any preceding line is an active-thinking marker, not idle
+  if echo "$preceding_lines" | grep -qE 'Newspapering|Baking|Crunched|Churned|Thinking|[0-9]+m\s*[0-9]+s|[⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏]'; then
+    return 1  # not idle — active thinking visible adjacent to prompt
   fi
   return 0  # idle — prompt is last, no active thinking immediately before it
 }
