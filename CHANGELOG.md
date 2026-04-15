@@ -2,6 +2,8 @@
 
 ### 📚 Documentation
 
+- *(cmux-reviewer)* Add test-code finding policy for iter 2+: auto-accept test findings unless genuinely broken (TEST_FALSE_PASS, TEST_ALWAYS_PASS, TEST_ALWAYS_FAIL block; TEST_THEORY_FLAKY is advisory only)
+
 - *(architecture)* Add 2026-04-14 session documents: bowser comparison, scenario-generator refactor, just+HOP 4-layer architecture, Claude+Codex+pi orchestration, Shikigami vs AFK Dispatcher split, bead generation plan
 
 ### 🚀 Features
