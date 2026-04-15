@@ -42,7 +42,7 @@ YES. The new Phase 1.5b council prompt includes:
 > If yes → CRITICAL finding: "Missing Universal-Scope for <catalog>"
 
 A council review for any of the 30 beads (or for the epic-level architecture bead) would
-have flagged: "KBV Fachrichtungsschlüssel requires a universal scope without adapter-prefix".
+have flagged: "KBV Fachabteilungsschlüssel requires a universal scope without adapter-prefix".
 
 **Would an integration-verification have caught it?**
 YES. A `.beads/integration-check.sh` for Aidbox would have queried the CodeSystem URL in
@@ -141,12 +141,15 @@ add_finding() {
 
 # Example: Check that universal CodeSystems exist in Aidbox
 if [[ -n "${AIDBOX_URL:-}" ]]; then
-  # KBV Fachrichtungsschlüssel (specialty codes) — must be in universal scope
+  # Note: transport failures (Aidbox unreachable, HTTP error) are treated as absence by design.
+  # To distinguish infrastructure errors from invariant violations, check AIDBOX_URL is reachable
+  # before running individual checks (e.g. curl -sf "$AIDBOX_URL/health" || { echo "Aidbox unreachable"; exit 2; })
+  # KBV Fachabteilungsschlüssel (specialty codes) — must be in universal scope
   KBV_COUNT=$(curl -sf "$AIDBOX_URL/fhir/CodeSystem?url=http://fhir.de/CodeSystem/dkgev/Fachabteilungsschluessel" \
     | jq -r '.total // 0' 2>/dev/null || echo 0)
   if [[ "${KBV_COUNT:-0}" =~ ^[0-9]+$ ]] && [[ "${KBV_COUNT:-0}" -eq 0 ]]; then
     add_finding "CRITICAL" "missing_scope" \
-      "KBV Fachrichtungsschlüssel not found in universal scope" \
+      "KBV Fachabteilungsschlüssel not found in universal scope" \
       "Create CodeSystem resource at http://fhir.de/CodeSystem/dkgev/Fachabteilungsschluessel without adapter-prefix"
   fi
 fi

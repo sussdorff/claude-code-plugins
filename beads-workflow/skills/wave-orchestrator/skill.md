@@ -802,7 +802,7 @@ have already closed, triggered by the wave-orchestrator.
 **When to run:**
 - `wave-completion.sh` returns exit code 0 (all beads closed, all surfaces idle)
 - All CI pipelines for the wave have passed (see Pipeline Check above)
-- This is the **final wave** of the epic (user confirmed no further waves)
+- This is the **final wave** of the epic — either the user explicitly confirms ("no more waves") or the wave plan from Phase 1 shows all beads are now closed
 - `--skip-integration-check` flag is NOT set
 
 **Skip conditions:**
@@ -814,13 +814,11 @@ have already closed, triggered by the wave-orchestrator.
 Check for a project-specific integration check script:
 
 ```bash
-# Non-zero exit means FAIL (see JSON status). Do NOT use set -e here.
+# Non-zero exit is expected when FAIL. Always read JSON status for dispatch.
 if [[ -f .beads/integration-check.sh ]]; then
   bash .beads/integration-check.sh > /tmp/integration-check-results.json || true
-  INTEGRATION_EXIT=$?
 else
   echo '{"status": "SKIPPED", "reason": "No .beads/integration-check.sh found"}' > /tmp/integration-check-results.json
-  INTEGRATION_EXIT=0
 fi
 ```
 
