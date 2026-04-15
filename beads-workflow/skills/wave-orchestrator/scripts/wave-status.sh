@@ -112,11 +112,15 @@ for i in $(seq 0 $((BEAD_COUNT - 1))); do
 
     # Check for idle shell (done) — empty prompt, no Claude session
     # Look at the last few lines for a bare prompt
-    LAST_LINES=$(echo "$SCREEN" | tail -3)
+    LAST_LINES=$(echo "$SCREEN" | tail -5)
     if echo "$LAST_LINES" | grep -qE '^\s*(\$|❯|➜|%)\s*$'; then
-      # Bare prompt with nothing after it — likely done
-      STATUS="done"
-      DETAIL="Shell idle, no active session"
+      # Only idle if no active thinking markers are present — Claude Code shows
+      # a bare prompt on the bottom line even while actively thinking (e.g.
+      # "Newspapering... 12m 2s" with ❯ still visible below it).
+      if ! echo "$LAST_LINES" | grep -qE 'Newspapering|Baking|Crunched|Churned|Thinking|[0-9]+m\s*[0-9]+s|[⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏]'; then
+        STATUS="done"
+        DETAIL="Shell idle, no active session"
+      fi
     fi
 
     # Detect follow-up beads (bd create in scrollback)

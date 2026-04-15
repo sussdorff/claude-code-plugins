@@ -44,7 +44,12 @@ for i in $(seq 0 $((BEAD_COUNT - 1))); do
     # is the authoritative completion signal; this is only about liveness.
     SURFACE_IDLE=true
   elif echo "$LAST_LINES" | grep -qE '^\s*(\$|❯|➜|%)\s*$'; then
-    SURFACE_IDLE=true
+    # Only idle if no active thinking markers are present — Claude Code shows
+    # a bare prompt on the bottom line even while actively thinking (e.g.
+    # "Newspapering... 12m 2s" with ❯ still visible below it).
+    if ! echo "$LAST_LINES" | grep -qE 'Newspapering|Baking|Crunched|Churned|Thinking|[0-9]+m\s*[0-9]+s|[⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏]'; then
+      SURFACE_IDLE=true
+    fi
   fi
 
   if [[ "$BD_STATUS" != "closed" ]]; then
