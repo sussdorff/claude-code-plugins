@@ -1,6 +1,6 @@
 ---
 name: project-context
-model: sonnet
+model: inherit
 description: >-
   Generate docs/project-context.md (Constitution Pattern) from an existing codebase.
   Analyzes CLAUDE.md, architecture docs, and directory structure to produce a readable,
