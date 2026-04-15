@@ -407,6 +407,41 @@ Before spawning the implementation subagent, stress-test the approach:
 
 → **Record phase_summary**: assumptions verified/failed, integration risks found, hardest AK identified.
 
+### Phase 2.6: Module Impact Analysis
+
+Before spawning the implementation subagent, identify the modules that will be changed
+and extract existing patterns from those modules. This ensures the implementer follows
+project-established patterns rather than introducing new styles.
+
+1. **Identify affected modules:**
+   Based on the bead description, acceptance criteria, and files identified in Phase 2,
+   list the specific files/modules that will be modified or created.
+
+2. **Extract existing patterns (3–5 per module):**
+   For each affected module, run targeted greps to capture patterns the project already uses:
+   ```bash
+   # Examples — adapt to the actual modules and tech stack:
+   # Logging patterns
+   grep -n "log\.\(info\|error\|warn\|debug\)" <affected-file> | head -5
+   # Error handling patterns
+   grep -n "raise\|throw\|except\|catch\|Result\|Either" <affected-file> | head -5
+   # Import/export patterns
+   grep -n "^import\|^from\|^export\|^use " <affected-file> | head -5
+   # Naming conventions (function/class/variable patterns)
+   grep -n "^def \|^class \|^fn \|^function \|^const \|^let " <affected-file> | head -5
+   # Type annotation / schema patterns (if applicable)
+   grep -n ":\s*[A-Z]\|-> \|Optional\[" <affected-file> | head -5
+   ```
+   Capture the actual output — these become the `### Existing Patterns` block.
+
+3. **Record findings:**
+   Store both lists (affected modules + pattern excerpts) in your agent context.
+   You will inject them into the subagent prompt as two blocks:
+   - `### Module Impact` — list of modules to be changed with a 1-line description of the change
+   - `### Existing Patterns` — grep excerpts showing the patterns the implementer MUST follow
+
+→ **Record phase_summary**: modules identified, patterns found per module, any modules with no existing patterns (new files).
+
 ### Phase 3: Spawn Implementation Subagent
 
 **Before spawning**, capture the current HEAD SHA for use in the Phase 3.5 review loop.
@@ -496,6 +531,8 @@ structured instructions with high fidelity — the more explicit, the better.
 - Standards: {paths to load}
 - Existing patterns: {reference files showing the project's conventions}
 - Dependencies: {what's already available, what needs importing}
+- Module Impact: {list of modules to be changed — from Phase 2.6}
+- Existing Patterns: {grep excerpts from affected modules — from Phase 2.6. Follow these patterns exactly.}
 
 ## Constraints
 {What NOT to do:}
@@ -538,6 +575,15 @@ At the end, ALWAYS include:
 
 ### Context
 {RELEVANT_FILES_AND_PATTERNS}
+
+### Module Impact
+{List of modules/files to be changed, with 1-line description of what changes.
+Generated in Phase 2.6. Always include — even for new files (mark as "new file").}
+
+### Existing Patterns
+{3–5 grep excerpts per affected module showing existing conventions:
+logging style, error handling, naming, imports, type annotations.
+The implementer MUST follow these patterns — do NOT introduce new styles.}
 
 ### Phase Summaries (Context Thread)
 {For M+ beads only — omit for S/XS. Paste accumulated phase_summaries from Phase 0 through Phase 2.5.}
