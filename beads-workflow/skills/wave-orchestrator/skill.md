@@ -795,9 +795,7 @@ before declaring the epic complete. This catches gaps that individual bead revie
 see — specifically: missing scopes, broken cross-bead contracts, and data-model
 inconsistencies that only surface when all implementations are combined.
 
-**This phase is NOT a gate for individual session-close calls.** Each bead-orchestrator
-manages its own session-close lifecycle. Integration-Verification runs AFTER all beads
-have already closed, triggered by the wave-orchestrator.
+**This is a gate on epic completion, not on individual bead session-close — CRITICAL findings prevent the epic from being declared complete and trigger a remediation wave.** Integration-Verification runs AFTER all beads have already closed, triggered by the wave-orchestrator.
 
 **When to run:**
 - `wave-completion.sh` returns exit code 0 (all beads closed, all surfaces idle)
@@ -809,6 +807,8 @@ have already closed, triggered by the wave-orchestrator.
 - `--skip-integration-check` flag set → log skip, proceed to Phase 7
 - Single-bead **epic** (no cross-bead invariants possible)
 
+> **Note**: The absence of `.beads/integration-check.sh` is NOT a skip condition — it triggers the fallback agent instead (see "Spawning the Verification Agent" below). `SKIPPED` status is reserved exclusively for the two conditions above.
+
 ### Running the Integration Check
 
 Check for a project-specific integration check script:
@@ -817,15 +817,16 @@ Check for a project-specific integration check script:
 # Non-zero exit is expected when FAIL. Always read JSON status for dispatch.
 if [[ -f .beads/integration-check.sh ]]; then
   bash .beads/integration-check.sh > /tmp/integration-check-results.json || true
-else
-  echo '{"status": "SKIPPED", "reason": "No .beads/integration-check.sh found"}' > /tmp/integration-check-results.json
 fi
+# Script absent → fall through to agent fallback below
 ```
+
+If the script is absent (or the if-block above did not execute), proceed to the "Spawning the Verification Agent" section below.
 
 The script must output JSON with this structure:
 ```json
 {
-  "status": "PASS | FAIL | SKIPPED",
+  "status": "PASS | FAIL | SKIPPED | ERROR",
   "findings": [
     {
       "severity": "CRITICAL | WARNING | INFO",
@@ -876,8 +877,9 @@ Agent(subagent_type="general-purpose", prompt="
 | Status | Action |
 |--------|--------|
 | `PASS` | Log results to bead notes, proceed to Phase 7 |
-| `FAIL` | Create follow-up beads for each CRITICAL finding, then proceed to Phase 7 |
+| `FAIL` | Create follow-up beads for each CRITICAL finding. Do NOT proceed to Phase 7. Schedule a remediation wave for the follow-up beads. The epic is not complete until the remediation wave has been run and Phase 6.5 returns PASS or SKIPPED. Exception: `--skip-integration-check` bypasses this gate. |
 | `SKIPPED` | Log advisory: "No integration check available for this project. Consider adding .beads/integration-check.sh for automated cross-bead invariant checks." |
+| `ERROR` | Infrastructure issue — do NOT create follow-up beads. Alert operator. Re-run manually once infrastructure is restored. Do NOT advance to Phase 7. |
 
 **Creating follow-up beads from CRITICAL findings:**
 ```bash

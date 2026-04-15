@@ -111,7 +111,25 @@ Use this as a reference when reviewing beads or writing integration checks.
 
 Create this file in the project root under `.beads/` to enable automated integration checks.
 
-### Structure
+### JSON Output Schema
+
+The script must output JSON with this structure:
+```json
+{
+  "status": "PASS | FAIL | SKIPPED | ERROR",
+  "findings": [...],
+  "environment": "production | staging | local",
+  "checked_at": "ISO-8601 timestamp"
+}
+```
+
+Exit code ladder:
+- 0 = PASS (no critical findings)
+- 1 = FAIL (one or more critical findings found)
+- 2 = ERROR (infrastructure/auth failure — could not run checks)
+- 3 = SKIPPED (--skip-integration-check or single-bead epic)
+
+### Example Script
 
 ```bash
 #!/usr/bin/env bash
@@ -119,7 +137,7 @@ Create this file in the project root under `.beads/` to enable automated integra
 #
 # Called by wave-orchestrator Phase 6.5 after all beads in a wave are closed.
 # Must output JSON matching the integration-check schema.
-# Exit 0 = PASS, Exit 1 = FAIL, Exit 2 = error
+# Exit 0 = PASS, Exit 1 = FAIL, Exit 2 = ERROR, Exit 3 = SKIPPED
 
 set -uo pipefail
 
@@ -137,16 +155,27 @@ add_finding() {
   fi
 }
 
+# --- Reachability probe (run before any per-catalog checks) ---
+if [[ -n "${AIDBOX_URL:-}" ]]; then
+  if ! curl -fsS --max-time 10 "$AIDBOX_URL/health" > /dev/null 2>&1; then
+    jq -n \
+      --arg env "${INTEGRATION_ENV:-unknown}" \
+      --arg ts "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+      '{status: "ERROR", findings: [{severity: "ERROR", category: "infrastructure",
+        description: "Aidbox unreachable or auth failed — integration checks skipped",
+        recommendation: "Verify AIDBOX_URL and credentials, then re-run"}],
+        environment: $env, checked_at: $ts}'
+    exit 2
+  fi
+fi
+
 # --- Project-specific checks below ---
 
 # Example: Check that universal CodeSystems exist in Aidbox
 if [[ -n "${AIDBOX_URL:-}" ]]; then
-  # Note: transport failures (Aidbox unreachable, HTTP error) are treated as absence by design.
-  # To distinguish infrastructure errors from invariant violations, check AIDBOX_URL is reachable
-  # before running individual checks (e.g. curl -sf "$AIDBOX_URL/health" || { echo "Aidbox unreachable"; exit 2; })
   # KBV Fachabteilungsschlüssel (specialty codes) — must be in universal scope
   KBV_COUNT=$(curl -sf "$AIDBOX_URL/fhir/CodeSystem?url=http://fhir.de/CodeSystem/dkgev/Fachabteilungsschluessel" \
-    | jq -r '.total // 0' 2>/dev/null || echo 0)
+    | jq -r '.total // 0' 2>/dev/null)
   if [[ "${KBV_COUNT:-0}" =~ ^[0-9]+$ ]] && [[ "${KBV_COUNT:-0}" -eq 0 ]]; then
     add_finding "CRITICAL" "missing_scope" \
       "KBV Fachabteilungsschlüssel not found in universal scope" \
@@ -163,6 +192,9 @@ jq -n \
   --arg ts "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
   '{status: $status, findings: $findings, environment: $env, checked_at: $ts}'
 
+if [[ "$STATUS" == "ERROR" ]]; then
+  exit 2
+fi
 if [[ "$STATUS" == "FAIL" ]]; then
   exit 1
 fi
