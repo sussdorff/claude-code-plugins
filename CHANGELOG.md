@@ -6,6 +6,9 @@
 
 ### Features
 
+- *(dev-tools)* Add `codex-guide` agent: haiku-powered documentation query agent for OpenAI Codex CLI — covers subcommands, config.toml, sandbox modes, custom TOML subagents (default/worker/explorer). Mirrors claude-code-guide pattern; fetches from developers.openai.com/codex/llms.txt.
+- *(architecture)* Harness-parity pivot: supersede 7 beads (CCP-3rh epic + CCP-rma, CCP-8w8, CCP-uec, CCP-yr3, CCP-q7r, CCP-18q) in favour of forking disler/the-library as cognovis/library with multi-harness (Claude Code + Codex) and marketplace support.
+- *(architecture)* Close 3 CCP-hs9 sub-beads (CCP-b3e, CCP-470, CCP-xa3) superseded by discovery that "62 agents" premise was factually incorrect — Codex ships subagents as first-class citizens (default/worker/explorer built-ins + custom TOML agents).
 - *(dev-tools)* New `/project-context` skill: 4-phase workflow (Scan, Distill, Draft, Validate) for generating docs/project-context.md from a codebase (Constitution Pattern). Includes golden output template with 5 required sections (Tech-Stack, Architecture Principles, Module Map, Patterns, Invariants) and 7 structural tests.
 - *(bead-orchestrator)* Inject Project Architecture Context and Bead Architecture Notes blocks into subagent prompt templates (Phase 2) — reads project-context.md or CLAUDE.md fallback, plus bead design field via JSON
 - *(bead-orchestrator)* Add Phase 2.6 Module Impact Analysis: identify affected modules, grep 3-5 existing patterns per module before implementation; new-file fallback scans siblings; dedicated Module Impact and Existing Patterns sections in both Codex and Standard Claude prompt templates
