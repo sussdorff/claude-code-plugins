@@ -46,9 +46,9 @@ MODE: debrief-only | ship-only | full (default)
 
 | Mode flag | Steps executed | Description |
 |-----------|----------------|-------------|
-| `--debrief-only` | Steps 10-12 only | Run Phase A (learnings, debrief, summary). No git operations. |
-| `--ship-only` | Steps 1-7, 9, 13-17 | Run Phase B (commit, changelog, merge, push, close). Skip Steps 10-12. |
-| _(none)_ | Steps 10-12, then 1-7, 9, 13-17 | Full run: Phase A first, then Phase B. |
+| `--debrief-only` | Steps 10-12c only | Run Phase A (learnings, debrief, summary, turn-log). No git operations. |
+| `--ship-only` | Steps 1-7, 9, 13-17 | Run Phase B (commit, changelog, merge, push, close). Skip Steps 10-12c. |
+| _(none)_ | Steps 10-12c, then 1-7, 9, 13-17 | Full run: Phase A first, then Phase B. |
 
 **Execution order (default):** Phase A (debrief) runs first, then Phase B (ship). This ensures learnings are captured even if the push fails.
 
@@ -232,6 +232,108 @@ Gather session data and save via `mcp__open-brain__save_memory`:
 - session_ref: bead-id or `session-YYYY-MM-DD`
 
 After saving, identify significant decisions and save each separately.
+
+### Step 12c: Worktree Turn-Log Upload
+
+Only runs when in a worktree (`REPO_ROOT != MAIN_REPO`). Skip silently in main-repo sessions — no error, no warning.
+
+**`--dry-run` mode:** This step is preview-only under `--dry-run`. Report what would happen (file present/absent, entry count, would POST) without executing the upload or deleting the file.
+
+1. **Check for JSONL file:**
+   ```bash
+   TURN_LOG="$REPO_ROOT/.worktree-turns.jsonl"
+   ```
+   - File does not exist → silent skip (normal for main-repo sessions).
+   - File exists but empty (0 bytes) → delete it (or note deletion in dry-run), continue.
+
+2. **Parse and POST (skipped in `--dry-run`):**
+   Read all lines from `$TURN_LOG`. Parse each as a JSON object to build `turns[]`.
+
+   **Fail-closed on malformed input:** If ANY line fails to parse as valid JSON,
+   abort the upload immediately — keep the file, record a warning, continue session-close.
+   Do NOT upload a partial turns list that silently omits corrupt entries.
+
+   Derive values for the payload:
+   - `worktree`: path of `$REPO_ROOT` relative to `$MAIN_REPO` (use `realpath --relative-to`)
+   - `bead_id`: extract from the worktree directory name if it matches the pattern
+     `bead-<id>` (e.g. `bead-CCP-3oy` → `CCP-3oy`). Use empty string if no match.
+   - `project`: repo name (same logic as Step 11 debrief — git remote or basename)
+
+   POST to the worktree session summary endpoint:
+   ```bash
+   OPEN_BRAIN_URL="${OPEN_BRAIN_URL:-https://open-brain.sussdorff.org}"
+   OPEN_BRAIN_API_KEY="${OPEN_BRAIN_API_KEY:-}"
+
+   python3 - <<'PYEOF'
+   import json, os, sys, urllib.request
+   from pathlib import Path
+
+   turn_log = Path(os.environ["TURN_LOG"])
+   lines = [l.strip() for l in turn_log.read_text().splitlines() if l.strip()]
+   if not lines:
+       turn_log.unlink()
+       print("TURN_LOG_STATUS=empty_deleted")
+       sys.exit(0)
+
+   # Fail closed: abort if any line is not valid JSON — keep file intact
+   turns = []
+   for i, line in enumerate(lines, 1):
+       try:
+           turns.append(json.loads(line))
+       except json.JSONDecodeError as exc:
+           print(f"TURN_LOG_STATUS=error_kept parse_error=line_{i}:{exc}")
+           sys.exit(1)
+
+   worktree = os.environ.get("WORKTREE_REL", "")
+   bead_id = os.environ.get("BEAD_ID_FROM_PATH", "")
+   project = os.environ.get("PROJECT_NAME", "unknown")
+   base_url = os.environ.get("OPEN_BRAIN_URL", "https://open-brain.sussdorff.org").rstrip("/")
+   api_key = os.environ.get("OPEN_BRAIN_API_KEY", "")
+
+   payload = json.dumps({
+       "worktree": worktree,
+       "bead_id": bead_id,
+       "project": project,
+       "turns": turns,
+   }).encode("utf-8")
+
+   req = urllib.request.Request(
+       f"{base_url}/api/worktree-session-summary",
+       data=payload,
+       headers={"Content-Type": "application/json", "X-API-Key": api_key},
+       method="POST",
+   )
+   try:
+       resp = urllib.request.urlopen(req, timeout=15)
+       if resp.status == 202:
+           turn_log.unlink()
+           print("TURN_LOG_STATUS=uploaded_deleted")
+       else:
+           print(f"TURN_LOG_STATUS=error_kept status={resp.status}")
+           sys.exit(1)
+   except Exception as exc:
+       print(f"TURN_LOG_STATUS=error_kept exc={exc}")
+       sys.exit(1)
+   PYEOF
+   ```
+
+3. **On success (202):** `.worktree-turns.jsonl` is deleted by the script.
+4. **On any error (non-202, network failure, parse error):** keep the file, record a
+   warning in the final report (Step 17), but **do NOT abort session-close**.
+
+The environment variables used:
+- `OPEN_BRAIN_URL` — base URL (default: `https://open-brain.sussdorff.org`)
+- `OPEN_BRAIN_API_KEY` — API key (empty string if unset → server decides whether to accept)
+
+Set the helper env vars before running the Python inline script:
+```bash
+export TURN_LOG="$REPO_ROOT/.worktree-turns.jsonl"
+export WORKTREE_REL=$(python3 -c "import os; print(os.path.relpath('$REPO_ROOT', '$MAIN_REPO'))" 2>/dev/null || echo "")
+# Extract bead ID from worktree dirname if pattern matches bead-<id>
+_WT_BASENAME=$(basename "$REPO_ROOT")
+export BEAD_ID_FROM_PATH=$(echo "$_WT_BASENAME" | sed -n 's/^bead-\(.*\)/\1/p')
+export PROJECT_NAME=$(git -C "$REPO_ROOT" remote get-url origin 2>/dev/null | sed 's|.*/||;s|\.git$||' || basename "$REPO_ROOT")
+```
 
 ### Step 13: Kill Worktree Dev Processes
 
@@ -449,6 +551,7 @@ Print the technical details after the What's New section:
 - Doc gaps found
 - Learnings extracted (Y/N)
 - Session summary saved (Y/N)
+- Worktree turn-log: uploaded+deleted / empty+deleted / skipped (no file) / ERROR: kept (with reason)
 - First merge from main: result
 - Second merge from main: result
 - Worktree merged (Y/N/N/A)
@@ -501,7 +604,7 @@ For each repo with changes:
 | Flag | Effect |
 |------|--------|
 | `--dry-run` | Preview all steps, no git changes |
-| `--debrief-only` | Run only Phase A: learnings, debrief, summary (Steps 10-12). No git operations. |
+| `--debrief-only` | Run only Phase A: learnings, debrief, summary, turn-log upload (Steps 10-12c). No git operations. |
 | `--ship-only` | Run only Phase B: commit, changelog, merge, push, close (Steps 1-7, 9, 13-17). No learnings/debrief. |
 | `--skip-audit` | Skip dependency audit (Step 4) |
 | `--skip-simplify` | Skip code simplification (Step 5) |

@@ -153,7 +153,34 @@ Return status:
 
    If changes exist, warn user or stash
 
-3. **Remove worktree**:
+3. **Pre-Remove: Check for unsent Turn-Log**
+
+   Before removing the worktree, check for a pending turn-log file:
+   ```bash
+   TURN_LOG="$WORKTREE_DIR/.worktree-turns.jsonl"
+   if [ -f "$TURN_LOG" ] && [ -s "$TURN_LOG" ]; then
+       ENTRY_COUNT=$(wc -l < "$TURN_LOG" | tr -d ' ')
+       # Prompt user interactively
+       echo "Worktree hat ungespeichertes Turn-Log ($ENTRY_COUNT Eintraege). Vermutlich ist kein session-close gelaufen. Trotzdem loeschen? [y/N]"
+       read -r CONFIRM
+       case "$CONFIRM" in
+           [yY])
+               # Proceed with removal
+               ;;
+           *)
+               echo "Abgebrochen. Fuehre erst session-close aus."
+               exit 1
+               ;;
+       esac
+   fi
+   ```
+
+   - If the file does not exist or is empty: proceed silently.
+   - If the file has entries and the user answers `n` (or empty): abort removal.
+     Print: `"Abgebrochen. Fuehre erst session-close aus."`
+   - If the user answers `y` or `Y`: proceed with removal as normal.
+
+4. **Remove worktree**:
    ```bash
    git worktree remove "$WORKTREE_DIR" --force
    ```
