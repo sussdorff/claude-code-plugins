@@ -1,7 +1,8 @@
-## [unreleased]
+## [2026.04.44] - 2026-04-19
 
 ### 🚀 Features
 
+- *(CCP-xpr)* Add vision_parser.py — shared stdlib parser for vision.md files (Principle, BoundaryRule, Vision dataclasses; VisionParseError with line:col; 4-column boundary table; 30 tests)
 - *(CCP-3oy)* Wire Turn-Log consumer in session-close and worktree-manager
 - *(dev-tools)* Add binary-explorer skill for reverse-engineering desktop apps
 
