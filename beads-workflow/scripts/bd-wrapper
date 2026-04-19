@@ -1,0 +1,56 @@
+#!/bin/sh
+# bd-wrapper — PATH-shim that extends 'bd lint' with --check=architecture-contracts support.
+#
+# Install: symlink or copy this script to ~/.local/bin/bd (which must precede
+# the real bd binary in PATH). See install-bd-wrapper.sh for the installer.
+#
+# Compatible with POSIX sh, bash, and zsh.
+#
+# How it works:
+#   1. Intercepts: bd lint --check=architecture-contracts [args...]
+#      -> delegates to bd_lint_contracts.py in the same directory as this script
+#   2. Everything else -> forwarded to the real bd binary (Homebrew or system)
+
+# ---------------------------------------------------------------------------
+# Locate this script's real path (resolve symlinks)
+# ---------------------------------------------------------------------------
+_SELF=$(readlink -f "$0" 2>/dev/null || realpath "$0" 2>/dev/null || "$0")
+_SCRIPT_DIR=$(dirname "$_SELF")
+
+# ---------------------------------------------------------------------------
+# Find the real bd binary (skip this script itself to avoid infinite recursion)
+# ---------------------------------------------------------------------------
+_REAL_BD=""
+for _candidate in /opt/homebrew/bin/bd /usr/local/bin/bd /usr/bin/bd; do
+    if [ ! -x "$_candidate" ]; then
+        continue
+    fi
+    _resolved=$(readlink -f "$_candidate" 2>/dev/null || realpath "$_candidate" 2>/dev/null || echo "$_candidate")
+    if [ "$_resolved" != "$_SELF" ]; then
+        _REAL_BD="$_candidate"
+        break
+    fi
+done
+
+if [ -z "$_REAL_BD" ]; then
+    echo "bd-wrapper: ERROR — cannot find real bd binary (checked /opt/homebrew/bin/bd, /usr/local/bin/bd, /usr/bin/bd)" >&2
+    exit 1
+fi
+
+# ---------------------------------------------------------------------------
+# Intercept: bd lint --check=architecture-contracts [args...]
+# ---------------------------------------------------------------------------
+if [ "$1" = "lint" ] && [ "$2" = "--check=architecture-contracts" ]; then
+    _CONTRACTS_SCRIPT="$_SCRIPT_DIR/bd_lint_contracts.py"
+    if [ ! -f "$_CONTRACTS_SCRIPT" ]; then
+        echo "bd-wrapper: ERROR — bd_lint_contracts.py not found at $_CONTRACTS_SCRIPT" >&2
+        exit 1
+    fi
+    shift 2  # remove 'lint' and '--check=architecture-contracts'
+    exec python3 "$_CONTRACTS_SCRIPT" "$@"
+fi
+
+# ---------------------------------------------------------------------------
+# Pass everything else to the real bd binary
+# ---------------------------------------------------------------------------
+exec "$_REAL_BD" "$@"
