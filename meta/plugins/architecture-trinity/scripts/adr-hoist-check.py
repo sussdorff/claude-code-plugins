@@ -17,12 +17,11 @@ Exit codes:
   0 — success (even if hoists are due, unless --ci)
   1 — failures in --ci mode (unknown conditions, malformed frontmatter, condition true)
 """
-import sys
-import subprocess
 import argparse
-from pathlib import Path
-
 import json
+import subprocess
+import sys
+from pathlib import Path
 
 import yaml
 
@@ -107,12 +106,15 @@ EVALUATORS = {
 def list_open_beads_with_title(title_fragment: str) -> list[dict]:
     """Query open beads matching a title fragment via bd list --json.
 
+    Uses --status=open so that closed beads with the same title do not
+    prevent re-creation when the condition fires again in a new cycle.
+
     Returns list of bead dicts. On non-zero exit or bd unavailable, prints a
     warning and returns an empty list to avoid spurious duplicate-creation.
     """
     try:
         result = subprocess.run(
-            ["bd", "list", f"--title-contains={title_fragment}", "--json"],
+            ["bd", "list", f"--title-contains={title_fragment}", "--status=open", "--json"],
             capture_output=True, text=True, timeout=10
         )
         if result.returncode != 0:
@@ -215,7 +217,7 @@ def run(repo_root: Path, create_beads: bool, ci_mode: bool, allow_unknown: bool)
 
         try:
             condition_met, evidence = evaluator(fm, repo_root)
-        except Exception as e:
+        except (yaml.YAMLError, KeyError, TypeError) as e:
             print(f"ERROR: evaluating condition in {adr['path']}: {e}")
             if ci_mode:
                 exit_code = 1

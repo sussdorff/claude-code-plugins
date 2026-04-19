@@ -181,6 +181,27 @@ def test_idempotent_no_create_beads():
 
 
 # ---------------------------------------------------------------------------
+# 10. adr-gap.sh smoke test — invokes the shell runner directly
+# ---------------------------------------------------------------------------
+
+def test_adr_gap_sh_smoke():
+    """adr-gap.sh must resolve adr-hoist-check.py correctly, exit 0, and
+    report 'HOIST DUE' when run on the adr-gap-mira fixture."""
+    shell_script = SKILL_ROOT / "scripts" / "adr-gap.sh"
+    assert shell_script.exists(), f"adr-gap.sh not found at {shell_script}"
+    result = subprocess.run(
+        [str(shell_script), str(FIXTURE_DIR)],
+        capture_output=True, text=True
+    )
+    assert result.returncode == 0, (
+        f"adr-gap.sh exited {result.returncode}\nstdout: {result.stdout}\nstderr: {result.stderr}"
+    )
+    assert "HOIST DUE" in result.stdout, (
+        f"Expected 'HOIST DUE' in adr-gap.sh output:\n{result.stdout}"
+    )
+
+
+# ---------------------------------------------------------------------------
 # Main runner
 # ---------------------------------------------------------------------------
 
@@ -197,6 +218,7 @@ if __name__ == "__main__":
         test_unknown_condition_warning,
         test_condition_false_no_report,
         test_idempotent_no_create_beads,
+        test_adr_gap_sh_smoke,
     ]
     passed = 0
     failed = 0

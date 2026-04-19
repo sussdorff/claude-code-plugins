@@ -11,7 +11,8 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-CHECKER="$(dirname "$(dirname "$SCRIPT_DIR")")/scripts/adr-hoist-check.py"
+PLUGIN_ROOT="$(cd "$SCRIPT_DIR/../../.." && pwd)"
+CHECKER="$PLUGIN_ROOT/scripts/adr-hoist-check.py"
 
 if [[ ! -f "$CHECKER" ]]; then
     echo "ERROR: adr-hoist-check.py not found at $CHECKER" >&2
