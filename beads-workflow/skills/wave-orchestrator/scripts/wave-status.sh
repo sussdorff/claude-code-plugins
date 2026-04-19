@@ -26,11 +26,14 @@ if [[ ! -f "$CONFIG" ]]; then
   exit 1
 fi
 
-# Parse dispatch time and compute elapsed minutes
+# Parse dispatch time and compute elapsed minutes (always in UTC to avoid local TZ offset)
 DISPATCH_TIME=$(jq -r '.dispatch_time' "$CONFIG")
 if [[ "$DISPATCH_TIME" != "null" && -n "$DISPATCH_TIME" ]]; then
-  DISPATCH_EPOCH=$(date -j -f "%Y-%m-%dT%H:%M:%S" "$DISPATCH_TIME" +%s 2>/dev/null || echo "0")
-  NOW_EPOCH=$(date +%s)
+  # macOS: date -j -u -f; Linux fallback: date -u -d with explicit Z suffix
+  DISPATCH_EPOCH=$(date -j -u -f "%Y-%m-%dT%H:%M:%S" "$DISPATCH_TIME" +%s 2>/dev/null \
+    || date -u -d "${DISPATCH_TIME}Z" +%s 2>/dev/null \
+    || echo "0")
+  NOW_EPOCH=$(date -u +%s)
   if [[ "$DISPATCH_EPOCH" -gt 0 ]]; then
     ELAPSED_MIN=$(( (NOW_EPOCH - DISPATCH_EPOCH) / 60 ))
   else
@@ -50,9 +53,12 @@ for i in $(seq 0 $((BEAD_COUNT - 1))); do
   SURFACE=$(jq -r ".beads[$i].surface" "$CONFIG")
 
   (
-    # The parallel subshell inherits `set -euo pipefail` — if cmux read-screen
-    # exits non-zero (dead pane), the subshell would die before writing its
-    # result file. `|| true` preserves output (via 2>&1) while forcing exit 0.
+    # Disable inherited strict mode so grep returning 1 (no match) or any
+    # other non-zero exit inside this subshell does NOT silently kill it before
+    # writing its result file.  Each individual command that matters uses || true.
+    set +euo pipefail
+
+    # cmux read-screen may exit non-zero for a dead pane — force exit 0.
     SCREEN=$(cmux read-screen --surface "$SURFACE" --scrollback --lines 60 2>&1 || true)
 
     # Determine status from screen content
@@ -165,16 +171,18 @@ done
 # Wait for all parallel reads
 wait
 
-# Assemble results
+# Assemble results — use jq to build the array so missing result files and
+# string-concatenation comma bugs cannot produce invalid JSON.
 ALL_DONE=true
-BEADS_JSON="["
 FOLLOW_UPS_ALL="[]"
 
+# Collect all existing per-bead result files in index order
+BEAD_FILES=()
 for i in $(seq 0 $((BEAD_COUNT - 1))); do
   RESULT="$TMPDIR/bead-$i.json"
   if [[ -f "$RESULT" ]]; then
-    BEAD_JSON=$(cat "$RESULT")
-    BEAD_STATUS=$(echo "$BEAD_JSON" | jq -r '.status')
+    BEAD_FILES+=("$RESULT")
+    BEAD_STATUS=$(jq -r '.status' "$RESULT")
 
     if [[ "$BEAD_STATUS" != "done" ]]; then
       ALL_DONE=false
@@ -185,16 +193,18 @@ for i in $(seq 0 $((BEAD_COUNT - 1))); do
     fi
 
     # Collect follow-up beads
-    BEAD_FOLLOW_UPS=$(echo "$BEAD_JSON" | jq '.follow_up_beads')
-    FOLLOW_UPS_ALL=$(echo "$FOLLOW_UPS_ALL" "$BEAD_FOLLOW_UPS" | jq -s 'add | unique')
-
-    if [[ $i -gt 0 ]]; then
-      BEADS_JSON+=","
-    fi
-    BEADS_JSON+="$BEAD_JSON"
+    BEAD_FOLLOW_UPS=$(jq '.follow_up_beads' "$RESULT")
+    FOLLOW_UPS_ALL=$(printf '%s\n%s' "$FOLLOW_UPS_ALL" "$BEAD_FOLLOW_UPS" | jq -s 'add | unique')
   fi
 done
-BEADS_JSON+="]"
+
+# Build the JSON array from individual files via jq slurp — handles 0..N files
+# correctly without any manual comma logic.
+if [[ ${#BEAD_FILES[@]} -gt 0 ]]; then
+  BEADS_JSON=$(jq -s '.' "${BEAD_FILES[@]}")
+else
+  BEADS_JSON="[]"
+fi
 
 # Build final output
 jq -n \
