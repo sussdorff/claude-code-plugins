@@ -161,10 +161,10 @@ _OPTIONAL_BULLET_RES: list[re.Pattern] = [
 # Valid gap-close markers
 _GAP_VALID_RES: list[re.Pattern] = [
     re.compile(r"^-\s+\[\s*\]\s+None$", re.IGNORECASE),
-    re.compile(r"^-\s+\[\s*\]\s+\[ADR-NEEDED\]"),
-    re.compile(r"^-\s+\[\s*\]\s+\[HELPER-NEEDED\]"),
-    re.compile(r"^-\s+\[\s*\]\s+\[ENFORCER-PROACTIVE-NEEDED\]"),
-    re.compile(r"^-\s+\[\s*\]\s+\[ENFORCER-REACTIVE-NEEDED\]"),
+    re.compile(r"^-\s+\[\s*\]\s+\[ADR-NEEDED\]\s+\S"),
+    re.compile(r"^-\s+\[\s*\]\s+\[HELPER-NEEDED\]\s+\S"),
+    re.compile(r"^-\s+\[\s*\]\s+\[ENFORCER-PROACTIVE-NEEDED\]\s+\S"),
+    re.compile(r"^-\s+\[\s*\]\s+\[ENFORCER-REACTIVE-NEEDED\]\s+\S"),
 ]
 
 

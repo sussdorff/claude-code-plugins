@@ -478,6 +478,36 @@ class TestGapMarkers(unittest.TestCase):
         errors = linter.validate_contracts_section("X", desc)
         self.assertTrue(len(errors) > 0)
 
+    def test_bare_adr_needed_fails(self):
+        """- [ ] [ADR-NEEDED] with no description after marker must fail."""
+        desc = self._desc_with_gap("- [ ] [ADR-NEEDED]")
+        errors = linter.validate_contracts_section("X", desc)
+        self.assertTrue(len(errors) > 0, "Bare [ADR-NEEDED] with no description should fail")
+
+    def test_bare_helper_needed_fails(self):
+        """- [ ] [HELPER-NEEDED] with no description must fail."""
+        desc = self._desc_with_gap("- [ ] [HELPER-NEEDED]")
+        errors = linter.validate_contracts_section("X", desc)
+        self.assertTrue(len(errors) > 0, "Bare [HELPER-NEEDED] with no description should fail")
+
+    def test_bare_enforcer_proactive_needed_fails(self):
+        """- [ ] [ENFORCER-PROACTIVE-NEEDED] with no description must fail."""
+        desc = self._desc_with_gap("- [ ] [ENFORCER-PROACTIVE-NEEDED]")
+        errors = linter.validate_contracts_section("X", desc)
+        self.assertTrue(len(errors) > 0, "Bare [ENFORCER-PROACTIVE-NEEDED] with no description should fail")
+
+    def test_bare_enforcer_reactive_needed_fails(self):
+        """- [ ] [ENFORCER-REACTIVE-NEEDED] with no description must fail."""
+        desc = self._desc_with_gap("- [ ] [ENFORCER-REACTIVE-NEEDED]")
+        errors = linter.validate_contracts_section("X", desc)
+        self.assertTrue(len(errors) > 0, "Bare [ENFORCER-REACTIVE-NEEDED] with no description should fail")
+
+    def test_adr_needed_whitespace_only_fails(self):
+        """- [ ] [ADR-NEEDED]   (marker + only whitespace) must fail."""
+        desc = self._desc_with_gap("- [ ] [ADR-NEEDED]   ")
+        errors = linter.validate_contracts_section("X", desc)
+        self.assertTrue(len(errors) > 0, "[ADR-NEEDED] followed by only whitespace should fail")
+
 
 # ---------------------------------------------------------------------------
 # Fenced code block handling in validate_contracts_section
