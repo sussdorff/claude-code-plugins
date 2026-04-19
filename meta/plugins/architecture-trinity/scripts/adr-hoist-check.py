@@ -22,6 +22,8 @@ import subprocess
 import argparse
 from pathlib import Path
 
+import json
+
 import yaml
 
 
@@ -30,10 +32,16 @@ import yaml
 # ---------------------------------------------------------------------------
 
 def parse_frontmatter(text: str) -> dict | None:
-    """Parse YAML frontmatter between --- fences. Returns dict or None on failure."""
+    """Parse YAML frontmatter between --- fences.
+
+    Returns:
+      None  — no opening --- fence found (not a frontmatter file)
+      {}    — frontmatter block present but empty or unclosed
+      dict  — parsed YAML content
+    """
     lines = text.splitlines()
     if not lines or lines[0].strip() != "---":
-        return {}
+        return None
     end = None
     for i, line in enumerate(lines[1:], start=1):
         if line.strip() == "---":
@@ -96,18 +104,27 @@ EVALUATORS = {
 # Bead integration
 # ---------------------------------------------------------------------------
 
-def list_open_beads_with_title(title_fragment: str) -> list[str]:
-    """Query open beads matching a title fragment via bd list. Returns list of titles."""
+def list_open_beads_with_title(title_fragment: str) -> list[dict]:
+    """Query open beads matching a title fragment via bd list --json.
+
+    Returns list of bead dicts. On non-zero exit or bd unavailable, prints a
+    warning and returns an empty list to avoid spurious duplicate-creation.
+    """
     try:
         result = subprocess.run(
-            ["bd", "list", f"--title-contains={title_fragment}"],
+            ["bd", "list", f"--title-contains={title_fragment}", "--json"],
             capture_output=True, text=True, timeout=10
         )
-        if result.returncode == 0:
-            return [line.strip() for line in result.stdout.splitlines() if line.strip()]
-    except (FileNotFoundError, subprocess.TimeoutExpired):
-        pass
-    return []
+        if result.returncode != 0:
+            print(f"WARNING: bd list exited {result.returncode}: {result.stderr.strip()}")
+            return []
+        return json.loads(result.stdout) if result.stdout.strip() else []
+    except (FileNotFoundError, subprocess.TimeoutExpired) as e:
+        print(f"WARNING: bd list unavailable: {e}")
+        return []
+    except json.JSONDecodeError as e:
+        print(f"WARNING: bd list returned invalid JSON: {e}")
+        return []
 
 
 def create_bead(title: str, note: str = "") -> bool:
@@ -156,7 +173,6 @@ def run(repo_root: Path, create_beads: bool, ci_mode: bool, allow_unknown: bool)
     adr_dir = repo_root / "docs" / "adr"
     exit_code = 0
     parsed_adrs = []
-    hoist_results = []
 
     # Phase 1: Parse ADRs
     if adr_dir.is_dir():
@@ -172,10 +188,7 @@ def run(repo_root: Path, create_beads: bool, ci_mode: bool, allow_unknown: bool)
                 continue
 
             if fm is None:
-                msg = f"ERROR: malformed frontmatter in {adr_file}"
-                print(msg)
-                if ci_mode:
-                    exit_code = 1
+                # No --- fence: not a frontmatter file, skip silently
                 continue
 
             parsed_adrs.append({"path": adr_file, "frontmatter": fm})
@@ -219,19 +232,13 @@ def run(repo_root: Path, create_beads: bool, ci_mode: bool, allow_unknown: bool)
             print(f"    Bead: {trigger_title}")
             print(f"    Evidence: {evidence_str}")
 
-            hoist_results.append({
-                "adr": adr_name,
-                "trigger_title": trigger_title,
-                "evidence": evidence,
-            })
-
             if ci_mode:
                 exit_code = 1
 
             if create_beads and trigger_title:
                 # Check if bead already exists
                 existing = list_open_beads_with_title(trigger_title)
-                bead_open = any(trigger_title in b for b in existing)
+                bead_open = bool(existing)
                 if not bead_open:
                     note = f"Auto-created by adr-hoist-check. Evidence: {evidence_str}"
                     ok = create_bead(trigger_title, note)

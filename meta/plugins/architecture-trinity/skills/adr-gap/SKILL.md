@@ -39,17 +39,24 @@ The skill runs `adr-hoist-check.py` against a repository root:
 
 ```bash
 # Basic audit (report only, no side effects)
-uv run scripts/adr-hoist-check.py <repo_root>
+bash scripts/adr-gap.sh [repo_root]
 
 # Create beads for all due hoists
-uv run scripts/adr-hoist-check.py <repo_root> --create-beads
+bash scripts/adr-gap.sh [repo_root] --create-beads
 
 # CI mode: exit non-zero if any hoists are due
-uv run scripts/adr-hoist-check.py <repo_root> --ci
+bash scripts/adr-gap.sh [repo_root] --ci
 
 # CI mode, allow unknown condition strings without failing
-uv run scripts/adr-hoist-check.py <repo_root> --ci --allow-unknown
+bash scripts/adr-gap.sh [repo_root] --ci --allow-unknown
 ```
+
+> **Advanced:** You can also invoke the Python script directly (useful when running
+> from the plugin root where the canonical script path is accessible):
+>
+> ```bash
+> uv run scripts/adr-hoist-check.py <repo_root> [flags]
+> ```
 
 ## Flags
 

@@ -11,8 +11,9 @@ from pathlib import Path
 
 SKILL_ROOT = Path(__file__).parent.parent
 SCRIPTS_DIR = SKILL_ROOT / "scripts"
+PLUGIN_ROOT = SKILL_ROOT.parent.parent
 FIXTURE_DIR = SKILL_ROOT / "tests" / "fixtures" / "adr-gap-mira"
-CHECKER = SCRIPTS_DIR / "adr-hoist-check.py"
+CHECKER = PLUGIN_ROOT / "scripts" / "adr-hoist-check.py"
 
 
 def run_checker(args=None, fixture=None):
