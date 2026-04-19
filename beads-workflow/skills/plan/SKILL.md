@@ -66,6 +66,79 @@ Proceed with Level [N] planning? (or specify --level=X to override)
 
 ---
 
+## Step 0.5: Architecture Scout (pre-implementation check)
+
+**Scale-adaptive**: Run for Level 2+ only. Skip for Level 0-1 (single-file fixes, typos, config changes).
+
+### When to Run
+
+After Scale-Adaptive Detection confirms Level 2+, spawn the architecture-scout agent before
+gathering full context. The scout identifies architectural debt, missing ADRs, and vision
+boundary violations early — when they are cheap to address.
+
+### How to Spawn
+
+```python
+import os
+scout_input = {
+  "bead_id": "<ticket-id>",
+  "bead_description": "<ticket description or user's input>",
+  "touched_paths": ["<package-or-path-1>", "<package-or-path-2>"],
+  "mode": "<advisor|gate from .claude/project-config.yml, default: advisor>",
+  # CONFORMANCE_SKIP bypass: read env var here (before spawning) and pass it through
+  "conformance_skip": os.environ.get("CONFORMANCE_SKIP") == "1"
+}
+Agent(
+  subagent_type="architecture-trinity:architecture-scout",
+  prompt=json.dumps(scout_input)
+)
+```
+
+**Determining `touched_paths`**: Extract package/directory mentions from the ticket
+description, acceptance criteria, or the argument passed to `/plan`. If the ticket
+references specific files or modules, include their parent package directory. If
+uncertain, use an empty array (scout will scan all packages).
+
+### Handling the Output
+
+**If the project has no `docs/adr/` and no `vision.md`:**
+The scout returns `CONFORM` with empty findings. Append the following note to the plan:
+
+> No contracts declared yet — consider running `/project-context` first to document
+> existing patterns and bootstrap your ADR library.
+
+Continue to Step 1 normally.
+
+**In advisor mode** (default):
+
+1. Append the `## Coverage Matrix (architecture-scout)` section to the plan document
+2. For any finding with `severity: "BLOCKING"`: add a DECIDE item to `## Developer Decisions`:
+
+   ```markdown
+   ### Q: Architecture Scout — BLOCKING: <rule>
+   **Concern**: <concern from finding>
+   **Source**: <source from finding>
+   **Decision**: [Unresolved — resolve in Step 4]
+   ```
+
+3. For ADVISORY findings: append inline notes in the Coverage Matrix (no separate DECIDE item)
+4. Continue to Step 1 (do NOT block the plan)
+
+**In gate mode** (`.claude/project-config.yml` → `architecture-scout.mode: gate`):
+
+- If the scout returns `status: VIOLATION` (BLOCKING findings exist):
+  ```
+  BLOCKED: architecture-scout reported N blocking finding(s) — see plan.md#coverage-matrix.
+  Resolve the findings before proceeding with /plan.
+  ```
+  Exit `/plan`. Do not continue to Step 1.
+
+- If `CONFORMANCE_SKIP=1` is set in the environment: pass `"conformance_skip": true` in the scout input (shown above); the scout will log a warning and continue as advisor mode.
+
+- If the scout returns `status: CONFORM`: continue to Step 1 normally.
+
+---
+
 ## Step 1: Gather Context
 
 ### Ticket/Issue Source Detection
