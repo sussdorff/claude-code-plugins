@@ -11,14 +11,23 @@
 #   3. Verifies that ~/.local/bin precedes the real bd in PATH
 #
 # Usage:
-#   bash beads-workflow/scripts/install-bd-wrapper.sh
+#   bash beads-workflow/scripts/install-bd-wrapper.sh           # safe install
+#   bash beads-workflow/scripts/install-bd-wrapper.sh --force   # overwrite non-wrapper files
 #
 # Compatible with POSIX sh, bash, and zsh.
 
 set -e
 
+# Parse flags
+_FORCE=false
+for _arg in "$@"; do
+    case "$_arg" in
+        --force) _FORCE=true ;;
+    esac
+done
+
 # Locate the install script's real directory
-_SELF=$(readlink -f "$0" 2>/dev/null || realpath "$0" 2>/dev/null || "$0")
+_SELF=$(readlink -f "$0" 2>/dev/null || realpath "$0" 2>/dev/null || echo "$0")
 _SCRIPT_DIR=$(dirname "$_SELF")
 _WRAPPER="$_SCRIPT_DIR/bd-wrapper"
 _CONTRACTS_SCRIPT="$_SCRIPT_DIR/bd_lint_contracts.py"
@@ -47,12 +56,30 @@ _TARGET_CONTRACTS="$_TARGET_DIR/bd_lint_contracts.py"
 # Remove any existing target first (handles symlinks from previous installs
 # and avoids macOS cp's "source and dest are identical" error).
 echo "Installing bd wrapper to $_TARGET ..."
+if [ -f "$_TARGET" ] && ! grep -qF 'BD_WRAPPER_MARKER' "$_TARGET" 2>/dev/null; then
+    if [ "$_FORCE" = "false" ]; then
+        echo "ERROR: $_TARGET exists and is NOT a bd-wrapper (it may be another tool)." >&2
+        echo "Re-run with --force to overwrite it." >&2
+        exit 1
+    else
+        echo "WARNING: overwriting non-wrapper file at $_TARGET (--force specified)."
+    fi
+fi
 rm -f "$_TARGET"
 cp "$_WRAPPER" "$_TARGET"
 chmod +x "$_TARGET"
 
 # Copy the contracts linter alongside the wrapper
 echo "Installing bd_lint_contracts.py to $_TARGET_CONTRACTS ..."
+if [ -f "$_TARGET_CONTRACTS" ] && ! grep -qF 'BD_LINT_CONTRACTS_MARKER' "$_TARGET_CONTRACTS" 2>/dev/null; then
+    if [ "$_FORCE" = "false" ]; then
+        echo "ERROR: $_TARGET_CONTRACTS exists and is NOT a bd_lint_contracts install." >&2
+        echo "Re-run with --force to overwrite it." >&2
+        exit 1
+    else
+        echo "WARNING: overwriting non-contracts file at $_TARGET_CONTRACTS (--force specified)."
+    fi
+fi
 rm -f "$_TARGET_CONTRACTS"
 cp "$_CONTRACTS_SCRIPT" "$_TARGET_CONTRACTS"
 

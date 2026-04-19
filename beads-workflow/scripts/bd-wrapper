@@ -15,7 +15,7 @@
 # ---------------------------------------------------------------------------
 # Locate this script's real path (resolve symlinks) and its directory
 # ---------------------------------------------------------------------------
-_SELF=$(readlink -f "$0" 2>/dev/null || realpath "$0" 2>/dev/null || "$0")
+_SELF=$(readlink -f "$0" 2>/dev/null || realpath "$0" 2>/dev/null || echo "$0")
 _SCRIPT_DIR=$(dirname "$_SELF")
 
 # ---------------------------------------------------------------------------

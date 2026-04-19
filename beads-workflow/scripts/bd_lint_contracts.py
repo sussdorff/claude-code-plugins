@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# BD_LINT_CONTRACTS_MARKER
 """
 bd_lint_contracts — Architecture Contracts lint check for bead descriptions.
 
