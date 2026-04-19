@@ -1,0 +1,7 @@
+- id: tense-gate
+  name: Tense Gate (prescriptive present enforcement)
+  description: Flags future-tense markers in vision.md and prescriptive-present documents
+  entry: scripts/tense-gate.py
+  language: python
+  files: '(vision\.md|.*\.md)'
+  args: []
