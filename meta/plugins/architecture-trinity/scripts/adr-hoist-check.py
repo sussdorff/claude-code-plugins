@@ -34,9 +34,13 @@ def parse_frontmatter(text: str) -> dict | None:
     """Parse YAML frontmatter between --- fences.
 
     Returns:
-      None  — no opening --- fence found (not a frontmatter file)
-      {}    — frontmatter block present but empty or unclosed
+      None  — no opening --- fence found (not a frontmatter file); skip silently
+      {}    — frontmatter block present but empty
       dict  — parsed YAML content
+
+    Raises:
+      yaml.YAMLError — unclosed fence OR YAML that parses to a non-mapping type
+                       (caller reports these as malformed ADRs)
     """
     lines = text.splitlines()
     if not lines or lines[0].strip() != "---":
@@ -47,9 +51,16 @@ def parse_frontmatter(text: str) -> dict | None:
             end = i
             break
     if end is None:
-        return {}
+        raise yaml.YAMLError("unclosed frontmatter fence (opening --- has no closing ---)")
     fm_text = "\n".join(lines[1:end])
-    return yaml.safe_load(fm_text) or {}
+    parsed = yaml.safe_load(fm_text)
+    if parsed is None:
+        return {}
+    if not isinstance(parsed, dict):
+        raise yaml.YAMLError(
+            f"frontmatter must be a YAML mapping, got {type(parsed).__name__}"
+        )
+    return parsed
 
 
 # ---------------------------------------------------------------------------
@@ -103,24 +114,30 @@ EVALUATORS = {
 # Bead integration
 # ---------------------------------------------------------------------------
 
-def list_open_beads_with_title(title_fragment: str) -> list[dict]:
-    """Query open beads matching a title fragment via bd list --json.
+def list_open_beads_with_title(title: str) -> list[dict]:
+    """Return open beads whose title exactly matches *title*.
+
+    Uses --title-contains for server-side pre-filtering, then applies an
+    exact-match filter on the client side so that a bead whose title merely
+    *contains* the trigger string cannot suppress real hoist bead creation.
 
     Uses --status=open so that closed beads with the same title do not
     prevent re-creation when the condition fires again in a new cycle.
 
-    Returns list of bead dicts. On non-zero exit or bd unavailable, prints a
-    warning and returns an empty list to avoid spurious duplicate-creation.
+    Returns list of matching bead dicts. On non-zero exit or bd unavailable,
+    prints a warning and returns an empty list to avoid spurious duplicates.
     """
     try:
         result = subprocess.run(
-            ["bd", "list", f"--title-contains={title_fragment}", "--status=open", "--json"],
+            ["bd", "list", f"--title-contains={title}", "--status=open", "--json"],
             capture_output=True, text=True, timeout=10
         )
         if result.returncode != 0:
             print(f"WARNING: bd list exited {result.returncode}: {result.stderr.strip()}")
             return []
-        return json.loads(result.stdout) if result.stdout.strip() else []
+        candidates = json.loads(result.stdout) if result.stdout.strip() else []
+        # Exact-match filter: substring pre-filter above may return broader results
+        return [b for b in candidates if b.get("title") == title]
     except (FileNotFoundError, subprocess.TimeoutExpired) as e:
         print(f"WARNING: bd list unavailable: {e}")
         return []
@@ -156,7 +173,12 @@ def collect_packages(repo_root: Path) -> list[str]:
 
 
 def collect_adr_covered_packages(adrs: list[dict]) -> set[str]:
-    """Collect all packages mentioned in applies_to or hoist_when.target across all ADRs."""
+    """Collect packages explicitly named in applies_to across all ADRs.
+
+    hoist_when.target is intentionally excluded: the target package (e.g.
+    adapter-common) has not yet *received* the hoist, so it should appear in
+    the pre-trinity report until the hoist actually lands.
+    """
     covered = set()
     for adr in adrs:
         fm = adr.get("frontmatter", {})
@@ -164,9 +186,6 @@ def collect_adr_covered_packages(adrs: list[dict]) -> set[str]:
         if isinstance(applies_to, str):
             applies_to = [applies_to]
         covered.update(applies_to)
-        hoist = fm.get("hoist_when", {})
-        if hoist.get("target"):
-            covered.add(hoist["target"])
     return covered
 
 

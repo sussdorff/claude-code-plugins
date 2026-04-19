@@ -3,10 +3,13 @@
 Unit tests for adr-hoist-check.py.
 Uses the adr-gap-mira fixture to validate hoist detection and pre-trinity reporting.
 """
-import sys
+import importlib.util
+import json
 import shutil
 import subprocess
+import sys
 import tempfile
+import unittest.mock as mock
 from pathlib import Path
 
 SKILL_ROOT = Path(__file__).parent.parent
@@ -202,6 +205,108 @@ def test_adr_gap_sh_smoke():
 
 
 # ---------------------------------------------------------------------------
+# 11. Unclosed frontmatter fence reports error
+# ---------------------------------------------------------------------------
+
+def test_unclosed_fence_reports_error():
+    """An ADR with an opening --- but no closing --- should report an error,
+    not silently produce empty frontmatter."""
+    tmp = tempfile.mkdtemp()
+    try:
+        root = Path(tmp)
+        (root / "docs" / "adr").mkdir(parents=True)
+        bad_adr = root / "docs" / "adr" / "ADR-UNCLOSED.md"
+        bad_adr.write_text(
+            "---\nstatus: accepted\ncontract: id-taxonomy\n# NO CLOSING FENCE\n\n# ADR body\n"
+        )
+        stdout, stderr, rc = run_checker(fixture=root)
+        combined = stdout + stderr
+        assert "ADR-UNCLOSED.md" in combined, (
+            f"Expected file path in error output for unclosed fence:\n{combined}"
+        )
+        assert "error" in combined.lower() or "unclosed" in combined.lower(), (
+            f"Expected error/unclosed message:\n{combined}"
+        )
+    finally:
+        shutil.rmtree(tmp)
+
+
+# ---------------------------------------------------------------------------
+# 12. Scalar frontmatter (non-mapping YAML) reports error
+# ---------------------------------------------------------------------------
+
+def test_scalar_frontmatter_reports_error():
+    """An ADR whose frontmatter parses to a scalar or list (not a dict) should
+    report an error rather than crash with AttributeError."""
+    tmp = tempfile.mkdtemp()
+    try:
+        root = Path(tmp)
+        (root / "docs" / "adr").mkdir(parents=True)
+        scalar_adr = root / "docs" / "adr" / "ADR-SCALAR.md"
+        # YAML that parses to a plain string, not a mapping
+        scalar_adr.write_text("---\njust a plain string\n---\n\n# ADR body\n")
+        stdout, stderr, rc = run_checker(fixture=root)
+        combined = stdout + stderr
+        assert "ADR-SCALAR.md" in combined, (
+            f"Expected file path in error output for scalar frontmatter:\n{combined}"
+        )
+    finally:
+        shutil.rmtree(tmp)
+
+
+# ---------------------------------------------------------------------------
+# 13. Pre-trinity section explicitly lists target package (adapter-common)
+# ---------------------------------------------------------------------------
+
+def test_pre_trinity_section_lists_target_package():
+    """adapter-common is the hoist_when.target but should NOT be excluded from
+    pre-trinity packages — it hasn't received the hoist yet.
+    Verify it appears after the 'Pre-trinity packages:' header."""
+    stdout, stderr, rc = run_checker()
+    assert rc == 0, f"Expected exit 0, got {rc}\nstderr: {stderr}"
+    lines = stdout.splitlines()
+    try:
+        header_idx = next(
+            i for i, line in enumerate(lines) if "Pre-trinity packages:" in line
+        )
+    except StopIteration:
+        raise AssertionError(f"'Pre-trinity packages:' section not found in output:\n{stdout}")
+    section_lines = "\n".join(lines[header_idx:])
+    assert "adapter-common" in section_lines, (
+        f"Expected 'adapter-common' in Pre-trinity section (not just elsewhere):\n{section_lines}"
+    )
+
+
+# ---------------------------------------------------------------------------
+# 14. Exact-match bead lookup: superset title does not suppress creation
+# ---------------------------------------------------------------------------
+
+def test_exact_match_bead_lookup():
+    """list_open_beads_with_title must use exact matching, not substring.
+    A bead titled '[HOIST] makeIdHelper to adapter-common-v2' must NOT
+    suppress creation of '[HOIST] makeIdHelper to adapter-common'."""
+    # Import the function directly to test it in isolation
+    spec = importlib.util.spec_from_file_location("adr_hoist_check", CHECKER)
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+
+    # Patch subprocess.run to simulate bd returning a superset-titled bead
+
+    superset_bead = [{"id": "X-001", "title": "[HOIST] makeIdHelper to adapter-common-v2", "status": "open"}]
+    fake_result = mock.MagicMock()
+    fake_result.returncode = 0
+    fake_result.stdout = json.dumps(superset_bead)
+
+    with mock.patch("subprocess.run", return_value=fake_result):
+        exact_title = "[HOIST] makeIdHelper to adapter-common"
+        matches = mod.list_open_beads_with_title(exact_title)
+
+    assert matches == [], (
+        f"Superset-titled bead must NOT match exact title '{exact_title}': got {matches}"
+    )
+
+
+# ---------------------------------------------------------------------------
 # Main runner
 # ---------------------------------------------------------------------------
 
@@ -219,6 +324,10 @@ if __name__ == "__main__":
         test_condition_false_no_report,
         test_idempotent_no_create_beads,
         test_adr_gap_sh_smoke,
+        test_unclosed_fence_reports_error,
+        test_scalar_frontmatter_reports_error,
+        test_pre_trinity_section_lists_target_package,
+        test_exact_match_bead_lookup,
     ]
     passed = 0
     failed = 0
