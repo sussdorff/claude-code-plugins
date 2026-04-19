@@ -9,6 +9,11 @@
 
 - *(beads)* Create Trinity-Harness epic and 10 subtask beads
 - *(CCP-089)* Introduce Architecture Trinity vocabulary in docs
+
+### Bug Fixes
+
+- *(CCP-089)* Remove duplicate issues.jsonl from tracking
+- *(CCP-089)* Align summary text to four-term vocabulary
 ## [2026.04.32] - 2026-04-16
 
 ### 🚀 Features
