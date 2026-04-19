@@ -70,18 +70,27 @@ def _run(args: list[str], timeout: int = 30) -> tuple[int, str, str]:
         return 1, "", "bd: command not found"
 
 
+class _BdUnavailableError(Exception):
+    """Raised when the bd CLI is unavailable or returns an unexpected error."""
+
+
 def _get_beads_json(extra_args: list[str]) -> list[dict]:
-    """Run bd list with extra_args and return parsed JSON list."""
+    """Run bd list with extra_args and return parsed JSON list.
+
+    Raises _BdUnavailableError when bd is unavailable or fails, so callers
+    in the main code paths can propagate a hard exit-1 instead of silently
+    returning an empty list.
+    """
     rc, stdout, stderr = _run(["list", "--json", "--limit", "0"] + extra_args)
     if rc != 0:
-        print(f"Warning: bd list failed: {stderr.strip()}", file=sys.stderr)
-        return []
+        raise _BdUnavailableError(f"bd list failed: {stderr.strip() or 'unknown error'}")
     try:
         data = json.loads(stdout) if stdout.strip() else []
-        return data if isinstance(data, list) else []
+        if not isinstance(data, list):
+            raise _BdUnavailableError("bd list returned unexpected JSON (not a list)")
+        return data
     except json.JSONDecodeError as exc:
-        print(f"Warning: bd list JSON parse error: {exc}", file=sys.stderr)
-        return []
+        raise _BdUnavailableError(f"bd list JSON parse error: {exc}") from exc
 
 
 def _get_bead_detail(bead_id: str) -> Optional[dict]:
@@ -161,9 +170,15 @@ def validate_contracts_section(bead_id: str, description: str) -> list[str]:
     - 3b  ≥1 bullet matching ADR-NNN (Name): ...      → FAIL if absent
     - 3c  '## Gaps to Close' section must exist with ≥1 valid marker bullet
 
+    Fenced code blocks are stripped before validation so that documentation
+    examples embedded in the description do not interfere with parsing.
+
     Returns a list of error strings (empty = OK).
     """
     errors: list[str] = []
+
+    # Strip fenced blocks so embedded documentation examples don't confuse the parser
+    description = _strip_fenced_blocks(description)
 
     # Must have the section at all
     section_content = extract_section(description, "## Architecture Contracts Touched")
@@ -282,7 +297,10 @@ def lint_bead(bead_id: str) -> list[LintError]:
 
 
 def lint_all(status: str) -> list[LintError]:
-    """Lint all beads with 'touches-contract' label + false-negative check."""
+    """Lint all beads with 'touches-contract' label + false-negative check.
+
+    Raises _BdUnavailableError if bd cannot be reached.
+    """
     extra = ["--all"] if status == "all" else ["--status", "open"]
     labeled_beads = _get_beads_json(["--label", "touches-contract"] + extra)
     all_beads = _get_beads_json(extra)
@@ -341,14 +359,18 @@ def main() -> None:
 
     status = "all" if args.all else "open"
 
-    if args.bead:
-        all_errors = lint_bead(args.bead)
-    elif args.check_false_negatives:
-        extra = ["--all"] if args.all else ["--status", "open"]
-        all_beads = _get_beads_json(extra)
-        all_errors = check_false_negatives(set(), all_beads)
-    else:
-        all_errors = lint_all(status)
+    try:
+        if args.bead:
+            all_errors = lint_bead(args.bead)
+        elif args.check_false_negatives:
+            extra = ["--all"] if args.all else ["--status", "open"]
+            all_beads = _get_beads_json(extra)
+            all_errors = check_false_negatives(set(), all_beads)
+        else:
+            all_errors = lint_all(status)
+    except _BdUnavailableError as exc:
+        print(f"\n\u274c Architecture contracts lint: bd unavailable — {exc}\n", file=sys.stderr)
+        sys.exit(1)
 
     if all_errors:
         print(f"\n\u274c Architecture contracts lint: {len(all_errors)} error(s) found\n")

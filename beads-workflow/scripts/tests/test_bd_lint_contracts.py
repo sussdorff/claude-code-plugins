@@ -426,5 +426,71 @@ class TestGapMarkers(unittest.TestCase):
         self.assertTrue(len(errors) > 0)
 
 
+# ---------------------------------------------------------------------------
+# Fenced code block handling in validate_contracts_section
+# ---------------------------------------------------------------------------
+
+class TestFencedBlocksInValidation(unittest.TestCase):
+
+    def test_section_in_fence_not_parsed_as_real_section(self):
+        """If ## Architecture Contracts Touched only appears in a fenced block, no error."""
+        desc = """## Summary
+This bead documents the convention.
+
+```markdown
+## Architecture Contracts Touched
+- ADR-001 (Example): example
+
+## Gaps to Close
+- [ ] None
+```
+
+No actual contract touched.
+"""
+        # validate_contracts_section should see no real section → "Missing section" error
+        errors = linter.validate_contracts_section("X", desc)
+        self.assertTrue(len(errors) > 0)
+        self.assertTrue(any("Missing" in e for e in errors),
+                        "Should report missing section, not parse fenced content as real")
+
+    def test_fenced_example_above_real_section_no_interference(self):
+        """Fenced example above a real section should not interfere with parsing."""
+        desc = """## Overview
+Example template:
+
+```markdown
+## Architecture Contracts Touched
+- ADR-999 (Example): this is just an example
+```
+
+## Architecture Contracts Touched
+- ADR-001 (Identity): actual contract usage
+
+## Gaps to Close
+- [ ] None
+"""
+        errors = linter.validate_contracts_section("X", desc)
+        self.assertEqual(errors, [], f"Real section after fence should pass: {errors}")
+
+
+# ---------------------------------------------------------------------------
+# _BdUnavailableError propagation
+# ---------------------------------------------------------------------------
+
+class TestBdUnavailableError(unittest.TestCase):
+
+    @patch("bd_lint_contracts._run")
+    def test_get_beads_json_raises_on_bd_failure(self, mock_run):
+        mock_run.return_value = (1, "", "bd: command not found")
+        with self.assertRaises(linter._BdUnavailableError):
+            linter._get_beads_json(["--status", "open"])
+
+    @patch("bd_lint_contracts._run")
+    def test_get_beads_json_raises_on_invalid_json(self, mock_run):
+        mock_run.return_value = (0, "not valid json", "")
+        with self.assertRaises(linter._BdUnavailableError):
+            linter._get_beads_json(["--status", "open"])
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)
