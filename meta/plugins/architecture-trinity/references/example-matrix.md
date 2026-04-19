@@ -19,7 +19,7 @@ and a test fixture for verifying the scout's output format.
 
 ```json
 {
-  "status": "VIOLATION",
+  "status": "CONFORM",
   "mode": "advisor",
   "matrix": {
     "ID Taxonomy": {
@@ -75,8 +75,8 @@ and a test fixture for verifying the scout's output format.
   "findings": [
     {
       "rule": "vision-boundary:platform-no-application-import",
-      "concern": "packages/adapter-common/src/boundary-violation.ts imports from pvs-charly (layer:platform must not depend on layer:application)",
-      "severity": "BLOCKING",
+      "concern": "Pre-existing violation: packages/adapter-common/src/boundary-violation.ts (non-touched) imports from pvs-charly (touched) — forbidden by vision boundary. Not owned by this bead.",
+      "severity": "ADVISORY",
       "source": "packages/adapter-common/src/boundary-violation.ts:20"
     },
     {
@@ -107,7 +107,7 @@ and a test fixture for verifying the scout's output format.
 
 **Bead**: CCP-2hd — Add sync support for pvs-charly delta events and cross-adapter reconciliation
 **Mode**: advisor
-**Status**: VIOLATION ❌
+**Status**: CONFORM ✅
 
 ### Existing Contracts
 
@@ -140,11 +140,11 @@ _Error Envelope applies only to adapter-common, which is not in touched_paths �
 
 ### Findings Detail
 
-⛔ **BLOCKING** — Vision Boundary Violation:
+⚠️ **ADVISORY** — Vision Boundary Violation (pre-existing, non-touched package):
 `packages/adapter-common/src/boundary-violation.ts:20` imports from `pvs-charly`.
 According to `vision.md`: layer `platform` must not depend on layer `application`.
 `adapter-common` is classified as `platform`; `pvs-charly` is `application`.
-**Action required**: Remove the forbidden import before proceeding.
+This violation exists in `adapter-common`, which is NOT in `touched_paths`. The author of this bead does not own this violation. It is surfaced for visibility only — fix it in a separate bead targeting `adapter-common`.
 
 ⚠️ **ADVISORY** — Implicit Contract `repeated-event-kind`:
 The pattern `event.kind === 'literal'` appears in 4 source files. This is an undocumented
