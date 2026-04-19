@@ -205,12 +205,60 @@ Vor der Bestaetigungsfrage, fuehre eine Break Analysis durch:
 
 Falls die Break Analysis echte Risiken aufdeckt: Aenderungen am Plan vorschlagen bevor weiter.
 
+#### Architektur-Scout Pre-Check (vor Bestätigung)
+
+Fuehre den Architecture Scout fuer jede entworfene Sub-Task durch, BEVOR du die Bestaetigungsfrage stellst:
+
+**Mode** (read from `.claude/project-config.yml` → `architecture-scout.mode`):
+- **Advisor mode** (default): BLOCKING findings surface as `⛔ DECIDE:` items in the handshake output. User confirms with full awareness and can modify the plan before confirmation.
+- **Gate mode**: If ANY sub-task scout returns `status: VIOLATION` (BLOCKING findings), halt Phase 4 entirely. Do NOT ask "Stimmt das so?" — Phase 5 is not entered until resolved.
+- **CONFORMANCE_SKIP=1**: Pass `conformance_skip: true` in scout input; proceed as advisor mode.
+
+For each drafted sub-task:
+
+- **Scout step A** — Determine `touched_paths` from the sub-task description:
+  - Extract package names (e.g., `packages/pvs-charly`) from file/module mentions
+  - Extract directory paths from acceptance criteria
+  - If no paths mentioned: use empty array (scout scans all packages)
+
+- **Scout step B** — Spawn architecture-scout:
+  ```
+  Agent(
+    subagent_type="architecture-trinity:architecture-scout",
+    prompt=json.dumps({
+      "bead_id": "<epic-id>/<subtask-title>",
+      "bead_description": "<sub-task title and description>",
+      "touched_paths": ["<extracted-path-1>", "<extracted-path-2>"],
+      "mode": "<advisor|gate>",
+      "conformance_skip": os.environ.get("CONFORMANCE_SKIP") == "1"
+    })
+  )
+  ```
+
+- **Scout step C** — Collect results for all sub-tasks.
+  Run scouts **sequentially** (not in parallel) to avoid rate limits.
+  Each scout run takes approximately 5 seconds.
+
+Include the scout matrices in the handshake output shown to the user.
+
+**Mode behavior after collecting results:**
+
+- **Advisor mode**: Surface BLOCKING findings as `⛔ DECIDE:` items before the confirmation prompt. User can accept findings and proceed, or modify the plan.
+- **Gate mode**: If ANY sub-task has `status: VIOLATION` (BLOCKING findings), halt Phase 4 with:
+  ```
+  BLOCKED: architecture-scout reported N blocking finding(s) for sub-task "<title>" — resolve before proceeding.
+  Resolve the architectural violation, add a waiver comment, or set CONFORMANCE_SKIP=1.
+  ```
+  Do NOT ask "Stimmt das so?" — Phase 5 is not entered.
+- **CONFORMANCE_SKIP=1**: Pass `conformance_skip: true`; proceed as advisor mode.
+
 Dann frage: "Stimmt das so? Soll ich Aenderungen vornehmen oder die Beads anlegen?"
 
 **KRITISCH:**
 - Warte auf explizite Bestaetigung ("ja", "passt", "anlegen", o.ae.)
 - Bei Aenderungswuenschen: zurueck zur Bearbeitung, dann erneut praesentieren
 - Niemals automatisch weiter zur Erstellung
+- In Gate mode: NIEMALS die Bestaetigungsfrage stellen wenn BLOCKING findings vorliegen
 
 ### Phase 5: Beads erstellen
 
@@ -221,10 +269,13 @@ Dann frage: "Stimmt das so? Soll ich Aenderungen vornehmen oder die Beads anlege
    bd create --title="[Epic-Titel]" --type=feature --priority=2 --description="[Vollstaendige Beschreibung mit Ziel, Kontext und Gesamtueberblick]"
    ```
 
-2. Sub-Tasks erstellen (fuer jede Komponente, mit Parent-Link zum Epic):
+2. Sub-Tasks erstellen (fuer jede Komponente, mit Parent-Link zum Epic); direkt nach jedem `bd create` das Scout-Ergebnis aus Phase 4 als Bead-Notiz speichern:
    ```bash
    bd create --title="[Task-Titel]" --type=task --priority=2 --parent=<epic-id> --description="[Beschreibung mit Acceptance Criteria]"
+   bd update <task-id> --append-notes="Coverage Matrix (architecture-scout):\n<scout-matrix-from-phase-4>"
    ```
+   (Der Scout wurde bereits in Phase 4 ausgefuehrt — dieser Schritt persistiert das Ergebnis im Bead-Datensatz.)
+   Wenn `status: CONFORM` mit leeren Findings: `bd update` Aufruf weglassen (Task-Beschreibung sauber halten).
 
 3. Abhaengigkeiten setzen:
    ```bash
@@ -238,6 +289,8 @@ Dann frage: "Stimmt das so? Soll ich Aenderungen vornehmen oder die Beads anlege
 
 5. Zusammenfassung zeigen:
    "Epic **[id]** mit **[n]** Sub-Tasks angelegt. `bd ready` zeigt dir was du anfangen kannst."
+
+
 
 **Abbruch-Handling während Phase 5:**
 
