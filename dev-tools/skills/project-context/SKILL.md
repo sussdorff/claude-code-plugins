@@ -45,7 +45,7 @@ Consumed by `bead-orchestrator` Phase 2 as project context for new implementatio
 | (none) | Interactive: analyze + generate with overwrite confirmation if file exists |
 | `--force` | Overwrite existing `docs/project-context.md` without asking |
 | `--dry-run` | Analyze and print the generated content to chat, do NOT write the file |
-| `--section=<name>` | Regenerate only one section (tech-stack, module-map, patterns, invariants, principles) |
+| `--section=<name>` | Regenerate only one section (tech-stack, module-map, patterns, invariants, principles, enforcement-matrix) |
 
 ## Workflow
 
@@ -133,10 +133,34 @@ Section ordering (always):
 3. Module Map
 4. Established Patterns
 5. Critical Invariants
+6. Enforcement Matrix
 
 Output size: target 150-300 lines. If Module Map exceeds 20 rows, truncate to top 15 + note.
 
 **Handle overwrite scenario**: if file exists and `--force` not set and not `--section`, confirm before overwriting.
+
+### Phase 3.5: Enforcement Matrix
+
+Run the standalone scanner to generate the Enforcement Matrix section:
+
+```bash
+python3 <skill_dir>/scripts/enforcement_matrix_scanner.py <repo_root>
+```
+
+Where `<skill_dir>` is the directory containing this SKILL.md (find it via the skill installation path), and `<repo_root>` is the project root being analyzed.
+
+The scanner (`enforcement_matrix_scanner.py`) is a stdlib-only Python script that:
+- Parses `docs/adr/**/*.md` YAML frontmatter for contract declarations
+- Scans `packages/*/src/` for Helper artifacts
+- Scans `packages/*/scripts/*gen*` and `package.json` for Proactive (codegen) enforcers
+- Checks `eslint.config.js` and `check:*` scripts for Reactive (lint) enforcers
+- Outputs a `## Enforcement Matrix` Markdown section with a gap-count signal line
+
+**Insert the script output** into the generated document after `## Critical Invariants`.
+
+If the output contains `Enforcement gaps: N`, note this in the Phase 4 report.
+
+**If `--section=enforcement-matrix`**: run only the scanner, update only that section.
 
 ### Phase 4: Report
 
@@ -157,6 +181,7 @@ After writing (or dry-running):
 - Module Map: {N modules}
 - Established Patterns: {N patterns}
 - Critical Invariants: {N invariants}
+- Enforcement Matrix: {N contracts × M packages} ({gap_count} gaps or "none")
 
 **Warnings** (if any):
 - {e.g. "CLAUDE.md not found"}
@@ -177,6 +202,8 @@ Next: Review the generated file, edit as needed, then commit:
 | Symlinked CLAUDE.md | Follow symlink; read resolved content |
 | Secrets files | Skip and report skipped files |
 | `--section=<name>` | Regenerate only named section; preserve rest |
+| No `docs/adr/` directory | Enforcement Matrix shows "No contracts declared yet" |
+| ADRs exist but no `packages/*/` | Use repo root as single package column |
 
 ## Output Template
 
