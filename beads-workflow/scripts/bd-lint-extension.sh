@@ -2,6 +2,20 @@
 # Compatible with bash and zsh.
 # Shell wrapper that extends 'bd lint' with --check support.
 #
+# PREFERRED ALTERNATIVE: Use the PATH-shim approach instead of sourcing this file.
+# The PATH-shim works in any shell (including CI) without any sourcing step:
+#
+#   bash beads-workflow/scripts/install-bd-wrapper.sh
+#
+# The installer symlinks bd-wrapper to ~/.local/bin/bd and prints instructions
+# to add ~/.local/bin to your PATH. After that, the following works everywhere:
+#
+#   bd lint --check=architecture-contracts [--all] [--bead <id>]
+#
+# --------------------------------------------------------------------------
+# LEGACY: source-in-shell approach (kept for compatibility)
+# --------------------------------------------------------------------------
+#
 # Usage: source this file in your .zshrc or .bashrc:
 #
 #   source /path/to/beads-workflow/scripts/bd-lint-extension.sh

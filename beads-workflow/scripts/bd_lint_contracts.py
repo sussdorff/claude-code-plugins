@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# BD_LINT_CONTRACTS_MARKER
 """
 bd_lint_contracts — Architecture Contracts lint check for bead descriptions.
 
@@ -366,8 +367,10 @@ def main() -> None:
         epilog=(
             "Exit code 0: all checks passed\n"
             "Exit code 1: one or more beads failed validation\n\n"
-            "To wire this into 'bd lint --check=architecture-contracts', source:\n"
-            "  beads-workflow/scripts/bd-lint-extension.sh"
+            "To use as 'bd lint --check=architecture-contracts' (preferred — works in CI):\n"
+            "  bash beads-workflow/scripts/install-bd-wrapper.sh\n\n"
+            "Legacy (requires sourcing in each shell):\n"
+            "  source beads-workflow/scripts/bd-lint-extension.sh"
         ),
     )
     parser.add_argument(
