@@ -36,6 +36,21 @@ cp -rf source dest          # NOT: cp -r source dest
 - `apt-get` - use `-y` flag
 - `brew` - use `HOMEBREW_NO_AUTO_UPDATE=1` env var
 
+## Architecture Trinity Vocabulary
+
+When discussing or implementing architectural tooling, use these terms precisely:
+
+| Term | Role |
+|------|------|
+| **ADR** | Architecture Decision Record — documents the governing decision (context, decision, consequences) |
+| **Helper** | Passive utility — encapsulates a common operation, no enforcement |
+| **Enforcer-Proactive** | Codegen/Builder — makes the wrong pattern structurally impossible at creation time |
+| **Enforcer-Reactive** | Lint/Test — catches violations in existing code at review/CI time |
+
+Reference examples (mira-adapters): **ADR-001** (ADR), **makeIdHelper** (Enforcer-Proactive), **no-raw-id-concat** (Enforcer-Reactive).
+
+See `meta/plugins/architecture-trinity/README.md` for full definitions and the canonical vocabulary table.
+
 <!-- BEGIN BEADS INTEGRATION v:1 profile:minimal hash:ca08a54f -->
 ## Beads Issue Tracker
 

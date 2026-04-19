@@ -239,6 +239,35 @@ cp -r bash-best-practices/skills/bash-best-practices ~/code/claude/project-name/
 - Manual installation workaround required until bug is fixed
 - ~/code/claude/ contains ".claude" directories which are dynamically linked. We we want to install into them, assume this is already the .claude directory
 
+## Architecture Trinity Vocabulary
+
+This project uses the **Architecture Trinity** model to classify architectural tooling into three orthogonal categories. Use this vocabulary consistently across all skills, READMEs, and design discussions.
+
+| Term | Category | Role | Enforces? |
+|------|----------|------|-----------|
+| **ADR** | Decision Record | Documents "the law" — context, decision, consequences | No — governs humans and tooling |
+| **Helper** | Utility | Encapsulates a common operation for reuse | No — passive, optional to use |
+| **Enforcer-Proactive** | Codegen / Builder | Generates code so the wrong pattern is structurally impossible | Yes — at creation time |
+| **Enforcer-Reactive** | Lint / Test | Checks existing code for violations after the fact | Yes — at review/CI time |
+
+### Definitions
+
+**ADR (Architecture Decision Record)**: A documented architectural decision capturing context, the decision made, and its consequences. Establishes "what is the law" for a given concern — other tooling implements or enforces that law.
+
+**Helper**: A utility function or module that encapsulates a common operation. Passive — it helps when used, but does not prevent misuse and carries no enforcement mechanism.
+
+**Enforcer-Proactive (Codegen / Builder)**: Tooling that generates code or scaffolding such that the wrong pattern is structurally impossible. The API itself rejects invalid input — you cannot misuse it even if you try.
+
+**Enforcer-Reactive (Lint / Test)**: Tooling that checks existing code for violations after the fact. Catches wrong patterns during code review or CI — does not prevent writing them in the first place.
+
+### Reference Examples (from mira-adapters)
+
+| Example | Trinity Category | Why |
+|---------|-----------------|-----|
+| **ADR-001** | ADR | Declares that all entity IDs must use typed helpers, not raw strings. The governing decision. |
+| **makeIdHelper** | Enforcer-Proactive | Generates typed ID accessor functions — the generated API only accepts the correct type; passing a raw string is a compile-time error. |
+| **no-raw-id-concat** | Enforcer-Reactive | An ESLint rule that flags raw string concatenation of IDs. Catches violations in existing code during lint/CI. |
+
 <!-- BEGIN BEADS INTEGRATION v:1 profile:minimal hash:ca08a54f -->
 ## Beads Issue Tracker
 
