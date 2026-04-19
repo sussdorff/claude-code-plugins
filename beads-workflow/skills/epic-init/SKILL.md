@@ -238,39 +238,39 @@ sub-task to detect architectural debt before implementation begins.
 
 **For each sub-task created:**
 
-1. Determine `touched_paths` from the sub-task description:
-   - Extract package names (e.g., `packages/pvs-charly`) from file/module mentions
-   - Extract directory paths from acceptance criteria
-   - If no paths mentioned: use empty array (scout scans all packages)
+- **Scout step A** — Determine `touched_paths` from the sub-task description:
+  - Extract package names (e.g., `packages/pvs-charly`) from file/module mentions
+  - Extract directory paths from acceptance criteria
+  - If no paths mentioned: use empty array (scout scans all packages)
 
-2. Spawn architecture-scout:
-   ```
-   Agent(
-     subagent_type="architecture-trinity:architecture-scout",
-     prompt=json.dumps({
-       "bead_id": "<sub-task-id>",
-       "bead_description": "<sub-task title and description>",
-       "touched_paths": ["<extracted-path-1>", "<extracted-path-2>"],
-       "mode": "advisor"
-     })
-   )
-   ```
+- **Scout step B** — Spawn architecture-scout:
+  ```
+  Agent(
+    subagent_type="architecture-trinity:architecture-scout",
+    prompt=json.dumps({
+      "bead_id": "<sub-task-id>",
+      "bead_description": "<sub-task title and description>",
+      "touched_paths": ["<extracted-path-1>", "<extracted-path-2>"],
+      "mode": "advisor"
+    })
+  )
+  ```
 
-3. Handle the scout result:
-   - If `status: CONFORM` with empty findings: skip (keep task description clean)
-   - If findings exist: append to the sub-task via:
-     ```bash
-     bd update <task-id> --append-notes="Coverage Matrix (architecture-scout):\n<scout-markdown-output>"
-     ```
+- **Scout step C** — Handle the scout result:
+  - If `status: CONFORM` with empty findings: skip (keep task description clean)
+  - If findings exist: append to the sub-task via:
+    ```bash
+    bd update <task-id> --append-notes="Coverage Matrix (architecture-scout):\n<scout-markdown-output>"
+    ```
 
-4. **Important**: Run scouts **sequentially** (not in parallel) to avoid rate limits.
-   Each scout run takes approximately 5 seconds.
+- **Scout step D** — Run scouts **sequentially** (not in parallel) to avoid rate limits.
+  Each scout run takes approximately 5 seconds.
 
-5. If a scout returns `status: VIOLATION` with BLOCKING findings:
-   - Still append the matrix to the sub-task notes (as above)
-   - Add a warning to the Phase 4 handshake summary:
-     "⚠️ Sub-task [id] has BLOCKING architecture findings — review before implementation"
-   - Do NOT block epic creation (epic-init is advisory-only; gate mode is /plan's responsibility)
+- **Scout step E** — If a scout returns `status: VIOLATION` with BLOCKING findings:
+  - Still append the matrix to the sub-task notes (as above)
+  - Add a warning to the Phase 4 handshake summary:
+    "⚠️ Sub-task [id] has BLOCKING architecture findings — review before implementation"
+  - Do NOT block epic creation (epic-init is advisory-only; gate mode is /plan's responsibility)
 
 4. Constraints als Notes speichern (falls vorhanden):
    ```bash
@@ -279,6 +279,8 @@ sub-task to detect architectural debt before implementation begins.
 
 5. Zusammenfassung zeigen:
    "Epic **[id]** mit **[n]** Sub-Tasks angelegt. `bd ready` zeigt dir was du anfangen kannst."
+
+
 
 **Abbruch-Handling während Phase 5:**
 

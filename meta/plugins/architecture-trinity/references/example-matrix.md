@@ -115,8 +115,10 @@ The fixture provides:
 - `docs/adr/0001-id-taxonomy.md` — full-trinity contract
 - `docs/adr/0002-schema-codegen.md` — partial contract
 - `docs/adr/0003-error-envelope.md` — pre-trinity contract
-- `packages/pvs-charly/src/sync.ts` — contains `repeated-event-kind` pattern
-- `packages/pvs-x-isynet/src/delta.ts` — second occurrence of pattern
+- `packages/pvs-charly/src/sync.ts` — contains `repeated-event-kind` pattern (occurrence 1)
+- `packages/pvs-x-isynet/src/delta.ts` — second occurrence of pattern (occurrence 2)
+- `packages/pvs-charly/src/reconcile.ts` — third occurrence of pattern (occurrence 3)
+- `packages/pvs-x-isynet/src/processor.ts` — fourth occurrence of pattern (occurrence 4, meets 3+ threshold)
 - `scripts/gen-id-types.ts` — Proactive Enforcer for ID Taxonomy
 - `vision.md` — boundary table declaring platform → application forbidden
 - `packages/adapter-common/src/boundary-violation.ts` — the forbidden import (BLOCKING finding)

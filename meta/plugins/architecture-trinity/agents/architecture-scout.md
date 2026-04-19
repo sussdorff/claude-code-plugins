@@ -48,6 +48,7 @@ You receive a prompt containing the following fields (as JSON or natural languag
 | `bead_description` | string | yes | What the feature/fix does |
 | `touched_paths` | string[] | yes | Packages or file paths the change will touch |
 | `mode` | "advisor" \| "gate" | no | Enforcement mode (default: advisor) |
+| `conformance_skip` | boolean | no | If `true`, treat as CONFORMANCE_SKIP=1 bypass and proceed in advisor mode regardless of gate config. The calling skill is responsible for checking the `CONFORMANCE_SKIP` environment variable and passing `true` here when set. |
 
 If `touched_paths` is empty, scan ALL packages.
 
@@ -65,7 +66,7 @@ architecture-scout:
 
 - If file does not exist or key is absent: default to `advisor`
 - If `mode` was explicitly provided in the input, it overrides config
-- Check environment: if `CONFORMANCE_SKIP=1` is set, proceed in advisor mode regardless
+- If `conformance_skip: true` is present in the input prompt, proceed in advisor mode regardless of gate config. The calling skill is responsible for checking the `CONFORMANCE_SKIP` environment variable and including `conformance_skip: true` in the input when set.
 
 ---
 
@@ -112,7 +113,11 @@ Filter to only the packages mentioned in `touched_paths` (unless `touched_paths`
 For each (contract, package) pair where the contract `applies_to` the package:
 
 **ADR present?**
-- Already determined in Step 2. Mark ✅ if `docs/adr/*.md` has frontmatter `contract: <name>` and `applies_to` includes the package.
+- Already determined in Step 2. Find the ADR file with frontmatter `contract: <name>` and `applies_to` includes the package, then check its `status`:
+  - `status: accepted` → ✅
+  - `status: proposed` → ⚠️ (ADR exists but not yet accepted)
+  - `status: deprecated` → ❌ (ADR superseded)
+  - `status` field absent → ✅ (treat as accepted by default)
 
 **Helper exists?**
 - Grep for files matching patterns:
@@ -136,10 +141,11 @@ For each (contract, package) pair where the contract `applies_to` the package:
 - Mark ✅ if found
 
 **Trinity Status:**
-- All four present: `full-trinity`
-- ADR + at least one other: `partial`
-- ADR only, or no trinity components: `pre-trinity`
-- No ADR: `pre-trinity`
+- All four present (ADR ✅): `full-trinity`
+- ADR ✅ + at least one other: `partial`
+- ADR ✅ only, or no trinity components: `pre-trinity`
+- ADR ⚠️ (proposed): `pre-trinity` (proposed ≠ committed — not yet in force)
+- ADR ❌ (deprecated) or no ADR: `pre-trinity`
 
 ---
 
@@ -220,13 +226,27 @@ If threshold met and no ADR covers error envelope → add finding.
 
 ### Heuristic 4: `no-adr-string-constant`
 
-**Description**: Same non-trivial string literal appearing in 4+ files without any ADR
-documenting why that string is significant.
+**Description**: Known-problematic string constants (API endpoint prefixes, domain-specific
+status codes, connection strings) repeated across multiple files without any ADR documenting
+why those values are significant.
 
-**Grep pattern**: Use Grep to find all string literals with 8+ characters that appear
-in 4+ different source files. Exclude common values like `"localhost"`, `"utf-8"`, `"POST"`, etc.
+**Approach**: Search for known-problematic patterns rather than exhaustive string frequency
+analysis (Grep cannot natively tally cross-file literal frequency). Target patterns like:
+- Hardcoded API base URLs: `["'](https?://[^"']{8,})["']`
+- Domain-specific status codes: `["'][A-Z_]{4,}["']` (e.g. `'PENDING_SYNC'`, `'FHIR_ERROR'`)
+- Connection strings / DSN fragments: `["'][a-z]+://[^"']{6,}["']`
+
+**Grep example**:
+```
+pattern: ["'][A-Z][A-Z_]{3,}["']
+path: packages/<pkg>/src/
+```
+Then manually check if the same literal appears in 4+ different files.
 
 **Threshold**: 4+ files containing the same literal
+
+**Note**: This heuristic is approximate. Flag when you observe the same non-trivial literal
+in 4+ files during your scan — do not attempt exhaustive frequency analysis across all strings.
 
 **Severity**: ADVISORY
 
@@ -311,8 +331,8 @@ _(Empty if all contracts have full-trinity coverage.)_
     BLOCKED: architecture-scout reported N blocking finding(s) — resolve before proceeding.
     See Coverage Matrix above for details.
     ```
-- If `CONFORMANCE_SKIP=1` environment variable is set:
-  - Log warning: `⚠️ WARNING: CONFORMANCE_SKIP=1 — gate bypassed. Continuing despite N blocking finding(s).`
+- If `conformance_skip: true` was passed in the input:
+  - Log warning: `⚠️ WARNING: conformance_skip=true — gate bypassed. Continuing despite N blocking finding(s).`
   - Continue as advisor mode
   - Still include all findings in the output
 

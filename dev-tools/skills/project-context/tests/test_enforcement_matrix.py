@@ -311,7 +311,7 @@ if __name__ == "__main__":
         test_scanner_id_taxonomy_adapter_common_cell,
         test_scanner_error_envelope_adapter_common_adr_proposed,
         test_scanner_na_for_packages_not_in_applies_to,
-        test_scanner_pvs_x_isynet_id_taxonomy_partial_coverage,
+        test_scanner_pvs_x_isynet_id_taxonomy_full_trinity,
         test_scanner_gap_count,
         test_scanner_golden_output,
         test_scanner_inline_list_quotes_stripped,
