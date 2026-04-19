@@ -95,6 +95,8 @@ one checkbox bullet. Valid bullet values:
 An empty `## Gaps to Close` section (header only, no bullets) fails rule 3c.
 Free-text bullets without a recognised marker also fail.
 
+**Mutual exclusion**: `- [ ] None` and any `[*-NEEDED]` markers cannot coexist in the same section. If there are no gaps, use only `- [ ] None`. If there are gaps, list them with `[*-NEEDED]` markers and omit `- [ ] None`.
+
 ### Rule Y — Label false-negative
 
 If a bead description contains `## Architecture Contracts Touched` but the bead
