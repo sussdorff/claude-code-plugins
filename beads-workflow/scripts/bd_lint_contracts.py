@@ -250,6 +250,17 @@ def validate_contracts_section(bead_id: str, description: str) -> list[str]:
                     "(rule 3c: use '- [ ] None' or '- [ ] [ADR-NEEDED] ...' / "
                     "[HELPER-NEEDED] / [ENFORCER-PROACTIVE-NEEDED] / [ENFORCER-REACTIVE-NEEDED])"
                 )
+            else:
+                # Rule 3c (mutual exclusion): - [ ] None cannot coexist with NEEDED markers
+                _NONE_RE = _GAP_VALID_RES[0]  # The None pattern is index 0
+                none_bullets = [b for b in checkbox_bullets if _NONE_RE.match(b)]
+                needed_bullets = [b for b in checkbox_bullets if not _NONE_RE.match(b)]
+                if none_bullets and needed_bullets:
+                    errors.append(
+                        "Section '## Gaps to Close' contains '- [ ] None' alongside other gap markers — "
+                        "these are mutually exclusive (rule 3c): remove '- [ ] None' if there are gaps, "
+                        "or remove all [*-NEEDED] markers if there are no gaps"
+                    )
 
     return errors
 

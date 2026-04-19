@@ -114,6 +114,15 @@ EDGE_OPTIONAL_BULLETS_ONLY = """
 - [ ] None
 """.strip()
 
+BAD_3C_NONE_MIXED_WITH_NEEDED = """
+## Architecture Contracts Touched
+- ADR-001 (Identity): extended for new entity type
+
+## Gaps to Close
+- [ ] None
+- [ ] [ADR-NEEDED] Some gap that needs an ADR
+""".strip()
+
 DESCRIPTION_WITH_SECTION_NO_LABEL = GOOD_DESCRIPTION
 
 DESCRIPTION_WITH_SECTION_IN_FENCE = """
@@ -507,6 +516,22 @@ class TestGapMarkers(unittest.TestCase):
         desc = self._desc_with_gap("- [ ] [ADR-NEEDED]   ")
         errors = linter.validate_contracts_section("X", desc)
         self.assertTrue(len(errors) > 0, "[ADR-NEEDED] followed by only whitespace should fail")
+
+    def test_3c_none_and_needed_coexist_fails(self):
+        """- [ ] None and - [ ] [ADR-NEEDED] in same section must fail (mutual exclusion)."""
+        desc = self._desc_with_gap("- [ ] None\n- [ ] [ADR-NEEDED] Some gap")
+        errors = linter.validate_contracts_section("X", desc)
+        self.assertTrue(len(errors) > 0, "Expected error for None mixed with NEEDED markers")
+        self.assertTrue(
+            any("None" in e or "mutual" in e.lower() or "exclusive" in e.lower() for e in errors),
+            f"Error message should mention None, mutual, or exclusive. Got: {errors}"
+        )
+
+    def test_3c_none_only_passes(self):
+        """- [ ] None alone (no NEEDED markers) must pass."""
+        desc = self._desc_with_gap("- [ ] None")
+        errors = linter.validate_contracts_section("X", desc)
+        self.assertEqual(errors, [], f"Only '- [ ] None' should pass, got: {errors}")
 
 
 # ---------------------------------------------------------------------------
