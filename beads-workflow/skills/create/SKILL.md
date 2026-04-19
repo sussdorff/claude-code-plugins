@@ -136,12 +136,55 @@ Agent(subagent_type="dev-tools:scenario-generator", prompt="
 
 ---
 
+## Phase 3.5: Contract-Label Check (opt-in)
+
+Frage vor der Bead-Erstellung:
+
+> "Beruehrt dieser Bead eine architektonische Vereinbarung (ADR, Helper, Enforcer)?
+> Falls ja, wird das Label `touches-contract` gesetzt und ein Pflicht-Abschnitt
+> in die Beschreibung eingefuegt."
+
+**Falls Antwort JA:**
+
+1. Label `touches-contract` wird bei der Erstellung gesetzt.
+2. Fuege folgenden Template-Abschnitt an das Ende der Beschreibung an:
+
+```markdown
+## Architecture Contracts Touched
+- ADR-NNN (Name): <was der Bead tut, wie er den Contract nutzt>
+- Helper: <pfad/zu/helper.ts>
+- Enforcer-Proactive: <codegen/builder>
+- Enforcer-Reactive: <lint-rule oder test>
+
+## Coverage Expected
+- Packages: <liste der berührten Packages>
+- Status nach Bead: <was wird gruen in der Matrix>
+
+## Gaps to Close
+- [ ] None
+```
+
+3. Lass den User die Platzhalter befuellen (oder befuelle sie mit ihm zusammen).
+4. Hinweis: `Helper:`, `Enforcer-Proactive:`, `Enforcer-Reactive:` Zeilen sind optional,
+   aber `ADR-NNN (Name): ...` und `## Gaps to Close` mit mindestens einem gueltigen Bullet
+   sind **Pflicht**.
+
+**Falls Antwort NEIN:** Direkt weiter zu Phase 4.
+
+---
+
 ## Phase 4: Bead erstellen
 
-Nach Handshake (Typ akzeptiert, bei Feature: Szenarien geklaert):
+Nach Handshake (Typ akzeptiert, bei Feature: Szenarien geklaert, Contract-Check abgeschlossen):
 
 ```bash
-bd create --title="[Titel]" --type=[typ] --priority=[prio] --description="[Beschreibung inkl. Szenarien falls Feature]"
+# Ohne touches-contract:
+bd create --title="[Titel]" --type=[typ] --priority=[prio] --description="[Beschreibung]"
+
+# Mit touches-contract:
+bd create --title="[Titel]" --type=[typ] --priority=[prio] \
+  --label=touches-contract \
+  --description="[Beschreibung inkl. Architecture Contracts Abschnitt]"
 ```
 
 Ausgabe:
@@ -149,11 +192,42 @@ Ausgabe:
 ```
 Bead [ID] erstellt: **[Titel]** ([typ], P[prio])
 [Falls Feature mit Szenarien: "inkl. auto-generierter Szenarien"]
+[Falls touches-contract: "inkl. Architecture Contracts Pflicht-Abschnitt"]
 
 Naechste Schritte:
 - `/beads [ID]` — Implementierung starten
 - `bd update [ID] --notes="..."` — Notizen ergaenzen
 - `bd show [ID]` — Details anzeigen
+```
+
+---
+
+## Phase 4.5: Contract Smoke-Check (nur bei touches-contract)
+
+Falls der Bead mit `touches-contract` erstellt wurde, fuehre nach der Erstellung
+einen Smoke-Check aus:
+
+```bash
+python3 "$(dirname "$(which bd)")/../skills/beads-workflow/scripts/bd_lint_contracts.py" --bead [ID]
+# Fallback falls Pfad nicht gefunden:
+# Suche bd_lint_contracts.py relativ zum CLAUDE.md-Verzeichnis
+```
+
+**Bei Erfolg (exit 0):** Zeige dem User:
+```
+Contract-Check: OK — Abschnitt ist vollstaendig und valide.
+```
+
+**Bei Fehler (exit 1):** Zeige die Lint-Fehler und erklaere dem User:
+```
+Contract-Check fehlgeschlagen:
+  [Fehlermeldung aus dem Linter]
+
+Bitte korrigiere die Beschreibung mit:
+  bd update [ID] --description="[korrigierte Beschreibung]"
+
+Dann erneut pruefen:
+  python3 .../bd_lint_contracts.py --bead [ID]
 ```
 
 ---
