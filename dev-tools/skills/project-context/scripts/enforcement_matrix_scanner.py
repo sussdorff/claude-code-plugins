@@ -26,6 +26,35 @@ from pathlib import Path
 # ADR parsing
 # ---------------------------------------------------------------------------
 
+def _strip_quotes(value: str) -> str:
+    """Strip matching pairs of single or double quotes from a scalar value."""
+    value = value.strip()
+    if (value.startswith('"') and value.endswith('"')) or \
+       (value.startswith("'") and value.endswith("'")):
+        value = value[1:-1]
+    return value
+
+
+def _strip_inline_comment(value: str) -> str:
+    """Strip inline YAML comment (# ...) from a scalar value outside of quotes."""
+    # Only strip if not a quoted string
+    if (value.startswith('"') and value.endswith('"')) or \
+       (value.startswith("'") and value.endswith("'")):
+        return value
+    # Remove trailing # comment
+    idx = value.find(" #")
+    if idx != -1:
+        value = value[:idx]
+    return value.strip()
+
+
+def _parse_inline_list(value: str) -> list:
+    """Parse inline YAML list syntax [a, b, c] into a list of strings."""
+    inner = value[1:-1]  # Strip [ and ]
+    items = [item.strip() for item in inner.split(",")]
+    return [item for item in items if item]
+
+
 def parse_frontmatter(text: str) -> dict:
     """Parse YAML frontmatter between --- fences. Returns dict or {}."""
     lines = text.splitlines()
@@ -45,7 +74,8 @@ def parse_frontmatter(text: str) -> dict:
     for line in fm_lines:
         # List item
         if line.startswith("  - ") or line.startswith("- "):
-            item = line.strip().lstrip("- ").strip()
+            raw_item = line.strip().lstrip("- ").strip()
+            item = _strip_quotes(_strip_inline_comment(raw_item))
             if current_list is not None:
                 current_list.append(item)
             continue
@@ -60,7 +90,14 @@ def parse_frontmatter(text: str) -> dict:
                 result[current_key] = current_list
             else:
                 current_list = None
-                result[current_key] = value
+                # Check for inline list syntax
+                if value.startswith("[") and value.endswith("]"):
+                    result[current_key] = _parse_inline_list(value)
+                else:
+                    # Strip inline comment, then strip quotes
+                    value = _strip_inline_comment(value)
+                    value = _strip_quotes(value)
+                    result[current_key] = value
     return result
 
 
@@ -75,11 +112,18 @@ def scan_adrs(repo_root: Path) -> list[dict]:
         fm = parse_frontmatter(text)
         if "contract" not in fm:
             continue
-        contract = fm.get("contract", "").strip()
+        contract = fm.get("contract", "")
+        if not isinstance(contract, str):
+            print(f"Warning: 'contract' field in {md_file} is not a string, skipping.", file=sys.stderr)
+            continue
+        contract = contract.strip()
         applies_to = fm.get("applies_to", [])
         if isinstance(applies_to, str):
             applies_to = [applies_to]
-        status = fm.get("status", "proposed").strip().lower()
+        status_raw = fm.get("status", "proposed")
+        if not isinstance(status_raw, str):
+            status_raw = "proposed"
+        status = status_raw.strip().lower()
         contracts.append({
             "contract": contract,
             "applies_to": [p.strip() for p in applies_to],
@@ -123,38 +167,95 @@ def contract_to_search_terms(contract_name: str) -> list[str]:
 
 
 # ---------------------------------------------------------------------------
+# Excluded path component names for filesystem scans
+# ---------------------------------------------------------------------------
+
+_EXCLUDED_DIRS = {"node_modules", "dist", "build", ".git", "__pycache__"}
+
+
+def _is_excluded(path: Path) -> bool:
+    """Return True if any component of the path is in the exclusion list."""
+    return any(part in _EXCLUDED_DIRS for part in path.parts)
+
+
+# ---------------------------------------------------------------------------
 # Trinity column scanners (per package)
 # ---------------------------------------------------------------------------
 
 def _has_helper(pkg_dir: Path, search_terms: list[str]) -> bool:
-    """Check if src/ contains a file/dir whose name includes any search term."""
+    """Check if src/ contains a file/dir whose name token-matches any search term."""
     src_dir = pkg_dir / "src"
     if not src_dir.exists():
         return False
     for item in src_dir.rglob("*"):
+        if _is_excluded(item):
+            continue
         name = item.name.lower()
-        # Strip extension for matching
+        # Split filename stem on non-alphanumeric chars to get tokens
         stem = item.stem.lower() if item.is_file() else name
+        tokens = set(re.split(r"[^a-z0-9]+", stem))
+        name_tokens = set(re.split(r"[^a-z0-9]+", name))
+        all_tokens = tokens | name_tokens
         for term in search_terms:
-            if term in stem or term in name:
+            if term in all_tokens:
                 return True
     return False
 
 
-def _has_proactive(pkg_dir: Path) -> bool:
+def _is_gen_script_name(stem: str) -> bool:
+    """
+    Return True if the script stem contains 'gen' as a whole token.
+    e.g. 'gen-schema' -> True, 'generate-types' -> False (unless token is 'gen')
+    """
+    tokens = set(re.split(r"[^a-z0-9]+", stem.lower()))
+    return "gen" in tokens
+
+
+def _is_gen_package_script_key(key: str) -> bool:
+    """
+    Return True if the package.json script key is a gen-related key.
+    Matches: codegen, generate, gen-, gen: prefixes, or the key itself equals 'gen'.
+    """
+    key_lower = key.lower()
+    if key_lower in ("codegen", "generate", "gen"):
+        return True
+    if key_lower.startswith("codegen:") or key_lower.startswith("codegen-"):
+        return True
+    if key_lower.startswith("generate:") or key_lower.startswith("generate-"):
+        return True
+    if key_lower.startswith("gen:") or key_lower.startswith("gen-"):
+        return True
+    return False
+
+
+def _is_gen_script_value(value: str) -> bool:
+    """Return True if the script value contains 'gen' as a full word."""
+    return bool(re.search(r"\bgen\b", value.lower()))
+
+
+def _has_proactive(pkg_dir: Path, repo_root: Path = None) -> bool:
     """
     Check if package has proactive (codegen) enforcers:
-    - scripts/*gen*.{ts,js,py} in the package directory
-    - package.json scripts matching schema:* or *gen* patterns
+    - scripts/*gen*.{ts,js,py} in the package directory (gen as whole token)
+    - package.json scripts matching codegen/generate/gen-/gen: patterns
+    - repo-root scripts/ directory for gen scripts
     """
-    # Check scripts/ subdirectory for gen* files
+    # Check package scripts/ subdirectory for gen* files
     scripts_dir = pkg_dir / "scripts"
     if scripts_dir.exists():
         for item in scripts_dir.iterdir():
             if item.is_file():
-                stem = item.stem.lower()
-                if "gen" in stem:
+                if _is_gen_script_name(item.stem):
                     return True
+
+    # Check repo-root scripts/ directory if provided
+    if repo_root is not None:
+        root_scripts_dir = repo_root / "scripts"
+        if root_scripts_dir.exists():
+            for item in root_scripts_dir.iterdir():
+                if item.is_file():
+                    if _is_gen_script_name(item.stem):
+                        return True
 
     # Check package.json scripts
     pkg_json = pkg_dir / "package.json"
@@ -162,9 +263,12 @@ def _has_proactive(pkg_dir: Path) -> bool:
         try:
             data = json.loads(pkg_json.read_text())
             scripts = data.get("scripts", {})
-            for key in scripts:
-                key_lower = key.lower()
-                if key_lower.startswith("schema:") or "gen" in key_lower:
+            for key, value in scripts.items():
+                if key.lower().startswith("schema:"):
+                    return True
+                if _is_gen_package_script_key(key):
+                    return True
+                if _is_gen_script_value(str(value)):
                     return True
         except (json.JSONDecodeError, KeyError):
             pass
@@ -172,16 +276,35 @@ def _has_proactive(pkg_dir: Path) -> bool:
     return False
 
 
-def _has_reactive(pkg_dir: Path) -> bool:
+_ESLINT_CONFIG_NAMES = {
+    "eslint.config.js",
+    "eslint.config.cjs",
+    "eslint.config.mjs",
+    ".eslintrc.js",
+    ".eslintrc.json",
+    ".eslintrc.yml",
+    ".eslintrc.yaml",
+    ".eslintrc.cjs",
+    ".eslintrc",
+}
+
+
+def _has_reactive(pkg_dir: Path, repo_root: Path = None) -> bool:
     """
     Check if package has reactive (lint/check) enforcers:
-    - eslint.config.js (or eslint.config.cjs/mjs) exists
+    - eslint config files exist in package dir or repo root
     - package.json scripts matching check:* patterns
     """
-    # Check for eslint config
-    for eslint_name in ["eslint.config.js", "eslint.config.cjs", "eslint.config.mjs", ".eslintrc.js", ".eslintrc.json"]:
+    # Check for eslint config in package directory
+    for eslint_name in _ESLINT_CONFIG_NAMES:
         if (pkg_dir / eslint_name).exists():
             return True
+
+    # Check for eslint config at repo root
+    if repo_root is not None:
+        for eslint_name in _ESLINT_CONFIG_NAMES:
+            if (repo_root / eslint_name).exists():
+                return True
 
     # Check package.json check:* scripts
     pkg_json = pkg_dir / "package.json"
@@ -220,9 +343,6 @@ def build_matrix(
         }
     }
     """
-    # Build lookup: which contracts apply to which packages
-    contract_map = {adr["contract"]: adr for adr in adrs}
-
     matrix = {}
     for adr in adrs:
         contract = adr["contract"]
@@ -253,8 +373,8 @@ def build_matrix(
             pkg_dir = repo_root / "packages" / pkg
 
             helper_sym = "✅" if _has_helper(pkg_dir, search_terms) else "❌"
-            proactive_sym = "✅" if _has_proactive(pkg_dir) else "❌"
-            reactive_sym = "✅" if _has_reactive(pkg_dir) else "❌"
+            proactive_sym = "✅" if _has_proactive(pkg_dir, repo_root) else "❌"
+            reactive_sym = "✅" if _has_reactive(pkg_dir, repo_root) else "❌"
 
             matrix[contract][pkg] = {
                 "adr": adr_sym,
@@ -270,6 +390,9 @@ def build_matrix(
 # Gap computation
 # ---------------------------------------------------------------------------
 
+_COL_LABELS = {"adr": "ADR", "helper": "Helper", "proactive": "Proactive", "reactive": "Reactive"}
+
+
 def compute_gaps(matrix: dict, contracts: list[str], packages: list[str]) -> list[tuple]:
     """
     Return list of (contract, package, [missing_columns]) for cells with any ❌.
@@ -280,8 +403,7 @@ def compute_gaps(matrix: dict, contracts: list[str], packages: list[str]) -> lis
         for pkg in packages:
             cell = matrix.get(contract, {}).get(pkg, {})
             missing = []
-            col_labels = {"adr": "ADR", "helper": "Helper", "proactive": "Proactive", "reactive": "Reactive"}
-            for col, label in col_labels.items():
+            for col, label in _COL_LABELS.items():
                 if cell.get(col) == "❌":
                     missing.append(label)
             if missing:
