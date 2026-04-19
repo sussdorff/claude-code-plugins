@@ -95,7 +95,7 @@ from pathlib import Path
 H2_RE = re.compile(r"^##\s+(.+)$")
 
 # Matches authored principle lines: - **P1**: text  OR  * **P1**: text
-PRINCIPLE_RE = re.compile(r"^\s*[-*]\s+\*\*([Pp]\d+)\*\*[:\s]+(.*)")
+PRINCIPLE_RE = re.compile(r"^\s*[-*]\s+\*\*(P\d+)\*\*[:\s]+(.*)")
 
 # Matches boundary table separator rows (e.g. |---|---|---|---|)
 TABLE_SEPARATOR_RE = re.compile(r"^\s*\|[-| :]+\|\s*$")
@@ -113,7 +113,6 @@ SECTION_ALIASES: dict[str, str] = {
     "positioning": "positioning",
     "value principles": "value_principles",
     "business goal": "business_goal",
-    "not in vision": "not_in_vision",
     "not in vision": "not_in_vision",
 }
 
@@ -237,20 +236,25 @@ def _parse_frontmatter(content: str) -> tuple[dict[str, str], int]:
     if not content.startswith("---"):
         return {}, 1
 
-    # Find the closing ---
-    end_idx = content.find("\n---", 3)
-    if end_idx == -1:
+    # Find the closing --- on its own line (exact match, not substring of ----)
+    lines_after_open = content[3:].split("\n")
+    close_idx = None
+    for i, ln in enumerate(lines_after_open):
+        if ln.strip() == "---":
+            close_idx = i
+            break
+    if close_idx is None:
         return {}, 1
 
-    front_block = content[3:end_idx].strip()
+    front_block = "\n".join(lines_after_open[:close_idx]).strip()
     result: dict[str, str] = {}
     for line in front_block.splitlines():
         if ":" in line:
             key, _, val = line.partition(":")
             result[key.strip()] = val.strip()
 
-    # Count lines up to and including closing ---
-    end_line = content[: end_idx + 4].count("\n") + 1
+    # Count lines up to and including closing --- (close_idx lines after open + 1 for opening)
+    end_line = close_idx + 2  # opening line + close_idx lines + 1-based
     return result, end_line
 
 
@@ -283,18 +287,19 @@ def _parse_value_principles(
     """
     principles: list[Principle] = []
     boundary_rules: list[BoundaryRule] = []
+    boundary_rule_lines: list[int] = []  # parallel list tracking line number per boundary rule
 
     # Two passes: collect principles first, then boundary table
     # State machine for table detection
     in_table = False
-    table_header_parsed = False
+    header_seen = False  # tracks whether we've seen the header row
     table_start_line = 0
 
     for lineno, line in section_lines:
         # Try to match principle
         pm = PRINCIPLE_RE.match(line)
         if pm and not in_table:
-            pid = pm.group(1).upper()  # normalize to uppercase
+            pid = pm.group(1)  # already uppercase (regex only matches P\d+)
             text = pm.group(2).strip()
             principles.append(Principle(id=pid, text=text))
             continue
@@ -304,7 +309,13 @@ def _parse_value_principles(
             if not in_table:
                 in_table = True
                 table_start_line = lineno
-                table_header_parsed = False
+                header_seen = False
+                # First table row must NOT be a separator
+                if TABLE_SEPARATOR_RE.match(line):
+                    raise VisionParseError(
+                        "Boundary table missing header row",
+                        lineno,
+                    )
                 # Parse header row
                 cells = _parse_table_row(line)
                 if cells is None or len(cells) != 4:
@@ -313,7 +324,7 @@ def _parse_value_principles(
                         lineno,
                     )
                 # Header must have 4 columns (we validated above)
-                table_header_parsed = True
+                header_seen = True
                 continue
             else:
                 # Check if it's a separator row
@@ -336,24 +347,17 @@ def _parse_value_principles(
                         source_section=source_section,
                     )
                 )
+                boundary_rule_lines.append(lineno)
         else:
             in_table = False
 
     # Validate: boundary rule_ids must reference known principles
     principle_ids = {p.id for p in principles}
-    for br in boundary_rules:
-        br_id = br.rule_id.upper()
-        if br_id not in principle_ids:
-            # Find the line number for this rule
-            # Search for the rule_id in section_lines
-            rule_lineno = 0
-            for lineno, line in section_lines:
-                if br.rule_id in line and TABLE_ROW_RE.match(line):
-                    rule_lineno = lineno
-                    break
+    for idx, br in enumerate(boundary_rules):
+        if br.rule_id not in principle_ids:
             raise VisionParseError(
                 f"Boundary rule_id '{br.rule_id}' has no matching principle",
-                rule_lineno or table_start_line,
+                boundary_rule_lines[idx],
             )
 
     return principles, boundary_rules
@@ -388,10 +392,10 @@ def parse_vision(path: Path) -> Vision:
 
     try:
         template_version = int(frontmatter["template_version"])
-    except ValueError:
+    except ValueError as exc:
         raise VisionParseError(
             f"Invalid frontmatter 'template_version': '{frontmatter['template_version']}'", 1
-        )
+        ) from exc
 
     if template_version != 1:
         raise VisionParseError(
@@ -408,6 +412,7 @@ def parse_vision(path: Path) -> Vision:
 
     current_section: str | None = None
     current_section_lineno: int = 0
+    last_section_line: int = 0  # line number of the last successfully-seen section header
 
     for i, line in enumerate(lines, start=1):
         h2m = H2_RE.match(line)
@@ -429,6 +434,7 @@ def parse_vision(path: Path) -> Vision:
                 section_order.append(canonical)
                 current_section = canonical
                 current_section_lineno = i
+                last_section_line = i
             else:
                 # Unknown H2 — ignore it (don't reset current_section)
                 # Actually stop collecting for the current section
@@ -437,12 +443,13 @@ def parse_vision(path: Path) -> Vision:
             section_content[current_section].append((i, line))
 
     # Validate all required sections are present
+    # Report at the line after the last seen section header (or line 1 if none seen)
+    missing_error_line = last_section_line + 1 if last_section_line > 0 else 1
     for canonical in REQUIRED_SECTIONS_ORDER:
         if canonical not in section_order:
-            # Report at end of file or last known position
             raise VisionParseError(
                 f"Missing required section '{SECTION_DISPLAY[canonical]}'",
-                len(lines),
+                missing_error_line,
             )
 
     # --- Build Vision ---
@@ -520,7 +527,13 @@ def main(argv: list[str]) -> int:
         except VisionParseError as exc:
             print(f"vision-parser: {exc}", file=sys.stderr)
             exit_code = 1
+        except (OSError, UnicodeDecodeError) as exc:
+            print(f"vision-parser: cannot read file: {exc}", file=sys.stderr)
+            exit_code = 1
         except Exception as exc:
+            # Unexpected errors (e.g. programming bugs) — show traceback for diagnosability
+            import traceback
+            traceback.print_exc()
             print(f"vision-parser: unexpected error reading {arg}: {exc}", file=sys.stderr)
             exit_code = 1
 
