@@ -59,7 +59,7 @@ MARKERS = [
 COMPILED = [(re.compile(pattern, re.IGNORECASE), tag, explanation) for pattern, tag, explanation in MARKERS]
 
 FRONTMATTER_RE = re.compile(r"^---\s*\n(.*?)\n---\s*\n", re.DOTALL)
-PRESCRIPTIVE_TYPE_RE = re.compile(r"document_type:\s*prescriptive-present")
+PRESCRIPTIVE_TYPE_RE = re.compile(r"document_type:\s*[\"']?prescriptive-present[\"']?")
 IGNORE_COMMENT_RE = re.compile(r"<!--\s*tense-gate-ignore\s*:", re.IGNORECASE)
 
 VISION_MD_NAMES = {"vision.md"}
@@ -86,8 +86,17 @@ def lint_file(path: Path) -> list[tuple[int, str, str, str]]:
 
     lines = content.splitlines()
     violations = []
+    in_code_fence = False
 
     for i, line in enumerate(lines, start=1):
+        # Toggle code fence tracking (``` or ~~~)
+        stripped = line.strip()
+        if stripped.startswith("```") or stripped.startswith("~~~"):
+            in_code_fence = not in_code_fence
+            continue
+        if in_code_fence:
+            continue
+
         prev_line = lines[i - 2] if i >= 2 else ""
         if IGNORE_COMMENT_RE.search(prev_line):
             continue  # allowlisted
