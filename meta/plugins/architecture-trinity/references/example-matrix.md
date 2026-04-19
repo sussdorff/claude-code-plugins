@@ -21,6 +21,57 @@ and a test fixture for verifying the scout's output format.
 {
   "status": "VIOLATION",
   "mode": "advisor",
+  "matrix": {
+    "ID Taxonomy": {
+      "pvs-charly": {
+        "adr": "✅",
+        "helper": "✅",
+        "proactive": "✅",
+        "reactive": "❌",
+        "status": "partial"
+      },
+      "pvs-x-isynet": {
+        "adr": "✅",
+        "helper": "✅",
+        "proactive": "✅",
+        "reactive": "✅",
+        "status": "full-trinity"
+      }
+    },
+    "Schema Codegen": {
+      "pvs-charly": {
+        "adr": "✅",
+        "helper": "❌",
+        "proactive": "❌",
+        "reactive": "❌",
+        "status": "pre-trinity"
+      },
+      "pvs-x-isynet": {
+        "adr": "✅",
+        "helper": "✅",
+        "proactive": "✅",
+        "reactive": "✅",
+        "status": "full-trinity"
+      }
+    },
+    "Error Envelope": {
+      "pvs-charly": {
+        "adr": "n/a",
+        "helper": "n/a",
+        "proactive": "n/a",
+        "reactive": "n/a",
+        "status": "n/a"
+      },
+      "pvs-x-isynet": {
+        "adr": "n/a",
+        "helper": "n/a",
+        "proactive": "n/a",
+        "reactive": "n/a",
+        "status": "n/a"
+      }
+    }
+  },
+  "touched_packages": ["pvs-charly", "pvs-x-isynet"],
   "findings": [
     {
       "rule": "vision-boundary:platform-no-application-import",
@@ -60,16 +111,20 @@ and a test fixture for verifying the scout's output format.
 
 ### Existing Contracts
 
-| Contract | ADR | Helper | Proactive | Reactive | Status |
-|----------|-----|--------|-----------|----------|--------|
-| ID Taxonomy | ✅ | ✅ | ✅ | ✅ | full-trinity |
-| Error Envelope | ⚠️ | ✅ | ❌ | ❌ | pre-trinity |
-| Schema Codegen | ✅ | ✅ | ✅ | ❌ | partial |
+| Contract | Package | ADR | Helper | Proactive | Reactive | Status |
+|----------|---------|-----|--------|-----------|----------|--------|
+| ID Taxonomy | pvs-charly | ✅ | ✅ | ✅ | ❌ | partial |
+| ID Taxonomy | pvs-x-isynet | ✅ | ✅ | ✅ | ✅ | full-trinity |
+| Schema Codegen | pvs-charly | ✅ | ❌ | ❌ | ❌ | pre-trinity |
+| Schema Codegen | pvs-x-isynet | ✅ | ✅ | ✅ | ✅ | full-trinity |
+
+_Error Envelope applies only to adapter-common, which is not in touched_paths — n/a rows omitted from display._
 
 **Evidence:**
-- **ID Taxonomy** (`docs/adr/0001-id-taxonomy.md`): Helper in `packages/adapter-common/src/id-taxonomy.ts`, Proactive in `scripts/gen-id-types.ts`, Reactive in `packages/adapter-common/src/id-taxonomy.test.ts`
-- **Error Envelope** (`docs/adr/0003-error-envelope.md`): ADR status is `proposed` (⚠️) — Helper exists (`error-envelope.ts`), but no Proactive or Reactive Enforcer yet
-- **Schema Codegen** (`docs/adr/0002-schema-codegen.md`): Helper and Proactive present; no ESLint rule or test enforces correct usage
+- **ID Taxonomy / pvs-charly** (`docs/adr/0001-id-taxonomy.md`): Helper in `packages/pvs-charly/src/id-taxonomy.ts`, Proactive via root `scripts/gen-id-types.ts`, no Reactive Enforcer (no eslint rule in pvs-charly)
+- **ID Taxonomy / pvs-x-isynet**: Helper in `packages/pvs-x-isynet/src/id-taxonomy.ts`, Proactive via root `scripts/gen-id-types.ts`, Reactive via `packages/pvs-x-isynet/eslint.config.js` (`no-raw-id` rule)
+- **Schema Codegen / pvs-charly** (`docs/adr/0002-schema-codegen.md`): ADR accepted but no helper, proactive, or reactive enforcer in pvs-charly
+- **Schema Codegen / pvs-x-isynet**: Helper, Proactive (`packages/pvs-x-isynet/scripts/gen-schema.ts`), and Reactive (eslint) all present
 
 ### Implicit Contracts Detected
 

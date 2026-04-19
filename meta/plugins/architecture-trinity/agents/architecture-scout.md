@@ -151,6 +151,8 @@ For each (contract, package) pair where the contract `applies_to` the package:
 
 ## Step 5: Vision Boundary Check
 
+**Scope**: Only check packages that appear in `touched_paths` (or all packages if `touched_paths` is empty). The vision boundary check is also scoped to touched packages — only check imports FROM the touched packages into forbidden layers. A boundary violation found in a non-touched package (e.g., `adapter-common` importing from a touched package) is still reported as a BLOCKING finding if the forbidden import affects the touched packages architecturally, even if `adapter-common` is not in `touched_paths`.
+
 Try to locate `vision.md` at either:
 - `vision.md` (project root), OR
 - `docs/vision.md`
@@ -275,6 +277,18 @@ Produce both JSON and Markdown outputs.
 {
   "status": "CONFORM" | "VIOLATION",
   "mode": "advisor" | "gate",
+  "matrix": {
+    "<contract-name>": {
+      "<package-name>": {
+        "adr": "✅" | "⚠️" | "❌" | "n/a",
+        "helper": "✅" | "❌" | "n/a",
+        "proactive": "✅" | "❌" | "n/a",
+        "reactive": "✅" | "❌" | "n/a",
+        "status": "full-trinity" | "partial" | "pre-trinity" | "n/a"
+      }
+    }
+  },
+  "touched_packages": ["<pkg>", "..."],
   "findings": [
     {
       "rule": "string",
@@ -287,6 +301,10 @@ Produce both JSON and Markdown outputs.
 ```
 
 - `status` = `VIOLATION` if ANY finding has `severity: "BLOCKING"`; otherwise `CONFORM`
+- `matrix` covers ONLY the packages in `touched_paths` (or all packages if `touched_paths` is empty)
+- `matrix` includes ALL discovered contracts (from `docs/adr/`) as top-level keys, even if the package has `n/a` for that contract
+- Use `n/a` for contract × package pairs where the contract's `applies_to` does not include that package
+- `touched_packages` is the resolved list of package names (directory names) that were actually scanned
 - Include ALL findings (BLOCKING + ADVISORY + INFO) in the array
 - Even if status is CONFORM, include advisory findings
 
@@ -300,9 +318,11 @@ Produce both JSON and Markdown outputs.
 **Status**: CONFORM ✅ | VIOLATION ❌
 
 ### Existing Contracts
-| Contract | ADR | Helper | Proactive | Reactive | Status |
-|----------|-----|--------|-----------|----------|--------|
-| <name>   | ✅/❌ | ✅/❌ | ✅/❌ | ✅/❌ | full-trinity / partial / pre-trinity |
+| Contract | Package | ADR | Helper | Proactive | Reactive | Status |
+|----------|---------|-----|--------|-----------|----------|--------|
+| <name>   | <pkg>   | ✅/❌ | ✅/❌ | ✅/❌ | ✅/❌ | full-trinity / partial / pre-trinity |
+
+_One row per contract × package pair where the contract applies_to the package (or n/a pairs are omitted). Only touched packages are shown._
 
 ### Implicit Contracts Detected
 | Pattern | Location | Suggested Triple |
@@ -356,7 +376,7 @@ If the project has:
 
 Return:
 ```json
-{ "status": "CONFORM", "mode": "advisor", "findings": [] }
+{ "status": "CONFORM", "mode": "advisor", "matrix": {}, "touched_packages": [], "findings": [] }
 ```
 
 With Markdown note:

@@ -216,68 +216,80 @@ Dann frage: "Stimmt das so? Soll ich Aenderungen vornehmen oder die Beads anlege
 
 **Erst nach expliziter Bestaetigung:**
 
-1. Epic erstellen:
+**Mode behavior** (read from `.claude/project-config.yml` → `architecture-scout.mode`):
+- Advisor mode (default): BLOCKING findings surface as DECIDE items in the Phase 4 handshake; user decides before any bd create calls happen.
+- Gate mode: if any sub-task scout returns BLOCKING findings, halt Phase 5. Do not run bd create. Instruct user to resolve the finding, add a waiver comment to the sub-task description, or set CONFORMANCE_SKIP=1.
+- CONFORMANCE_SKIP=1: pass conformance_skip: true in scout input; proceed as advisor mode.
+
+1. Architecture Scout pre-check (before creating any beads):
+
+   For each drafted sub-task:
+
+   - **Scout step A** — Determine `touched_paths` from the sub-task description:
+     - Extract package names (e.g., `packages/pvs-charly`) from file/module mentions
+     - Extract directory paths from acceptance criteria
+     - If no paths mentioned: use empty array (scout scans all packages)
+
+   - **Scout step B** — Spawn architecture-scout:
+     ```
+     Agent(
+       subagent_type="architecture-trinity:architecture-scout",
+       prompt=json.dumps({
+         "bead_id": "<draft-sub-task-title>",
+         "bead_description": "<sub-task title and description>",
+         "touched_paths": ["<extracted-path-1>", "<extracted-path-2>"],
+         "mode": "<advisor|gate>",
+         "conformance_skip": <true if CONFORMANCE_SKIP=1>
+       })
+     )
+     ```
+
+   - **Scout step C** — Collect results for all sub-tasks.
+     Run scouts **sequentially** (not in parallel) to avoid rate limits.
+     Each scout run takes approximately 5 seconds.
+
+2. Present findings in handshake (if any findings):
+
+   Add scout matrices to the Phase 4 handshake output BEFORE asking for confirmation,
+   so the user sees findings while decomposition is still editable.
+
+   - **Advisor mode**: Surface BLOCKING findings as `⛔ DECIDE:` items. User can accept findings and proceed, or modify the plan.
+   - **Gate mode**: If ANY sub-task has BLOCKING findings, halt Phase 5 entirely.
+     Output:
+     ```
+     BLOCKED: architecture-scout reported BLOCKING findings in sub-task(s) [list].
+     Resolve findings, add a waiver comment to the sub-task description, or set CONFORMANCE_SKIP=1 before proceeding.
+     ```
+     Do NOT run any `bd create` commands until resolved.
+
+3. Epic erstellen:
    ```bash
    bd create --title="[Epic-Titel]" --type=feature --priority=2 --description="[Vollstaendige Beschreibung mit Ziel, Kontext und Gesamtueberblick]"
    ```
 
-2. Sub-Tasks erstellen (fuer jede Komponente, mit Parent-Link zum Epic):
+4. Sub-Tasks erstellen (fuer jede Komponente, mit Parent-Link zum Epic):
    ```bash
    bd create --title="[Task-Titel]" --type=task --priority=2 --parent=<epic-id> --description="[Beschreibung mit Acceptance Criteria]"
    ```
 
-3. Abhaengigkeiten setzen:
+5. Abhaengigkeiten setzen:
    ```bash
    bd dep add <task-id> <blocking-task-id>
    ```
 
-#### Architecture Scout per Sub-Task
+6. Append scout results to sub-task notes:
+   For each sub-task created, if its scout returned any findings:
+   ```bash
+   bd update <task-id> --append-notes="Coverage Matrix (architecture-scout):\n<scout-markdown-output>"
+   ```
+   If `status: CONFORM` with empty findings: skip (keep task description clean).
 
-After creating all sub-tasks and setting dependencies, run architecture-scout for each
-sub-task to detect architectural debt before implementation begins.
-
-**For each sub-task created:**
-
-- **Scout step A** — Determine `touched_paths` from the sub-task description:
-  - Extract package names (e.g., `packages/pvs-charly`) from file/module mentions
-  - Extract directory paths from acceptance criteria
-  - If no paths mentioned: use empty array (scout scans all packages)
-
-- **Scout step B** — Spawn architecture-scout:
-  ```
-  Agent(
-    subagent_type="architecture-trinity:architecture-scout",
-    prompt=json.dumps({
-      "bead_id": "<sub-task-id>",
-      "bead_description": "<sub-task title and description>",
-      "touched_paths": ["<extracted-path-1>", "<extracted-path-2>"],
-      "mode": "advisor"
-    })
-  )
-  ```
-
-- **Scout step C** — Handle the scout result:
-  - If `status: CONFORM` with empty findings: skip (keep task description clean)
-  - If findings exist: append to the sub-task via:
-    ```bash
-    bd update <task-id> --append-notes="Coverage Matrix (architecture-scout):\n<scout-markdown-output>"
-    ```
-
-- **Scout step D** — Run scouts **sequentially** (not in parallel) to avoid rate limits.
-  Each scout run takes approximately 5 seconds.
-
-- **Scout step E** — If a scout returns `status: VIOLATION` with BLOCKING findings:
-  - Still append the matrix to the sub-task notes (as above)
-  - Add a warning to the Phase 4 handshake summary:
-    "⚠️ Sub-task [id] has BLOCKING architecture findings — review before implementation"
-  - Do NOT block epic creation (epic-init is advisory-only; gate mode is /plan's responsibility)
-
-4. Constraints als Notes speichern (falls vorhanden):
+7. Constraints als Notes speichern (falls vorhanden):
    ```bash
    bd update <id> --notes="Constraints: [...]"
    ```
 
-5. Zusammenfassung zeigen:
+8. Zusammenfassung zeigen:
    "Epic **[id]** mit **[n]** Sub-Tasks angelegt. `bd ready` zeigt dir was du anfangen kannst."
 
 
