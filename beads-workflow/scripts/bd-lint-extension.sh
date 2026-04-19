@@ -1,5 +1,6 @@
-#!/usr/bin/env bash
-# bd-lint-extension.sh — Shell wrapper that extends 'bd lint' with --check support.
+# bd-lint-extension.sh — Source this file in .zshrc or .bashrc
+# Compatible with bash and zsh.
+# Shell wrapper that extends 'bd lint' with --check support.
 #
 # Usage: source this file in your .zshrc or .bashrc:
 #

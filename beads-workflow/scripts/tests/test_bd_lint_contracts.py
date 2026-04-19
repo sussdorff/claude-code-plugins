@@ -116,6 +116,18 @@ EDGE_OPTIONAL_BULLETS_ONLY = """
 
 DESCRIPTION_WITH_SECTION_NO_LABEL = GOOD_DESCRIPTION
 
+DESCRIPTION_WITH_SECTION_IN_FENCE = """
+## Summary
+This bead documents the convention.
+
+```markdown
+## Architecture Contracts Touched
+- ADR-001 (Example): example
+```
+
+No actual architectural contract touched.
+""".strip()
+
 
 # ---------------------------------------------------------------------------
 # Unit tests for extract_section()
@@ -213,57 +225,62 @@ class TestValidateContractsSection(unittest.TestCase):
 
 class TestFalseNegativeCheck(unittest.TestCase):
 
-    def _make_bd_list_response(self, beads: list[dict]) -> str:
-        import json
-        return json.dumps(beads)
-
-    @patch("bd_lint_contracts._run")
-    def test_detects_section_without_label(self, mock_run):
+    def test_detects_section_without_label(self):
         """Bead has section in description but no touches-contract label → error."""
-        import json
         beads = [
             {"id": "BID-FN1", "description": DESCRIPTION_WITH_SECTION_NO_LABEL,
              "title": "Test", "status": "open"}
         ]
-        # First call: get all open beads
-        mock_run.return_value = (0, json.dumps(beads), "")
 
         labeled_ids: set[str] = set()  # Empty: BID-FN1 has no label
-        errors = linter.check_false_negatives(labeled_ids, "open")
+        errors = linter.check_false_negatives(labeled_ids, beads)
 
         self.assertEqual(len(errors), 1)
         self.assertEqual(errors[0].bead_id, "BID-FN1")
         self.assertIn("label", errors[0].error.lower())
 
-    @patch("bd_lint_contracts._run")
-    def test_no_false_negative_when_correctly_labeled(self, mock_run):
+    def test_no_false_negative_when_correctly_labeled(self):
         """Bead has section AND has label → already in labeled_ids → no error."""
-        import json
         beads = [
             {"id": "BID-FN2", "description": GOOD_DESCRIPTION,
              "title": "Test", "status": "open"}
         ]
-        mock_run.return_value = (0, json.dumps(beads), "")
 
         labeled_ids = {"BID-FN2"}  # Already labeled
-        errors = linter.check_false_negatives(labeled_ids, "open")
+        errors = linter.check_false_negatives(labeled_ids, beads)
 
         self.assertEqual(errors, [])
 
-    @patch("bd_lint_contracts._run")
-    def test_no_false_negative_when_no_section(self, mock_run):
+    def test_no_false_negative_when_no_section(self):
         """Bead has no section and no label → no error (opt-in)."""
-        import json
         beads = [
             {"id": "BID-FN3", "description": NO_SECTION_DESCRIPTION,
              "title": "Test", "status": "open"}
         ]
-        mock_run.return_value = (0, json.dumps(beads), "")
 
         labeled_ids: set[str] = set()
-        errors = linter.check_false_negatives(labeled_ids, "open")
+        errors = linter.check_false_negatives(labeled_ids, beads)
 
         self.assertEqual(errors, [])
+
+    def test_no_false_negative_when_section_in_fence(self):
+        """Header inside fenced code block should not trigger rule Y."""
+        beads = [
+            {"id": "BID-FN4", "description": DESCRIPTION_WITH_SECTION_IN_FENCE,
+             "title": "Test", "status": "open"}
+        ]
+
+        labeled_ids: set[str] = set()
+        errors = linter.check_false_negatives(labeled_ids, beads)
+
+        self.assertEqual(errors, [], f"Expected no errors for fenced header, got: {errors}")
+
+    def test_label_exact_match_no_substring(self):
+        """_bead_has_label should not match 'touches-contract-v2' for 'touches-contract'."""
+        with patch("bd_lint_contracts._run") as mock_run:
+            mock_run.return_value = (0, "touches-contract-v2\n", "")
+            result = linter._bead_has_label("BID-X", "touches-contract")
+            self.assertFalse(result)
 
 
 # ---------------------------------------------------------------------------

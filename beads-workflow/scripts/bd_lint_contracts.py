@@ -24,7 +24,7 @@ import json
 import re
 import subprocess
 import sys
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Optional
 
 
@@ -39,6 +39,15 @@ class LintError:
 
     def __str__(self) -> str:
         return f"[{self.bead_id}] {self.error}"
+
+
+# ---------------------------------------------------------------------------
+# Text helpers
+# ---------------------------------------------------------------------------
+
+def _strip_fenced_blocks(text: str) -> str:
+    """Remove content inside fenced code blocks (``` ... ```)."""
+    return re.sub(r"```[^\n]*\n.*?```", "", text, flags=re.DOTALL)
 
 
 # ---------------------------------------------------------------------------
@@ -90,7 +99,7 @@ def _get_bead_detail(bead_id: str) -> Optional[dict]:
 def _bead_has_label(bead_id: str, label: str) -> bool:
     """Return True if the bead has the given label."""
     rc, stdout, _ = _run(["label", "list", bead_id])
-    return label in stdout
+    return any(line.strip() == label or line.strip() == f"- {label}" for line in stdout.splitlines())
 
 
 # ---------------------------------------------------------------------------
@@ -215,13 +224,11 @@ def validate_contracts_section(bead_id: str, description: str) -> list[str]:
 # Main lint logic
 # ---------------------------------------------------------------------------
 
-def check_false_negatives(labeled_ids: set[str], status: str) -> list[LintError]:
+def check_false_negatives(labeled_ids: set[str], all_beads: list[dict]) -> list[LintError]:
     """
     Rule Y: Detect beads whose description contains '## Architecture Contracts Touched'
     but that lack the 'touches-contract' label.
     """
-    extra = ["--all"] if status == "all" else ["--status", "open"]
-    all_beads = _get_beads_json(extra)
     errors: list[LintError] = []
 
     for bead in all_beads:
@@ -230,7 +237,8 @@ def check_false_negatives(labeled_ids: set[str], status: str) -> list[LintError]
             continue  # Already checked via labeled path
 
         description = bead.get("description") or ""
-        if "## Architecture Contracts Touched" in description:
+        stripped = _strip_fenced_blocks(description)
+        if "## Architecture Contracts Touched" in stripped:
             errors.append(LintError(
                 bead_id=bead_id,
                 error=(
@@ -252,7 +260,7 @@ def lint_bead(bead_id: str) -> list[LintError]:
         return [LintError(bead_id=bead_id, error=f"Could not load bead '{bead_id}'")]
 
     description = detail.get("description") or ""
-    has_section = "## Architecture Contracts Touched" in description
+    has_section = "## Architecture Contracts Touched" in _strip_fenced_blocks(description)
     has_label = _bead_has_label(bead_id, "touches-contract")
 
     # Rule Y for single-bead mode
@@ -277,6 +285,7 @@ def lint_all(status: str) -> list[LintError]:
     """Lint all beads with 'touches-contract' label + false-negative check."""
     extra = ["--all"] if status == "all" else ["--status", "open"]
     labeled_beads = _get_beads_json(["--label", "touches-contract"] + extra)
+    all_beads = _get_beads_json(extra)
 
     all_errors: list[LintError] = []
     labeled_ids: set[str] = set()
@@ -284,16 +293,12 @@ def lint_all(status: str) -> list[LintError]:
     for bead in labeled_beads:
         bead_id = bead.get("id", "")
         labeled_ids.add(bead_id)
-        detail = _get_bead_detail(bead_id)
-        if detail is None:
-            all_errors.append(LintError(bead_id=bead_id, error="Could not load bead details"))
-            continue
-        description = detail.get("description") or ""
+        description = bead.get("description") or ""
         for msg in validate_contracts_section(bead_id, description):
             all_errors.append(LintError(bead_id=bead_id, error=msg))
 
     # False-negative check (rule Y)
-    all_errors.extend(check_false_negatives(labeled_ids, status))
+    all_errors.extend(check_false_negatives(labeled_ids, all_beads))
 
     return all_errors
 
@@ -339,7 +344,9 @@ def main() -> None:
     if args.bead:
         all_errors = lint_bead(args.bead)
     elif args.check_false_negatives:
-        all_errors = check_false_negatives(set(), status)
+        extra = ["--all"] if args.all else ["--status", "open"]
+        all_beads = _get_beads_json(extra)
+        all_errors = check_false_negatives(set(), all_beads)
     else:
         all_errors = lint_all(status)
 
