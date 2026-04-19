@@ -241,7 +241,7 @@ cp -r bash-best-practices/skills/bash-best-practices ~/code/claude/project-name/
 
 ## Architecture Trinity Vocabulary
 
-This project uses the **Architecture Trinity** model to classify architectural tooling into three orthogonal categories. Use this vocabulary consistently across all skills, READMEs, and design discussions.
+This project uses the **Architecture Trinity** model to classify architectural tooling into four precise terms: ADR, Helper, Enforcer-Proactive, and Enforcer-Reactive. Use this vocabulary consistently across all skills, READMEs, and design discussions.
 
 | Term | Category | Role | Enforces? |
 |------|----------|------|-----------|

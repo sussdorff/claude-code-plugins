@@ -1,6 +1,6 @@
 # Architecture Trinity Plugin
 
-The Architecture Trinity is a classification model for architectural tooling that distinguishes three orthogonal roles: decision records, proactive enforcers, and reactive enforcers. This shared vocabulary prevents ambiguity when designing, reviewing, or discussing enforcement strategies across plugins and skills.
+The Architecture Trinity is a classification model for architectural tooling that distinguishes four precise terms: ADR, Helper, Enforcer-Proactive, and Enforcer-Reactive. This shared vocabulary prevents ambiguity when designing, reviewing, or discussing enforcement strategies across plugins and skills.
 
 > **Note**: This is a stub. Full content, skill definitions, and harness integration will be added in CCP-6up.
 
