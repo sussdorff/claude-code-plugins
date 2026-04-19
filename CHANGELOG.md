@@ -1,5 +1,26 @@
 ## [unreleased]
 
+### 🚀 Features
+
+- *(CCP-3oy)* Wire Turn-Log consumer in session-close and worktree-manager
+- *(dev-tools)* Add binary-explorer skill for reverse-engineering desktop apps
+
+### ⚙️ Miscellaneous Tasks
+
+- *(beads)* Create Trinity-Harness epic and 10 subtask beads
+- *(CCP-089)* Introduce Architecture Trinity vocabulary in docs
+## [2026.04.32] - 2026-04-16
+
+### 🚀 Features
+
+- *(dev-tools)* Add codex-guide agent for Codex CLI documentation queries
+
+### ⚙️ Miscellaneous Tasks
+
+- Update changelog
+- Bump version to 2026.04.32
+## [unreleased]
+
 ### Bug Fixes
 
 - *(wave-orchestrator)* Fix idle detection in wave-status: use position-based approach instead of bag-of-clues to correctly identify idle agents; guard against stale terminal history with thinking/tool-call markers; check 2 preceding lines for thinking markers to handle extra status lines

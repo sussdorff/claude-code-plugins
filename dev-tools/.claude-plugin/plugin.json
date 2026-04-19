@@ -1,7 +1,7 @@
 {
   "name": "dev-tools",
-  "version": "2026.04.32",
-  "description": "Development tooling — playwright-cli, bug-triage, codex, project-health, project-setup, project-context, spec-developer, test agents",
+  "version": "2026.04.33",
+  "description": "Development tooling — playwright-cli, bug-triage, codex, project-health, project-setup, project-context, spec-developer, binary-explorer, test agents",
   "keywords": [
     "development",
     "testing",
@@ -10,6 +10,8 @@
     "bug-triage",
     "scaffolding",
     "project-context",
-    "documentation"
+    "documentation",
+    "reverse-engineering",
+    "binary-explorer"
   ]
 }
