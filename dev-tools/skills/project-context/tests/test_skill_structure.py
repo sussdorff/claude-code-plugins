@@ -16,6 +16,8 @@ REQUIRED_SKILL_SECTIONS = [
     "Module Map",
     "Patterns",
     "Invarianten",
+    "Enforcement Matrix",
+    "enforcement_matrix_scanner",
 ]
 
 # Required sections in the output template
@@ -25,6 +27,7 @@ REQUIRED_TEMPLATE_SECTIONS = [
     "## Module Map",
     "## Established Patterns",
     "## Critical Invariants",
+    "## Enforcement Matrix",
 ]
 
 def test_skill_md_exists():

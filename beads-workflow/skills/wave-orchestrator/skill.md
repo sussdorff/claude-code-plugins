@@ -669,15 +669,29 @@ CI config exists, treat the bead as done without a pipeline check.
 
 ### Monitoring Schedule
 
-| Time after dispatch | Action |
-|---------------------|--------|
-| T+10 min | First check — catch immediate failures |
-| T+15 min | Second check — most beads nearing mid-point |
-| T+18 min | Third check — catch fast completions |
-| T+20 min onwards | Every 3 min until wave completes |
+Bead-orchestrators typically run 10–30 min. To keep the wave orchestrator's own
+prompt cache warm across a wave, **every poll interval must stay under 270s** (the
+Anthropic prompt cache TTL is 5 minutes — any gap ≥300s forces a full-context
+re-read on the next wake).
 
-**Use `run_in_background`** for the sleep between checks so the main agent stays
-responsive for user questions.
+| Poll | Delay from previous | Elapsed | Purpose |
+|------|---------------------|---------|---------|
+| #1 | 270s | T+4.5 min | Catch immediate failures (missing scenario, crash-on-start) |
+| #2 | 270s | T+9 min | Early progress signal |
+| #3 | 270s | T+13.5 min | Mid-point — quick-fix beads may already be done |
+| #4+ | 270s | every 4.5 min | Continue until `wave-completion.sh` returns 0 |
+
+**Why not 1500s (25 min) polls?** Fewer polls but each one eats a full cache miss,
+and you miss fast quick-fix completions. 270s gives 13 cache-warm polls per hour
+vs. 2–3 cache-miss polls — strictly better for a 10–30 min workload.
+
+**Why not <270s?** Sub-270s adds poll cost without buying anything — bead state
+rarely changes meaningfully in under 4 minutes, and the cache window is the same.
+
+**Implementation — use `ScheduleWakeup`** between checks, not `run_in_background`
+sleeps. `ScheduleWakeup(delaySeconds=270, prompt="/wave-orchestrator monitor", ...)`
+lets the runtime clamp correctly and surfaces the poll cadence to the user. The
+runtime clamps to [60, 3600], so 270 is honored as-is.
 
 ### Status Updates
 
@@ -1043,6 +1057,6 @@ For all error scenarios, read `references/error-recovery.md`. It covers:
 - **Scenarios before dispatch**: Feature beads without scenarios waste pane time.
 - **max 4-5 panes**: Beyond 5, layout overhead and resource contention become issues.
 - **Pull between waves**: Always `git pull --no-rebase` + `bd dolt pull` between waves.
-- **Don't monitor too early**: First check at T+10min, not T+1min.
+- **Stay cache-warm**: Poll every 270s (not 300s+, not <60s). First check at T+4.5min. 270s keeps the prompt cache alive across the full wave; gaps ≥300s force a full-context re-read.
 - **Expect extra panes**: bead-orchestrators spawn their own review panes via `cld -br` — this is normal, don't intervene.
 - **Reviewer intervention only on disconnect**: Only intervene when cmux communication between impl and reviewer demonstrably failed. Otherwise stay out.
