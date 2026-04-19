@@ -78,15 +78,19 @@ boundary violations early — when they are cheap to address.
 
 ### How to Spawn
 
-```
+```python
+import os
+scout_input = {
+  "bead_id": "<ticket-id>",
+  "bead_description": "<ticket description or user's input>",
+  "touched_paths": ["<package-or-path-1>", "<package-or-path-2>"],
+  "mode": "<advisor|gate from .claude/project-config.yml, default: advisor>",
+  # CONFORMANCE_SKIP bypass: read env var here (before spawning) and pass it through
+  "conformance_skip": os.environ.get("CONFORMANCE_SKIP") == "1"
+}
 Agent(
   subagent_type="architecture-trinity:architecture-scout",
-  prompt=json.dumps({
-    "bead_id": "<ticket-id>",
-    "bead_description": "<ticket description or user's input>",
-    "touched_paths": ["<package-or-path-1>", "<package-or-path-2>"],
-    "mode": "<advisor|gate from .claude/project-config.yml, default: advisor>"
-  })
+  prompt=json.dumps(scout_input)
 )
 ```
 
@@ -129,7 +133,7 @@ Continue to Step 1 normally.
   ```
   Exit `/plan`. Do not continue to Step 1.
 
-- If `CONFORMANCE_SKIP=1` is set in the environment: log warning and continue as advisor mode.
+- If `CONFORMANCE_SKIP=1` is set in the environment: pass `"conformance_skip": true` in the scout input (shown above); the scout will log a warning and continue as advisor mode.
 
 - If the scout returns `status: CONFORM`: continue to Step 1 normally.
 

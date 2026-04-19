@@ -26,17 +26,17 @@ and a test fixture for verifying the scout's output format.
       "rule": "vision-boundary:platform-no-application-import",
       "concern": "packages/adapter-common/src/boundary-violation.ts imports from pvs-charly (layer:platform must not depend on layer:application)",
       "severity": "BLOCKING",
-      "source": "packages/adapter-common/src/boundary-violation.ts:3"
+      "source": "packages/adapter-common/src/boundary-violation.ts:20"
     },
     {
       "rule": "implicit:repeated-event-kind",
       "concern": "event.kind === 'literal' pattern found in 4 files without ADR covering delta event semantics",
       "severity": "ADVISORY",
-      "source": "packages/pvs-charly/src/sync.ts:42, packages/pvs-x-isynet/src/delta.ts:17, packages/pvs-charly/src/reconcile.ts:28, packages/pvs-x-isynet/src/processor.ts:55"
+      "source": "packages/pvs-charly/src/sync.ts:20, packages/pvs-x-isynet/src/delta.ts:21, packages/pvs-charly/src/reconcile.ts:32, packages/pvs-x-isynet/src/processor.ts:29"
     },
     {
       "rule": "trinity-gap:error-envelope",
-      "concern": "ADR 0003 (Error Envelope) applies to adapter-common but has no Helper, no Proactive Enforcer, and no Reactive Enforcer",
+      "concern": "ADR 0003 (Error Envelope) is proposed (not yet accepted) and has no Proactive Enforcer or Reactive Enforcer",
       "severity": "ADVISORY",
       "source": "docs/adr/0003-error-envelope.md"
     },
@@ -63,30 +63,30 @@ and a test fixture for verifying the scout's output format.
 | Contract | ADR | Helper | Proactive | Reactive | Status |
 |----------|-----|--------|-----------|----------|--------|
 | ID Taxonomy | ✅ | ✅ | ✅ | ✅ | full-trinity |
-| Error Envelope | ✅ | ❌ | ❌ | ❌ | pre-trinity |
+| Error Envelope | ⚠️ | ✅ | ❌ | ❌ | pre-trinity |
 | Schema Codegen | ✅ | ✅ | ✅ | ❌ | partial |
 
 **Evidence:**
 - **ID Taxonomy** (`docs/adr/0001-id-taxonomy.md`): Helper in `packages/adapter-common/src/id-taxonomy.ts`, Proactive in `scripts/gen-id-types.ts`, Reactive in `packages/adapter-common/src/id-taxonomy.test.ts`
-- **Error Envelope** (`docs/adr/0003-error-envelope.md`): ADR status is `proposed` — no implementation components exist yet
+- **Error Envelope** (`docs/adr/0003-error-envelope.md`): ADR status is `proposed` (⚠️) — Helper exists (`error-envelope.ts`), but no Proactive or Reactive Enforcer yet
 - **Schema Codegen** (`docs/adr/0002-schema-codegen.md`): Helper and Proactive present; no ESLint rule or test enforces correct usage
 
 ### Implicit Contracts Detected
 
 | Pattern | Location | Suggested Triple |
 |---------|----------|-----------------|
-| `repeated-event-kind` | `pvs-charly/src/sync.ts:42`, `pvs-x-isynet/src/delta.ts:17`, `pvs-charly/src/reconcile.ts:28`, `pvs-x-isynet/src/processor.ts:55` | ADR-0004: delta-event-kind + `makeDeltaKindHelper` + `no-stringly-typed-event-kind` |
+| `repeated-event-kind` | `pvs-charly/src/sync.ts:20`, `pvs-x-isynet/src/delta.ts:21`, `pvs-charly/src/reconcile.ts:32`, `pvs-x-isynet/src/processor.ts:29` | ADR-0004: delta-event-kind + `makeDeltaKindHelper` + `no-stringly-typed-event-kind` |
 
 ### Recommended Triples
 
 - [ ] ADR-0004: delta-event-kind — documents delta event semantics used in pvs-charly and pvs-x-isynet; add `makeDeltaKindHelper` in `adapter-common` + lint rule `no-stringly-typed-event-kind`
-- [ ] Implement Error Envelope (ADR-0003 is accepted-in-progress): add `createErrorEnvelope` helper in `adapter-common/src/` + lint rule `no-inline-error-shape` + tests enforcing the envelope shape
+- [ ] Advance Error Envelope (ADR-0003 is `proposed`): accept the ADR, then add Proactive Enforcer (`createErrorEnvelope` codegen) + lint rule `no-inline-error-shape` + tests enforcing the envelope shape
 - [ ] Add Reactive Enforcer for Schema Codegen: ESLint rule `no-manual-schema-definition` to prevent bypassing the codegen pipeline
 
 ### Findings Detail
 
 ⛔ **BLOCKING** — Vision Boundary Violation:
-`packages/adapter-common/src/boundary-violation.ts:3` imports from `pvs-charly`.
+`packages/adapter-common/src/boundary-violation.ts:20` imports from `pvs-charly`.
 According to `vision.md`: layer `platform` must not depend on layer `application`.
 `adapter-common` is classified as `platform`; `pvs-charly` is `application`.
 **Action required**: Remove the forbidden import before proceeding.

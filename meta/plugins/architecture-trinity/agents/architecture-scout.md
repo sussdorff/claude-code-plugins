@@ -151,21 +151,30 @@ For each (contract, package) pair where the contract `applies_to` the package:
 
 ## Step 5: Vision Boundary Check
 
-If `vision.md` exists at project root:
+Try to locate `vision.md` at either:
+- `vision.md` (project root), OR
+- `docs/vision.md`
 
-1. Read `vision.md` and find a table with columns `rule | scope | source-section` or `layer | forbidden-from | forbidden-to`
-2. For each boundary rule, identify the "forbidden-from" layer's source directories
-3. Use Grep to search those source files for imports of the "forbidden-to" layer:
+Use the first one found. If neither exists: skip this step silently.
+
+1. Read the found `vision.md` and locate a table with columns `rule | scope | source-section` or `layer | forbidden-from | forbidden-to`.
+2. For each boundary rule, identify:
+   - The **forbidden-from** layer packages (the layer that must NOT import from the other)
+   - The **forbidden-to** layer packages (the packages that must not be imported)
+3. For each forbidden-from package, use Grep to search its source files for imports of any forbidden-to package **by package name** (not layer name — imports use package directory names, not abstract layer labels):
    ```
-   pattern: import.*from.*['"]<forbidden-layer>
+   pattern: import.*from.*['"](\.\.\/)*<forbidden-to-pkg-name>
    path: packages/<forbidden-from-pkg>/src/
+   ```
+   Example: if `adapter-common` (platform layer) must not import from `pvs-charly` (application layer):
+   ```
+   pattern: import.*from.*['"].*pvs-charly
+   path: packages/adapter-common/src/
    ```
 4. Any match → add BLOCKING finding:
    ```json
    { "rule": "vision-boundary:<rule>", "concern": "Package X imports from Y (forbidden by vision boundary)", "severity": "BLOCKING", "source": "file:line" }
    ```
-
-If `vision.md` does not exist: skip this step silently.
 
 ---
 
