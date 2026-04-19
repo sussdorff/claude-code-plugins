@@ -74,7 +74,8 @@ def parse_frontmatter(text: str) -> dict:
     for line in fm_lines:
         # List item
         if line.startswith("  - ") or line.startswith("- "):
-            raw_item = line.strip().lstrip("- ").strip()
+            m = re.match(r"^\s*-\s+(.*)", line)
+            raw_item = m.group(1).strip() if m else line.strip()
             item = _strip_quotes(_strip_inline_comment(raw_item))
             if current_list is not None:
                 current_list.append(item)
@@ -191,13 +192,10 @@ def _has_helper(pkg_dir: Path, search_terms: list[str]) -> bool:
         if _is_excluded(item):
             continue
         name = item.name.lower()
-        # Split filename stem on non-alphanumeric chars to get tokens
-        stem = item.stem.lower() if item.is_file() else name
-        tokens = set(re.split(r"[^a-z0-9]+", stem))
-        name_tokens = set(re.split(r"[^a-z0-9]+", name))
-        all_tokens = tokens | name_tokens
+        # Split filename name on non-alphanumeric chars to get tokens
+        tokens = set(re.split(r"[^a-z0-9]+", name))
         for term in search_terms:
-            if term in all_tokens:
+            if term in tokens:
                 return True
     return False
 
@@ -233,7 +231,7 @@ def _is_gen_script_value(value: str) -> bool:
     return bool(re.search(r"\bgen\b", value.lower()))
 
 
-def _has_proactive(pkg_dir: Path, repo_root: Path = None) -> bool:
+def _has_proactive(pkg_dir: Path, repo_root: "Path | None" = None) -> bool:
     """
     Check if package has proactive (codegen) enforcers:
     - scripts/*gen*.{ts,js,py} in the package directory (gen as whole token)
@@ -270,7 +268,7 @@ def _has_proactive(pkg_dir: Path, repo_root: Path = None) -> bool:
                     return True
                 if _is_gen_script_value(str(value)):
                     return True
-        except (json.JSONDecodeError, KeyError):
+        except json.JSONDecodeError:
             pass
 
     return False
@@ -289,7 +287,7 @@ _ESLINT_CONFIG_NAMES = {
 }
 
 
-def _has_reactive(pkg_dir: Path, repo_root: Path = None) -> bool:
+def _has_reactive(pkg_dir: Path, repo_root: "Path | None" = None) -> bool:
     """
     Check if package has reactive (lint/check) enforcers:
     - eslint config files exist in package dir or repo root
@@ -315,7 +313,7 @@ def _has_reactive(pkg_dir: Path, repo_root: Path = None) -> bool:
             for key in scripts:
                 if key.startswith("check:"):
                     return True
-        except (json.JSONDecodeError, KeyError):
+        except json.JSONDecodeError:
             pass
 
     return False
@@ -513,7 +511,7 @@ def build_json_output(
         "matrix": matrix,
         "gaps": gaps_list,
         "gap_count": len(gaps),
-        "contract_count": contracts_with_gaps,
+        "contracts_with_gaps": contracts_with_gaps,
     }
 
 
@@ -541,7 +539,7 @@ def main():
 
     if not adrs:
         if args.json:
-            print(json.dumps({"contracts": [], "packages": packages, "matrix": {}, "gaps": [], "gap_count": 0, "contract_count": 0}, indent=2))
+            print(json.dumps({"contracts": [], "packages": packages, "matrix": {}, "gaps": [], "gap_count": 0, "contracts_with_gaps": 0}, indent=2))
         else:
             print(render_empty())
         return

@@ -57,7 +57,7 @@ def test_scanner_gap_signal():
 
 def test_scanner_empty_matrix_when_no_adrs():
     """Scanner on a directory without docs/adr/ should produce the empty-matrix message."""
-    import tempfile, os
+    import tempfile
     with tempfile.TemporaryDirectory() as tmp:
         stdout, rc = run_scanner(fixture=Path(tmp))
     assert rc == 0, f"Scanner should exit 0 on empty repo, got {rc}"
@@ -82,7 +82,7 @@ def test_scanner_json_flag():
     assert "matrix" in data, "JSON must contain 'matrix' key"
     assert "gaps" in data, "JSON must contain 'gaps' key"
     assert "gap_count" in data, "JSON must contain 'gap_count' key"
-    assert "contract_count" in data, "JSON must contain 'contract_count' key"
+    assert "contracts_with_gaps" in data, "JSON must contain 'contracts_with_gaps' key"
 
 
 def test_scanner_json_contains_correct_contracts():
