@@ -186,6 +186,52 @@ fi
 rm -rf "$_fake_dir2"
 
 # ---------------------------------------------------------------------------
+# Test 6: Multiple wrapper copies in PATH do not exec-loop each other
+#
+# Simulates: original bd-wrapper in dir1, installed copy in dir2, real bd in dir3.
+# Running dir1/bd with a passthrough command must reach real bd, not loop.
+# ---------------------------------------------------------------------------
+echo ""
+echo "--- Test 6: multiple wrapper copies in PATH do not cause exec loop ---"
+_real_bd_found=false
+for _candidate in /opt/homebrew/bin/bd /usr/local/bin/bd /usr/bin/bd; do
+    if [ -x "$_candidate" ]; then
+        _real_bd_found=true
+        _real_bd_for_test6="$_candidate"
+        break
+    fi
+done
+
+if [ "$_real_bd_found" = "true" ]; then
+    _dir6a=$(mktemp -d)  # "source checkout" wrapper
+    _dir6b=$(mktemp -d)  # "installed copy" wrapper
+
+    cp "$_WRAPPER" "$_dir6a/bd"
+    chmod +x "$_dir6a/bd"
+    cp "$_CONTRACTS_SCRIPT" "$_dir6a/bd_lint_contracts.py"
+
+    cp "$_WRAPPER" "$_dir6b/bd"
+    chmod +x "$_dir6b/bd"
+    cp "$_CONTRACTS_SCRIPT" "$_dir6b/bd_lint_contracts.py"
+
+    # PATH: dir6a (wrapper copy 1) -> dir6b (wrapper copy 2) -> real bd dir
+    _real_bd_dir=$(dirname "$_real_bd_for_test6")
+    if PATH="$_dir6a:$_dir6b:$_real_bd_dir" sh "$_dir6a/bd" version > /tmp/bd_wrapper_test6_out.txt 2>&1; then
+        _pass "Test 6: 'bd version' passes through two wrapper copies to real bd (exit 0)"
+    else
+        if grep -q "bd-wrapper: ERROR" /tmp/bd_wrapper_test6_out.txt 2>/dev/null; then
+            _fail "Test 6: wrapper error instead of passthrough — possible loop or missing real bd"
+            cat /tmp/bd_wrapper_test6_out.txt
+        else
+            _pass "Test 6: command passed through to real bd (non-zero exit is bd's own response)"
+        fi
+    fi
+    rm -rf "$_dir6a" "$_dir6b"
+else
+    echo "SKIP: Test 6 skipped — no real bd binary found in standard locations"
+fi
+
+# ---------------------------------------------------------------------------
 # Summary
 # ---------------------------------------------------------------------------
 echo ""

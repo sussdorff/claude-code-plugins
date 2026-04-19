@@ -1,5 +1,6 @@
 #!/bin/sh
 # bd-wrapper — PATH-shim that extends 'bd lint' with --check=architecture-contracts support.
+# BD_WRAPPER_MARKER — used by wrapper instances to detect and skip each other in PATH walk.
 #
 # Install: copy this script (and bd_lint_contracts.py) to ~/.local/bin/ via install-bd-wrapper.sh.
 # ~/.local/bin must precede the real bd binary in PATH.
@@ -33,8 +34,10 @@ fi
 # ---------------------------------------------------------------------------
 # For all other commands, find and delegate to the real bd binary.
 #
-# Strategy: walk PATH entries in order, skip any entry that resolves to this
-# script itself, and use the first real 'bd' executable found.
+# Strategy: walk PATH entries in order, skip:
+#   (a) any entry that resolves to this exact script ($SELF), and
+#   (b) any other bd-wrapper copy — detected by the BD_WRAPPER_MARKER string.
+# This prevents mutual exec loops when multiple wrapper copies exist in PATH.
 # ---------------------------------------------------------------------------
 _REAL_BD=""
 _old_ifs="$IFS"
@@ -44,18 +47,18 @@ for _dir in $PATH; do
     [ -z "$_dir" ] && continue
     _candidate="$_dir/bd"
     [ -x "$_candidate" ] || continue
-    # Resolve symlinks and compare to ourselves
+    # Skip if same file as ourselves (symlink-resolved)
     _resolved=$(readlink -f "$_candidate" 2>/dev/null || realpath "$_candidate" 2>/dev/null || echo "$_candidate")
-    if [ "$_resolved" != "$_SELF" ]; then
-        _REAL_BD="$_candidate"
-        break
-    fi
-    IFS=:
+    [ "$_resolved" = "$_SELF" ] && { IFS=:; continue; }
+    # Skip other bd-wrapper copies (copies installed elsewhere in PATH)
+    grep -qF 'BD_WRAPPER_MARKER' "$_candidate" 2>/dev/null && { IFS=:; continue; }
+    _REAL_BD="$_candidate"
+    break
 done
 IFS="$_old_ifs"
 
 if [ -z "$_REAL_BD" ]; then
-    echo "bd-wrapper: ERROR — cannot find real bd binary in PATH (excluding this wrapper)" >&2
+    echo "bd-wrapper: ERROR — cannot find real bd binary in PATH (excluding wrapper copies)" >&2
     exit 1
 fi
 
