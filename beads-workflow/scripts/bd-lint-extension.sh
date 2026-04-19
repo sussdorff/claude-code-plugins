@@ -1,67 +1,32 @@
-#!/usr/bin/env sh
-# bd-lint-extension.sh — Shell wrapper that adds `bd lint --check=architecture-contracts` support.
-#
-# The bd binary does not natively support `bd lint`. Source this file to define a bd() shell
-# function that intercepts the lint subcommand and delegates to bd_lint_contracts.py.
-#
-# Usage:
-#   source beads-workflow/scripts/bd-lint-extension.sh
-#   bd lint --check=architecture-contracts
-#   bd lint --check=architecture-contracts --all
-#   bd lint --check=architecture-contracts --bead CCP-0hr
-#
+# bd-lint-extension.sh — Source this file in .zshrc or .bashrc
 # Compatible with bash and zsh.
+# Shell wrapper that extends 'bd lint' with --check support.
 #
-# The Python script path is resolved relative to this shell script's location,
-# so the extension works regardless of where you source it from.
+# Usage: source this file in your .zshrc or .bashrc:
+#
+#   source /path/to/beads-workflow/scripts/bd-lint-extension.sh
+#
+# After sourcing, the following command works:
+#
+#   bd lint --check=architecture-contracts [--all] [--bead <id>]
+#
+# Arguments after --check=architecture-contracts are forwarded to the Python script.
 
-# Resolve the directory containing this script.
-# Works in both bash (BASH_SOURCE) and zsh (0).
-_bd_lint_ext_resolve_dir() {
-    if [ -n "${BASH_SOURCE[0]}" ]; then
-        # bash
-        echo "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-    elif [ -n "${ZSH_VERSION}" ]; then
-        # zsh
-        echo "$(cd "$(dirname "${(%):-%x}")" && pwd)"
-    else
-        # POSIX fallback — may not work for all sourcing scenarios
-        echo "$(cd "$(dirname "$0")" && pwd)"
-    fi
-}
+_BD_LINT_CONTRACTS_SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]:-${(%):-%x}}")" 2>/dev/null && pwd)"
 
-_BD_LINT_SCRIPT_DIR="$(_bd_lint_ext_resolve_dir)"
-_BD_LINT_CONTRACTS_PY="${_BD_LINT_SCRIPT_DIR}/bd_lint_contracts.py"
-
-# bd() — wrapper function that intercepts lint subcommand.
 bd() {
-    # Check if this is a lint call with --check=architecture-contracts
-    case "$*" in
-        lint*--check=architecture-contracts*)
-            # Extract extra flags for the Python script
-            _bd_lint_extra_args=""
-            for arg in "$@"; do
-                case "$arg" in
-                    lint|--check=architecture-contracts) ;;
-                    *) _bd_lint_extra_args="${_bd_lint_extra_args} ${arg}" ;;
-                esac
-            done
-            # shellcheck disable=SC2086
-            python3 "${_BD_LINT_CONTRACTS_PY}" ${_bd_lint_extra_args}
-            return $?
-            ;;
-        *)
-            # Pass everything else through to the real bd binary
-            command bd "$@"
-            return $?
-            ;;
-    esac
+    # Intercept: bd lint --check=architecture-contracts [...]
+    if [[ "$1" == "lint" ]] && [[ "$2" == --check=architecture-contracts ]]; then
+        local script="${_BD_LINT_CONTRACTS_SCRIPT_DIR}/bd_lint_contracts.py"
+        if [[ ! -f "$script" ]]; then
+            echo "bd-lint-extension: ERROR — bd_lint_contracts.py not found at $script" >&2
+            return 1
+        fi
+        shift 2  # Remove 'lint' and '--check=architecture-contracts'
+        python3 "$script" "$@"
+        return $?
+    fi
+
+    # Pass everything else to the real bd binary
+    command bd "$@"
 }
-
-# Export so sub-shells can use it (bash only; zsh does not support function export)
-if [ -n "${BASH_VERSION}" ]; then
-    export -f bd 2>/dev/null || true
-fi
-
-echo "bd-lint-extension loaded. 'bd lint --check=architecture-contracts' now available."
-echo "Python script: ${_BD_LINT_CONTRACTS_PY}"

@@ -101,7 +101,51 @@ Soll ich `/epic-init "[Ziel]"` starten?
 
 ---
 
-## Phase 3: Feature-Gate (nur bei Typ = feature)
+## Phase 3: Contract-Label Check (bei allen Typen)
+
+Frage den User vor der Feature-Gate und Erstellung:
+
+```
+Beruehrt dieses Bead einen Architektur-Vertrag?
+
+Beispiele: Ein ADR wird umgesetzt, ein Helper wird geaendert, ein Enforcer
+wird hinzugefuegt, oder es gibt eine Luecke die einen neuen ADR/Helper/Enforcer braucht.
+
+[ja / nein]
+```
+
+**Falls "ja":**
+
+1. Setze das Label `touches-contract` (wird bei `bd create` als `--label touches-contract` uebergeben).
+
+2. Injiziere dieses Template in die Bead-Description (vor den Acceptance Criteria):
+
+```markdown
+## Architecture Contracts Touched
+- ADR-NNN (Name): <was der Bead tut, wie er den Contract nutzt>
+- Helper: <pfad/zu/helper.ts>              # optional
+- Enforcer-Proactive: <codegen/builder>    # optional
+- Enforcer-Reactive: <lint-rule oder test> # optional
+
+## Coverage Expected
+- Packages: <liste der beruehrten Packages>
+- Status nach Bead: <was wird gruen in der Matrix>
+
+## Gaps to Close
+- [ ] None
+```
+
+Erklaere dem User kurz:
+> "Das Bead bekommt das Label `touches-contract` und die Pflicht-Sektion. Fuelle die drei
+> Sub-Sektionen aus — der Linter (`bd lint --check=architecture-contracts`) prueft sie."
+
+**Falls "nein":** Weiter ohne Label und ohne Template.
+
+**Referenz:** `beads-workflow/skills/create/references/contract-sections.md`
+
+---
+
+## Phase 3.5: Feature-Gate (nur bei Typ = feature)
 
 **PFLICHT fuer Features.** Wenn der akzeptierte Typ `feature` ist:
 
@@ -136,46 +180,9 @@ Agent(subagent_type="dev-tools:scenario-generator", prompt="
 
 ---
 
-## Phase 3.5: Contract-Label Check (opt-in)
-
-Frage vor der Bead-Erstellung:
-
-> "Beruehrt dieser Bead eine architektonische Vereinbarung (ADR, Helper, Enforcer)?
-> Falls ja, wird das Label `touches-contract` gesetzt und ein Pflicht-Abschnitt
-> in die Beschreibung eingefuegt."
-
-**Falls Antwort JA:**
-
-1. Label `touches-contract` wird bei der Erstellung gesetzt.
-2. Fuege folgenden Template-Abschnitt an das Ende der Beschreibung an:
-
-```markdown
-## Architecture Contracts Touched
-- ADR-NNN (Name): <was der Bead tut, wie er den Contract nutzt>
-- Helper: <pfad/zu/helper.ts>
-- Enforcer-Proactive: <codegen/builder>
-- Enforcer-Reactive: <lint-rule oder test>
-
-## Coverage Expected
-- Packages: <liste der berührten Packages>
-- Status nach Bead: <was wird gruen in der Matrix>
-
-## Gaps to Close
-- [ ] None
-```
-
-3. Lass den User die Platzhalter befuellen (oder befuelle sie mit ihm zusammen).
-4. Hinweis: `Helper:`, `Enforcer-Proactive:`, `Enforcer-Reactive:` Zeilen sind optional,
-   aber `ADR-NNN (Name): ...` und `## Gaps to Close` mit mindestens einem gueltigen Bullet
-   sind **Pflicht**.
-
-**Falls Antwort NEIN:** Direkt weiter zu Phase 4.
-
----
-
 ## Phase 4: Bead erstellen
 
-Nach Handshake (Typ akzeptiert, bei Feature: Szenarien geklaert, Contract-Check abgeschlossen):
+Nach Handshake (Typ akzeptiert, Contract-Label ggf. gesetzt, bei Feature: Szenarien geklaert):
 
 ```bash
 # Ohne touches-contract:
@@ -183,51 +190,39 @@ bd create --title="[Titel]" --type=[typ] --priority=[prio] --description="[Besch
 
 # Mit touches-contract:
 bd create --title="[Titel]" --type=[typ] --priority=[prio] \
-  --label=touches-contract \
-  --description="[Beschreibung inkl. Architecture Contracts Abschnitt]"
+  --description="[Beschreibung inkl. Architecture Contracts Template]" \
+  --label touches-contract
 ```
+
+---
+
+## Phase 4.5: Contract-Lint Smoke-Check (nur bei touches-contract)
+
+Falls das Bead mit `touches-contract` Label erstellt wurde, fuehre sofort einen Lint-Check durch:
+
+```bash
+python3 beads-workflow/scripts/bd_lint_contracts.py --bead [neue-Bead-ID]
+```
+
+**Falls der Check fehlschlaegt:** Zeige die Fehlermeldungen dem User und bitte ihn,
+die Sektion zu korrigieren (`bd update [ID] --description="..."`), bevor er mit der
+Implementierung beginnt.
+
+**Falls der Check erfolgreich ist:** Weiter mit der Ausgabe unten.
+
+---
 
 Ausgabe:
 
 ```
 Bead [ID] erstellt: **[Titel]** ([typ], P[prio])
 [Falls Feature mit Szenarien: "inkl. auto-generierter Szenarien"]
-[Falls touches-contract: "inkl. Architecture Contracts Pflicht-Abschnitt"]
+[Falls touches-contract: "inkl. Architecture Contracts Pflicht-Sektion — Lint: OK"]
 
 Naechste Schritte:
 - `/beads [ID]` — Implementierung starten
 - `bd update [ID] --notes="..."` — Notizen ergaenzen
 - `bd show [ID]` — Details anzeigen
-```
-
----
-
-## Phase 4.5: Contract Smoke-Check (nur bei touches-contract)
-
-Falls der Bead mit `touches-contract` erstellt wurde, fuehre nach der Erstellung
-einen Smoke-Check aus:
-
-```bash
-python3 "$(dirname "$(which bd)")/../skills/beads-workflow/scripts/bd_lint_contracts.py" --bead [ID]
-# Fallback falls Pfad nicht gefunden:
-# Suche bd_lint_contracts.py relativ zum CLAUDE.md-Verzeichnis
-```
-
-**Bei Erfolg (exit 0):** Zeige dem User:
-```
-Contract-Check: OK — Abschnitt ist vollstaendig und valide.
-```
-
-**Bei Fehler (exit 1):** Zeige die Lint-Fehler und erklaere dem User:
-```
-Contract-Check fehlgeschlagen:
-  [Fehlermeldung aus dem Linter]
-
-Bitte korrigiere die Beschreibung mit:
-  bd update [ID] --description="[korrigierte Beschreibung]"
-
-Dann erneut pruefen:
-  python3 .../bd_lint_contracts.py --bead [ID]
 ```
 
 ---
@@ -241,3 +236,5 @@ Dann erneut pruefen:
 5. **Epic-Routing** — zu grosse Vorhaben an `/epic-init` weiterleiten
 6. **Sprache:** Deutsch fuer Kommunikation, Englisch fuer Code/technische Terme
 7. **Keine Dauer-Schaetzungen** — nur relative Groessen ("klein", "komplex", "mehrere Sessions")
+8. **Contract-Label ist opt-in** — NIEMALS `touches-contract` ohne explizite Bestaetigung setzen
+9. **Lint-Smoke-Check bei touches-contract** — IMMER den Lint-Check nach Erstellung ausfuehren

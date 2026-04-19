@@ -1,426 +1,578 @@
 #!/usr/bin/env python3
-"""Tests for bd-lint-contracts.py — fixture-based, no real bd calls.
+"""
+Test suite for bd_lint_contracts.py — fixture-based, no real bd CLI calls.
 
 Run with:
-    python -m pytest beads-workflow/scripts/tests/test_bd_lint_contracts.py -v
-or:
-    python beads-workflow/scripts/tests/test_bd_lint_contracts.py
+    python3 -m unittest beads-workflow/scripts/tests/test_bd_lint_contracts.py -v
 """
 import sys
 import unittest
 from pathlib import Path
 from unittest.mock import patch, MagicMock
 
-# Add scripts directory to path so we can import the linter
-SCRIPTS_DIR = Path(__file__).parent.parent
-sys.path.insert(0, str(SCRIPTS_DIR))
+# Allow importing the module under test
+sys.path.insert(0, str(Path(__file__).parent.parent))
 
 import bd_lint_contracts as linter
 
+
 # ---------------------------------------------------------------------------
-# Fixtures — pure Python strings representing bead descriptions
+# Fixtures
 # ---------------------------------------------------------------------------
 
-GOOD_DESCRIPTION = """\
+GOOD_DESCRIPTION = """
+## Architecture Contracts Touched
+- ADR-001 (Identity): This bead extends the ID helper to support new entity type
+- Helper: packages/core/helpers/entity-id.ts
+- Enforcer-Reactive: lint/rules/no-raw-id-concat.js
+
+## Coverage Expected
+- Packages: core, adapters
+- Status nach Bead: ADR-001 green for new entity type
+
+## Gaps to Close
+- [ ] None
+""".strip()
+
+BAD_3A_EMPTY_SECTION = """
+## Architecture Contracts Touched
+
+## Coverage Expected
+- Packages: core
+- Status nach Bead: unchanged
+
+## Gaps to Close
+- [ ] None
+""".strip()
+
+BAD_3B_NO_ADR_BULLET = """
+## Architecture Contracts Touched
+- Helper: packages/core/helpers/entity-id.ts
+- Enforcer-Reactive: lint/rules/no-raw-id-concat.js
+
+## Coverage Expected
+- Packages: core
+
+## Gaps to Close
+- [ ] None
+""".strip()
+
+BAD_3C_NO_GAPS_SECTION = """
+## Architecture Contracts Touched
+- ADR-001 (Identity): extended for new entity type
+
+## Coverage Expected
+- Packages: core
+""".strip()
+
+BAD_3C_EMPTY_GAPS = """
+## Architecture Contracts Touched
+- ADR-001 (Identity): extended for new entity type
+
+## Coverage Expected
+- Packages: core
+
+## Gaps to Close
+""".strip()
+
+BAD_3C_INVALID_GAP_BULLETS = """
+## Architecture Contracts Touched
+- ADR-001 (Identity): extended for new entity type
+
+## Gaps to Close
+- [ ] Some vague gap description without required marker
+""".strip()
+
+GOOD_WITH_NEEDED_GAPS = """
+## Architecture Contracts Touched
+- ADR-002 (Permissions): adds permission check to new route
+
+## Gaps to Close
+- [ ] [ADR-NEEDED] No ADR yet for caching strategy
+- [ ] [ENFORCER-REACTIVE-NEEDED] ESLint rule for this pattern
+""".strip()
+
+GOOD_MINIMAL = """
+## Architecture Contracts Touched
+- ADR-042 (Caching): uses existing cache invalidation contract
+
+## Gaps to Close
+- [ ] None
+""".strip()
+
+NO_SECTION_DESCRIPTION = """
 ## Summary
-This bead implements an ADR-backed feature.
+This bead does not touch any architectural contracts.
+""".strip()
 
+EDGE_OPTIONAL_BULLETS_ONLY = """
 ## Architecture Contracts Touched
-- ADR-001 (TypedIDs): This bead uses typed ID helpers throughout the adapter layer.
-- Helper: lib/id-helpers.ts
-- Enforcer-Reactive: eslint/no-raw-id-concat
-
-## Coverage Expected
-- Packages: lib/adapters, lib/core
-- Status nach Bead: ADR-001 column turns green in the matrix
+- Helper: packages/utils/id.ts
+- Enforcer-Proactive: scripts/generate-entity.ts
 
 ## Gaps to Close
 - [ ] None
-"""
+""".strip()
 
-GOOD_DESCRIPTION_MULTIPLE_GAPS = """\
-## Architecture Contracts Touched
-- ADR-002 (EntityBoundary): Wraps all cross-module calls in boundary helpers.
-- Enforcer-Proactive: scripts/gen-boundary.ts
+DESCRIPTION_WITH_SECTION_NO_LABEL = GOOD_DESCRIPTION
 
-## Coverage Expected
-- Packages: lib/boundary
-
-## Gaps to Close
-- [ ] [ADR-NEEDED] Document the boundary crossing rules formally
-- [ ] [ENFORCER-REACTIVE-NEEDED] Add lint rule for direct cross-module imports
-"""
-
-GOOD_DESCRIPTION_EXPLICIT_NO_GAPS = """\
-## Architecture Contracts Touched
-- ADR-003 (EventSourcing): Records all state changes as domain events.
-
-## Gaps to Close
-- [ ] None
-"""
-
-BAD_3A_EMPTY_SECTION = """\
-## Architecture Contracts Touched
-
-## Coverage Expected
-- Packages: lib/core
-
-## Gaps to Close
-- [ ] None
-"""
-
-BAD_3A_WHITESPACE_ONLY = """\
-## Architecture Contracts Touched
-
-
-## Gaps to Close
-- [ ] None
-"""
-
-BAD_3B_NO_ADR_BULLET = """\
-## Architecture Contracts Touched
-- Helper: lib/some-helper.ts
-- Enforcer-Reactive: eslint/some-rule
-
-## Gaps to Close
-- [ ] None
-"""
-
-BAD_3B_WRONG_ADR_FORMAT = """\
-## Architecture Contracts Touched
-- ADR001 TypedIDs: missing hyphen and parens format
-- Helper: lib/id-helpers.ts
-
-## Gaps to Close
-- [ ] None
-"""
-
-BAD_3C_NO_GAPS_SECTION = """\
-## Architecture Contracts Touched
-- ADR-001 (TypedIDs): Uses typed ID helpers.
-
-## Coverage Expected
-- Packages: lib/core
-"""
-
-BAD_3C_EMPTY_GAPS = """\
-## Architecture Contracts Touched
-- ADR-001 (TypedIDs): Uses typed ID helpers.
-
-## Gaps to Close
-
-## Next Steps
-- Deploy to staging
-"""
-
-BAD_3C_INVALID_BULLETS = """\
-## Architecture Contracts Touched
-- ADR-001 (TypedIDs): Uses typed ID helpers.
-
-## Gaps to Close
-- No gaps identified
-- Everything is fine
-"""
-
-BAD_3C_CHECKBOX_NO_KEYWORD = """\
-## Architecture Contracts Touched
-- ADR-001 (TypedIDs): Uses typed ID helpers.
-
-## Gaps to Close
-- [ ] We should look into this later
-- [ ] Also consider the boundary issue
-"""
-
-EDGE_OPTIONAL_ONLY_NO_ADR = """\
-## Architecture Contracts Touched
-- Helper: lib/helper.ts
-- Enforcer-Proactive: scripts/gen.ts
-- Enforcer-Reactive: eslint/rule
-
-## Gaps to Close
-- [ ] None
-"""
-
-NO_CONTRACT_SECTION = """\
+DESCRIPTION_WITH_SECTION_IN_FENCE = """
 ## Summary
-This bead has no architectural contracts.
+This bead documents the convention.
 
-## Acceptance Criteria
-- [ ] Works correctly
-"""
+```markdown
+## Architecture Contracts Touched
+- ADR-001 (Example): example
+```
+
+No actual architectural contract touched.
+""".strip()
+
 
 # ---------------------------------------------------------------------------
-# Tests for extract_section()
+# Unit tests for extract_section()
 # ---------------------------------------------------------------------------
 
 class TestExtractSection(unittest.TestCase):
 
-    def test_extracts_existing_section(self):
-        result = linter.extract_section(GOOD_DESCRIPTION, "## Architecture Contracts Touched")
-        self.assertIsNotNone(result)
-        self.assertIn("ADR-001", result)
+    def test_extracts_section_content(self):
+        content = linter.extract_section(GOOD_DESCRIPTION, "## Architecture Contracts Touched")
+        self.assertIsNotNone(content)
+        self.assertIn("ADR-001", content)
 
     def test_returns_none_for_missing_section(self):
-        result = linter.extract_section(NO_CONTRACT_SECTION, "## Architecture Contracts Touched")
-        self.assertIsNone(result)
+        content = linter.extract_section(NO_SECTION_DESCRIPTION, "## Architecture Contracts Touched")
+        self.assertIsNone(content)
 
-    def test_does_not_include_next_header(self):
-        result = linter.extract_section(GOOD_DESCRIPTION, "## Architecture Contracts Touched")
-        self.assertNotIn("## Coverage Expected", result)
+    def test_stops_at_next_header(self):
+        content = linter.extract_section(GOOD_DESCRIPTION, "## Architecture Contracts Touched")
+        self.assertNotIn("Packages:", content)  # That's in ## Coverage Expected
 
     def test_extracts_gaps_section(self):
-        result = linter.extract_section(GOOD_DESCRIPTION, "## Gaps to Close")
-        self.assertIsNotNone(result)
-        self.assertIn("None", result)
+        content = linter.extract_section(GOOD_DESCRIPTION, "## Gaps to Close")
+        self.assertIsNotNone(content)
+        self.assertIn("None", content)
 
-    def test_handles_section_at_end_of_document(self):
-        result = linter.extract_section(GOOD_DESCRIPTION_EXPLICIT_NO_GAPS, "## Gaps to Close")
-        self.assertIsNotNone(result)
-        self.assertIn("None", result)
+    def test_empty_section_returns_empty_string(self):
+        content = linter.extract_section(BAD_3A_EMPTY_SECTION, "## Architecture Contracts Touched")
+        self.assertIsNotNone(content)
+        stripped = content.strip()
+        self.assertEqual(stripped, "")
 
 
 # ---------------------------------------------------------------------------
-# Tests for validate_contracts_section()
+# Unit tests for validate_contracts_section()
 # ---------------------------------------------------------------------------
 
 class TestValidateContractsSection(unittest.TestCase):
 
     def test_good_description_no_errors(self):
-        errors = linter.validate_contracts_section("BEAD-001", GOOD_DESCRIPTION)
+        errors = linter.validate_contracts_section("BID-001", GOOD_DESCRIPTION)
         self.assertEqual(errors, [], f"Expected no errors, got: {errors}")
 
-    def test_good_multiple_gaps_no_errors(self):
-        errors = linter.validate_contracts_section("BEAD-002", GOOD_DESCRIPTION_MULTIPLE_GAPS)
-        self.assertEqual(errors, [])
+    def test_good_minimal_no_errors(self):
+        errors = linter.validate_contracts_section("BID-002", GOOD_MINIMAL)
+        self.assertEqual(errors, [], f"Expected no errors, got: {errors}")
 
-    def test_good_explicit_no_gaps_no_errors(self):
-        errors = linter.validate_contracts_section("BEAD-003", GOOD_DESCRIPTION_EXPLICIT_NO_GAPS)
-        self.assertEqual(errors, [])
+    def test_good_with_needed_gaps_no_errors(self):
+        errors = linter.validate_contracts_section("BID-003", GOOD_WITH_NEEDED_GAPS)
+        self.assertEqual(errors, [], f"Expected no errors, got: {errors}")
 
-    def test_no_section_returns_no_errors(self):
-        # If there's no section at all, no contract errors (label check is separate)
-        errors = linter.validate_contracts_section("BEAD-000", NO_CONTRACT_SECTION)
-        self.assertEqual(errors, [])
-
-    # Rule 3a tests
+    # Rule 3a: Empty section
     def test_3a_empty_section_fails(self):
-        errors = linter.validate_contracts_section("BEAD-3A", BAD_3A_EMPTY_SECTION)
-        self.assertTrue(any("3a" in e.rule or "empty" in e.message.lower() for e in errors),
-                        f"Expected rule 3a error, got: {errors}")
+        errors = linter.validate_contracts_section("BID-004", BAD_3A_EMPTY_SECTION)
+        self.assertTrue(len(errors) > 0, "Expected error for empty section")
+        self.assertTrue(any("empty" in e.lower() or "3a" in e for e in errors))
 
-    def test_3a_whitespace_only_fails(self):
-        errors = linter.validate_contracts_section("BEAD-3AW", BAD_3A_WHITESPACE_ONLY)
-        self.assertTrue(any("3a" in e.rule or "empty" in e.message.lower() for e in errors),
-                        f"Expected rule 3a error, got: {errors}")
-
-    # Rule 3b tests
+    # Rule 3b: ADR bullet required
     def test_3b_no_adr_bullet_fails(self):
-        errors = linter.validate_contracts_section("BEAD-3B", BAD_3B_NO_ADR_BULLET)
-        self.assertTrue(any("3b" in e.rule or "ADR" in e.message for e in errors),
-                        f"Expected rule 3b error, got: {errors}")
+        errors = linter.validate_contracts_section("BID-005", BAD_3B_NO_ADR_BULLET)
+        self.assertTrue(len(errors) > 0, "Expected error for missing ADR bullet")
+        self.assertTrue(any("ADR" in e for e in errors))
 
-    def test_3b_wrong_adr_format_fails(self):
-        errors = linter.validate_contracts_section("BEAD-3BF", BAD_3B_WRONG_ADR_FORMAT)
-        self.assertTrue(any("3b" in e.rule or "ADR" in e.message for e in errors),
-                        f"Expected rule 3b format error, got: {errors}")
+    def test_3b_edge_optional_bullets_only_fails(self):
+        """Only Helper/Enforcer bullets, no ADR → should fail rule 3b."""
+        errors = linter.validate_contracts_section("BID-006", EDGE_OPTIONAL_BULLETS_ONLY)
+        self.assertTrue(len(errors) > 0, "Expected error: no ADR bullet even though optional bullets present")
+        self.assertTrue(any("ADR" in e for e in errors))
 
-    def test_3b_edge_optional_only_fails(self):
-        # Section with only Helper/Enforcer bullets but no ADR bullet → error
-        errors = linter.validate_contracts_section("BEAD-EDGE", EDGE_OPTIONAL_ONLY_NO_ADR)
-        self.assertTrue(any("3b" in e.rule or "ADR" in e.message for e in errors),
-                        f"Expected rule 3b error for optional-only section, got: {errors}")
-
-    # Rule 3c tests
+    # Rule 3c: Gaps section required
     def test_3c_no_gaps_section_fails(self):
-        errors = linter.validate_contracts_section("BEAD-3C", BAD_3C_NO_GAPS_SECTION)
-        self.assertTrue(any("3c" in e.rule or "Gaps" in e.message for e in errors),
-                        f"Expected rule 3c error, got: {errors}")
+        errors = linter.validate_contracts_section("BID-007", BAD_3C_NO_GAPS_SECTION)
+        self.assertTrue(len(errors) > 0, "Expected error for missing Gaps section")
+        self.assertTrue(any("Gaps" in e or "gap" in e.lower() for e in errors))
 
-    def test_3c_empty_gaps_fails(self):
-        errors = linter.validate_contracts_section("BEAD-3CE", BAD_3C_EMPTY_GAPS)
-        self.assertTrue(any("3c" in e.rule or "Gaps" in e.message for e in errors),
-                        f"Expected rule 3c empty error, got: {errors}")
+    def test_3c_empty_gaps_section_fails(self):
+        errors = linter.validate_contracts_section("BID-008", BAD_3C_EMPTY_GAPS)
+        self.assertTrue(len(errors) > 0, "Expected error for empty Gaps section")
+        self.assertTrue(any("empty" in e.lower() or "Gaps" in e or "bullet" in e.lower() for e in errors))
 
-    def test_3c_invalid_bullets_fails(self):
-        errors = linter.validate_contracts_section("BEAD-3CI", BAD_3C_INVALID_BULLETS)
-        self.assertTrue(any("3c" in e.rule or "Gaps" in e.message or "valid" in e.message.lower() for e in errors),
-                        f"Expected rule 3c invalid bullets error, got: {errors}")
+    def test_3c_invalid_gap_bullets_fails(self):
+        errors = linter.validate_contracts_section("BID-009", BAD_3C_INVALID_GAP_BULLETS)
+        self.assertTrue(len(errors) > 0, "Expected error for invalid gap bullet format")
+        self.assertTrue(any("None" in e or "NEEDED" in e or "format" in e.lower() for e in errors))
 
-    def test_3c_checkbox_no_keyword_fails(self):
-        errors = linter.validate_contracts_section("BEAD-3CK", BAD_3C_CHECKBOX_NO_KEYWORD)
-        self.assertTrue(any("3c" in e.rule or "valid" in e.message.lower() or "pattern" in e.message.lower() for e in errors),
-                        f"Expected rule 3c keyword error, got: {errors}")
+    # Missing section entirely
+    def test_missing_section_fails(self):
+        errors = linter.validate_contracts_section("BID-010", NO_SECTION_DESCRIPTION)
+        self.assertTrue(len(errors) > 0, "Expected error for missing section")
+        self.assertTrue(any("Missing" in e or "missing" in e for e in errors))
 
-    def test_error_contains_bead_id(self):
-        errors = linter.validate_contracts_section("MY-BEAD-ID", BAD_3A_EMPTY_SECTION)
-        for e in errors:
-            self.assertIn("MY-BEAD-ID", e.bead_id,
-                          f"Error should reference bead ID, got: {e}")
+    # Rule 3b: optional bullet prefix validation
+    def test_3b_helper_without_colon_fails(self):
+        """- Helper path (no colon) is not a valid optional bullet."""
+        desc = """## Architecture Contracts Touched
+- ADR-001 (Identity): valid adr
+- Helper packages/core/id.ts
+
+## Gaps to Close
+- [ ] None
+"""
+        errors = linter.validate_contracts_section("X", desc)
+        self.assertTrue(len(errors) > 0, "Expected error for malformed Helper bullet")
+        self.assertTrue(any("Helper" in e or "prefix" in e.lower() or "invalid" in e.lower() for e in errors))
+
+    def test_3b_unrecognised_optional_prefix_fails(self):
+        """Unrecognised prefix (e.g. Enforcer: without Proactive/Reactive) must fail."""
+        desc = """## Architecture Contracts Touched
+- ADR-001 (Identity): valid adr
+- Enforcer: some-path
+
+## Gaps to Close
+- [ ] None
+"""
+        errors = linter.validate_contracts_section("X", desc)
+        self.assertTrue(len(errors) > 0, "Expected error for unrecognised prefix")
+        self.assertTrue(any("Enforcer" in e or "prefix" in e.lower() or "invalid" in e.lower() for e in errors))
+
+    def test_3b_typo_in_optional_prefix_fails(self):
+        """Typo in optional prefix (Enforcer-Proacive vs Enforcer-Proactive) must fail."""
+        desc = """## Architecture Contracts Touched
+- ADR-001 (Identity): valid adr
+- Enforcer-Proacive: some-path
+
+## Gaps to Close
+- [ ] None
+"""
+        errors = linter.validate_contracts_section("X", desc)
+        self.assertTrue(len(errors) > 0, "Expected error for typo in prefix")
+
+    def test_3b_valid_optional_bullets_with_adr_pass(self):
+        """Valid Helper + Enforcer-Proactive + Enforcer-Reactive with ADR should pass."""
+        desc = """## Architecture Contracts Touched
+- ADR-001 (Identity): valid adr
+- Helper: packages/core/helpers/entity-id.ts
+- Enforcer-Proactive: scripts/codegen/generate-entity.ts
+- Enforcer-Reactive: lint/rules/no-raw-id-concat.js
+
+## Gaps to Close
+- [ ] None
+"""
+        errors = linter.validate_contracts_section("X", desc)
+        self.assertEqual(errors, [], f"Expected no errors for valid optional bullets: {errors}")
 
 
 # ---------------------------------------------------------------------------
-# Tests for LintError dataclass
+# Unit tests for label false-negative check (rule Y)
 # ---------------------------------------------------------------------------
 
-class TestLintError(unittest.TestCase):
-
-    def test_lint_error_has_required_fields(self):
-        err = linter.LintError(bead_id="X-001", rule="3a", message="test message")
-        self.assertEqual(err.bead_id, "X-001")
-        self.assertEqual(err.rule, "3a")
-        self.assertEqual(err.message, "test message")
-
-    def test_lint_error_str_contains_all_parts(self):
-        err = linter.LintError(bead_id="X-001", rule="3b", message="missing ADR bullet")
-        s = str(err)
-        self.assertIn("X-001", s)
-        self.assertIn("3b", s)
-        self.assertIn("missing ADR bullet", s)
-
-
-# ---------------------------------------------------------------------------
-# Tests for check_false_negatives() — label false-negative check (Y)
-# ---------------------------------------------------------------------------
-
-class TestFalseNegatives(unittest.TestCase):
-
-    def _make_bead(self, bead_id: str, description: str, has_label: bool) -> dict:
-        return {
-            "id": bead_id,
-            "description": description,
-            "labels": ["touches-contract"] if has_label else [],
-        }
-
-    def test_no_false_negatives_when_consistent(self):
-        beads = [
-            self._make_bead("B-001", GOOD_DESCRIPTION, True),
-            self._make_bead("B-002", NO_CONTRACT_SECTION, False),
-        ]
-        errors = linter.check_false_negatives(beads)
-        self.assertEqual(errors, [])
+class TestFalseNegativeCheck(unittest.TestCase):
 
     def test_detects_section_without_label(self):
+        """Bead has section in description but no touches-contract label → error."""
         beads = [
-            self._make_bead("B-003", GOOD_DESCRIPTION, False),  # has section, missing label
+            {"id": "BID-FN1", "description": DESCRIPTION_WITH_SECTION_NO_LABEL,
+             "title": "Test", "status": "open"}
         ]
-        errors = linter.check_false_negatives(beads)
-        self.assertTrue(len(errors) > 0, "Should detect section without label")
-        self.assertTrue(any("label" in e.message.lower() or "touches-contract" in e.message for e in errors),
-                        f"Error should mention label, got: {errors}")
-        self.assertEqual(errors[0].bead_id, "B-003")
 
-    def test_no_error_when_no_section_no_label(self):
+        labeled_ids: set[str] = set()  # Empty: BID-FN1 has no label
+        errors = linter.check_false_negatives(labeled_ids, beads)
+
+        self.assertEqual(len(errors), 1)
+        self.assertEqual(errors[0].bead_id, "BID-FN1")
+        self.assertIn("label", errors[0].error.lower())
+
+    def test_no_false_negative_when_correctly_labeled(self):
+        """Bead has section AND has label → already in labeled_ids → no error."""
         beads = [
-            self._make_bead("B-004", NO_CONTRACT_SECTION, False),
+            {"id": "BID-FN2", "description": GOOD_DESCRIPTION,
+             "title": "Test", "status": "open"}
         ]
-        errors = linter.check_false_negatives(beads)
+
+        labeled_ids = {"BID-FN2"}  # Already labeled
+        errors = linter.check_false_negatives(labeled_ids, beads)
+
         self.assertEqual(errors, [])
 
-    def test_no_error_when_label_and_section_present(self):
+    def test_no_false_negative_when_no_section(self):
+        """Bead has no section and no label → no error (opt-in)."""
         beads = [
-            self._make_bead("B-005", GOOD_DESCRIPTION, True),
+            {"id": "BID-FN3", "description": NO_SECTION_DESCRIPTION,
+             "title": "Test", "status": "open"}
         ]
-        errors = linter.check_false_negatives(beads)
+
+        labeled_ids: set[str] = set()
+        errors = linter.check_false_negatives(labeled_ids, beads)
+
         self.assertEqual(errors, [])
+
+    def test_no_false_negative_when_section_in_fence(self):
+        """Header inside fenced code block should not trigger rule Y."""
+        beads = [
+            {"id": "BID-FN4", "description": DESCRIPTION_WITH_SECTION_IN_FENCE,
+             "title": "Test", "status": "open"}
+        ]
+
+        labeled_ids: set[str] = set()
+        errors = linter.check_false_negatives(labeled_ids, beads)
+
+        self.assertEqual(errors, [], f"Expected no errors for fenced header, got: {errors}")
+
+    def test_label_exact_match_no_substring(self):
+        """_bead_has_label should not match 'touches-contract-v2' for 'touches-contract'."""
+        with patch("bd_lint_contracts._run") as mock_run:
+            mock_run.return_value = (0, "touches-contract-v2\n", "")
+            result = linter._bead_has_label("BID-X", "touches-contract")
+            self.assertFalse(result)
 
 
 # ---------------------------------------------------------------------------
-# Tests for lint_bead() — mocking bd CLI calls
+# Integration-style tests for lint_bead()
 # ---------------------------------------------------------------------------
 
 class TestLintBead(unittest.TestCase):
 
-    def _mock_bd_show(self, description: str, labels: list[str]) -> MagicMock:
-        """Create a mock for subprocess.run that simulates bd show output."""
-        bead_data = [{
-            "id": "TEST-001",
-            "title": "Test Bead",
-            "description": description,
-            "labels": labels,
-            "status": "open",
-        }]
-        mock = MagicMock()
-        mock.returncode = 0
-        mock.stdout = f'{{"id": "TEST-001", "description": {repr(description)}}}'
-        return mock
+    @patch("bd_lint_contracts._run")
+    def test_lint_valid_bead_passes(self, mock_run):
+        import json
+        bead_detail = [{"id": "BID-I1", "description": GOOD_DESCRIPTION}]
 
-    def test_lint_bead_good(self):
-        bead_data = [{
-            "id": "TEST-001",
-            "title": "Test Bead",
-            "description": GOOD_DESCRIPTION,
-            "labels": ["touches-contract"],
-            "status": "open",
-        }]
-        with patch("bd_lint_contracts._run") as mock_run:
-            # bd show returns JSON
-            mock_run.return_value = (0, f"[{{}}\n]", "")
-            # Override with proper bead data
-            mock_run.side_effect = [
-                (0, __import__("json").dumps(bead_data), ""),  # bd show
-                (0, "touches-contract", ""),                    # bd label list
-            ]
-            errors = linter.lint_bead("TEST-001")
-            self.assertEqual(errors, [], f"Expected no errors for good bead, got: {errors}")
+        def side_effect(args, **kwargs):
+            if args == ["show", "BID-I1", "--json"]:
+                return (0, json.dumps(bead_detail), "")
+            if args == ["label", "list", "BID-I1"]:
+                return (0, "touches-contract\n", "")
+            return (0, "", "")
 
-    def test_lint_bead_bad_no_label(self):
-        bead_data = [{
-            "id": "TEST-002",
-            "title": "Test Bead",
-            "description": GOOD_DESCRIPTION,  # has section
-            "labels": [],                       # but no label → false negative
-            "status": "open",
-        }]
-        with patch("bd_lint_contracts._run") as mock_run:
-            mock_run.side_effect = [
-                (0, __import__("json").dumps(bead_data), ""),  # bd show
-                (0, "", ""),                                    # bd label list (no touches-contract)
-            ]
-            errors = linter.lint_bead("TEST-002")
-            self.assertTrue(len(errors) > 0, "Should detect false negative")
+        mock_run.side_effect = side_effect
+        errors = linter.lint_bead("BID-I1")
+        self.assertEqual(errors, [], f"Expected no errors: {errors}")
 
-    def test_lint_bead_bd_not_found(self):
-        with patch("bd_lint_contracts._run") as mock_run:
-            mock_run.return_value = (1, "", "bd: not found")
-            errors = linter.lint_bead("MISSING-001")
-            self.assertTrue(len(errors) > 0, "Should return error when bd not found")
+    @patch("bd_lint_contracts._run")
+    def test_lint_bead_without_label_but_with_section(self, mock_run):
+        import json
+        bead_detail = [{"id": "BID-I2", "description": GOOD_DESCRIPTION}]
+
+        def side_effect(args, **kwargs):
+            if args == ["show", "BID-I2", "--json"]:
+                return (0, json.dumps(bead_detail), "")
+            if args == ["label", "list", "BID-I2"]:
+                return (0, "other-label\n", "")  # No touches-contract
+            return (0, "", "")
+
+        mock_run.side_effect = side_effect
+        errors = linter.lint_bead("BID-I2")
+        self.assertTrue(len(errors) > 0)
+        self.assertTrue(any("label" in e.error.lower() for e in errors))
+
+    @patch("bd_lint_contracts._run")
+    def test_lint_bead_with_label_and_bad_description(self, mock_run):
+        import json
+        bead_detail = [{"id": "BID-I3", "description": BAD_3B_NO_ADR_BULLET}]
+
+        def side_effect(args, **kwargs):
+            if args == ["show", "BID-I3", "--json"]:
+                return (0, json.dumps(bead_detail), "")
+            if args == ["label", "list", "BID-I3"]:
+                return (0, "touches-contract\n", "")
+            return (0, "", "")
+
+        mock_run.side_effect = side_effect
+        errors = linter.lint_bead("BID-I3")
+        self.assertTrue(len(errors) > 0)
+        self.assertTrue(any("ADR" in e.error for e in errors))
+
+    @patch("bd_lint_contracts._run")
+    def test_lint_bead_not_found(self, mock_run):
+        mock_run.return_value = (1, "", "bead not found")
+        errors = linter.lint_bead("NONEXISTENT")
+        self.assertTrue(len(errors) > 0)
 
 
 # ---------------------------------------------------------------------------
-# Integration-style tests for complete valid descriptions
+# ADR bullet format validation
 # ---------------------------------------------------------------------------
 
-class TestCompleteValidDescriptions(unittest.TestCase):
+class TestADRBulletFormats(unittest.TestCase):
 
-    def test_all_valid_fixtures_pass(self):
-        valid_fixtures = [
-            ("GOOD-001", GOOD_DESCRIPTION),
-            ("GOOD-002", GOOD_DESCRIPTION_MULTIPLE_GAPS),
-            ("GOOD-003", GOOD_DESCRIPTION_EXPLICIT_NO_GAPS),
-        ]
-        for bead_id, desc in valid_fixtures:
-            with self.subTest(bead_id=bead_id):
-                errors = linter.validate_contracts_section(bead_id, desc)
-                self.assertEqual(errors, [],
-                                 f"{bead_id}: Expected no errors, got: {errors}")
+    def _desc_with_bullets(self, bullets: str) -> str:
+        return f"""## Architecture Contracts Touched
+{bullets}
 
-    def test_all_bad_fixtures_fail(self):
-        bad_fixtures = [
-            ("BAD-3A", BAD_3A_EMPTY_SECTION),
-            ("BAD-3AW", BAD_3A_WHITESPACE_ONLY),
-            ("BAD-3B", BAD_3B_NO_ADR_BULLET),
-            ("BAD-3BF", BAD_3B_WRONG_ADR_FORMAT),
-            ("BAD-3C", BAD_3C_NO_GAPS_SECTION),
-            ("BAD-3CE", BAD_3C_EMPTY_GAPS),
-            ("BAD-3CI", BAD_3C_INVALID_BULLETS),
-            ("BAD-3CK", BAD_3C_CHECKBOX_NO_KEYWORD),
-            ("EDGE", EDGE_OPTIONAL_ONLY_NO_ADR),
-        ]
-        for bead_id, desc in bad_fixtures:
-            with self.subTest(bead_id=bead_id):
-                errors = linter.validate_contracts_section(bead_id, desc)
-                self.assertTrue(len(errors) > 0,
-                                f"{bead_id}: Expected errors but got none")
+## Gaps to Close
+- [ ] None
+"""
+
+    def test_valid_adr_format_accepted(self):
+        desc = self._desc_with_bullets("- ADR-001 (Identity): does something")
+        errors = linter.validate_contracts_section("X", desc)
+        self.assertEqual(errors, [])
+
+    def test_valid_adr_three_digits(self):
+        desc = self._desc_with_bullets("- ADR-123 (Caching Strategy): uses cache")
+        errors = linter.validate_contracts_section("X", desc)
+        self.assertEqual(errors, [])
+
+    def test_invalid_adr_no_number_fails(self):
+        desc = self._desc_with_bullets("- ADR (Identity): missing number")
+        errors = linter.validate_contracts_section("X", desc)
+        self.assertTrue(any("ADR" in e for e in errors))
+
+    def test_invalid_adr_no_parens_fails(self):
+        desc = self._desc_with_bullets("- ADR-001: missing name in parens")
+        errors = linter.validate_contracts_section("X", desc)
+        self.assertTrue(any("ADR" in e for e in errors))
+
+
+# ---------------------------------------------------------------------------
+# Gap section valid marker tests
+# ---------------------------------------------------------------------------
+
+class TestGapMarkers(unittest.TestCase):
+
+    def _desc_with_gap(self, gap_line: str) -> str:
+        return f"""## Architecture Contracts Touched
+- ADR-001 (Test): test contract
+
+## Gaps to Close
+{gap_line}
+"""
+
+    def test_none_marker_valid(self):
+        desc = self._desc_with_gap("- [ ] None")
+        errors = linter.validate_contracts_section("X", desc)
+        self.assertEqual(errors, [])
+
+    def test_adr_needed_marker_valid(self):
+        desc = self._desc_with_gap("- [ ] [ADR-NEEDED] Need ADR for this pattern")
+        errors = linter.validate_contracts_section("X", desc)
+        self.assertEqual(errors, [])
+
+    def test_helper_needed_marker_valid(self):
+        desc = self._desc_with_gap("- [ ] [HELPER-NEEDED] Need helper for XYZ")
+        errors = linter.validate_contracts_section("X", desc)
+        self.assertEqual(errors, [])
+
+    def test_enforcer_proactive_needed_marker_valid(self):
+        desc = self._desc_with_gap("- [ ] [ENFORCER-PROACTIVE-NEEDED] Codegen missing")
+        errors = linter.validate_contracts_section("X", desc)
+        self.assertEqual(errors, [])
+
+    def test_enforcer_reactive_needed_marker_valid(self):
+        desc = self._desc_with_gap("- [ ] [ENFORCER-REACTIVE-NEEDED] Lint rule missing")
+        errors = linter.validate_contracts_section("X", desc)
+        self.assertEqual(errors, [])
+
+    def test_free_text_gap_fails(self):
+        desc = self._desc_with_gap("- [ ] Some gap without proper marker")
+        errors = linter.validate_contracts_section("X", desc)
+        self.assertTrue(len(errors) > 0)
+
+    def test_bare_adr_needed_fails(self):
+        """- [ ] [ADR-NEEDED] with no description after marker must fail."""
+        desc = self._desc_with_gap("- [ ] [ADR-NEEDED]")
+        errors = linter.validate_contracts_section("X", desc)
+        self.assertTrue(len(errors) > 0, "Bare [ADR-NEEDED] with no description should fail")
+
+    def test_bare_helper_needed_fails(self):
+        """- [ ] [HELPER-NEEDED] with no description must fail."""
+        desc = self._desc_with_gap("- [ ] [HELPER-NEEDED]")
+        errors = linter.validate_contracts_section("X", desc)
+        self.assertTrue(len(errors) > 0, "Bare [HELPER-NEEDED] with no description should fail")
+
+    def test_bare_enforcer_proactive_needed_fails(self):
+        """- [ ] [ENFORCER-PROACTIVE-NEEDED] with no description must fail."""
+        desc = self._desc_with_gap("- [ ] [ENFORCER-PROACTIVE-NEEDED]")
+        errors = linter.validate_contracts_section("X", desc)
+        self.assertTrue(len(errors) > 0, "Bare [ENFORCER-PROACTIVE-NEEDED] with no description should fail")
+
+    def test_bare_enforcer_reactive_needed_fails(self):
+        """- [ ] [ENFORCER-REACTIVE-NEEDED] with no description must fail."""
+        desc = self._desc_with_gap("- [ ] [ENFORCER-REACTIVE-NEEDED]")
+        errors = linter.validate_contracts_section("X", desc)
+        self.assertTrue(len(errors) > 0, "Bare [ENFORCER-REACTIVE-NEEDED] with no description should fail")
+
+    def test_adr_needed_whitespace_only_fails(self):
+        """- [ ] [ADR-NEEDED]   (marker + only whitespace) must fail."""
+        desc = self._desc_with_gap("- [ ] [ADR-NEEDED]   ")
+        errors = linter.validate_contracts_section("X", desc)
+        self.assertTrue(len(errors) > 0, "[ADR-NEEDED] followed by only whitespace should fail")
+
+
+# ---------------------------------------------------------------------------
+# Fenced code block handling in validate_contracts_section
+# ---------------------------------------------------------------------------
+
+class TestFencedBlocksInValidation(unittest.TestCase):
+
+    def test_section_in_fence_not_parsed_as_real_section(self):
+        """If ## Architecture Contracts Touched only appears in a fenced block, no error."""
+        desc = """## Summary
+This bead documents the convention.
+
+```markdown
+## Architecture Contracts Touched
+- ADR-001 (Example): example
+
+## Gaps to Close
+- [ ] None
+```
+
+No actual contract touched.
+"""
+        # validate_contracts_section should see no real section → "Missing section" error
+        errors = linter.validate_contracts_section("X", desc)
+        self.assertTrue(len(errors) > 0)
+        self.assertTrue(any("Missing" in e for e in errors),
+                        "Should report missing section, not parse fenced content as real")
+
+    def test_fenced_example_above_real_section_no_interference(self):
+        """Fenced example above a real section should not interfere with parsing."""
+        desc = """## Overview
+Example template:
+
+```markdown
+## Architecture Contracts Touched
+- ADR-999 (Example): this is just an example
+```
+
+## Architecture Contracts Touched
+- ADR-001 (Identity): actual contract usage
+
+## Gaps to Close
+- [ ] None
+"""
+        errors = linter.validate_contracts_section("X", desc)
+        self.assertEqual(errors, [], f"Real section after fence should pass: {errors}")
+
+
+# ---------------------------------------------------------------------------
+# _BdUnavailableError propagation
+# ---------------------------------------------------------------------------
+
+class TestBdUnavailableError(unittest.TestCase):
+
+    @patch("bd_lint_contracts._run")
+    def test_get_beads_json_raises_on_bd_failure(self, mock_run):
+        mock_run.return_value = (1, "", "bd: command not found")
+        with self.assertRaises(linter._BdUnavailableError):
+            linter._get_beads_json(["--status", "open"])
+
+    @patch("bd_lint_contracts._run")
+    def test_get_beads_json_raises_on_invalid_json(self, mock_run):
+        mock_run.return_value = (0, "not valid json", "")
+        with self.assertRaises(linter._BdUnavailableError):
+            linter._get_beads_json(["--status", "open"])
 
 
 if __name__ == "__main__":

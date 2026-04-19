@@ -1,171 +1,133 @@
-# Architecture Contracts Touched — Reference
+# Architecture Contracts Touched — Section Reference
 
-This document covers the `touches-contract` label convention, the mandatory section
-structure it requires in bead descriptions, the three parser rules enforced by
-`bd-lint-contracts`, and valid Gap markers.
+When a bead touches an **architectural contract** (an ADR, a shared helper, or an enforcer),
+it must declare this explicitly in its description. This makes the impact visible, keeps the
+Architecture Trinity matrix accurate, and enables automated lint checks.
 
 ---
 
-## What is the `touches-contract` Label?
+## The `touches-contract` Label
 
-The `touches-contract` label is an **opt-in convention** applied to beads that interact
-with a documented architectural decision (ADR) or its associated tooling (Helpers,
-Enforcer-Proactive, Enforcer-Reactive).
+Add the label `touches-contract` to a bead when it:
 
-When a bead:
-- Implements, extends, or modifies an ADR
-- Uses a Helper that encodes an architectural rule
-- Adds or changes an Enforcer (code-gen or lint/test)
-- Exposes a gap in the current architectural tooling
+- Implements a decision recorded in an ADR
+- Modifies or adds a Helper (shared utility bound to an ADR)
+- Changes an Enforcer-Proactive (codegen / builder)
+- Changes an Enforcer-Reactive (lint rule / test)
+- Introduces a gap that should become a new ADR, Helper, or Enforcer
 
-...it should carry the `touches-contract` label.
-
-**When NOT to use it:** Routine feature work, bug fixes, dependency updates, or chores
-that do not interact with any documented architectural pattern.
+**Do NOT add the label** for beads that only touch application logic with no
+architectural significance (CRUD, UI tweaks, business rules that don't cross module
+boundaries).
 
 ---
 
 ## Mandatory Section Structure
 
-When the `touches-contract` label is set, the bead description **must** include these
-three sections. They appear together at the end of the description.
+When `touches-contract` is set, the bead description **must** contain all three of
+these sections in this order:
 
 ```markdown
 ## Architecture Contracts Touched
-- ADR-NNN (Name): <what this bead does, how it relates to the ADR>
-- Helper: <path/to/helper.ts>           (optional)
-- Enforcer-Proactive: <codegen/builder> (optional)
-- Enforcer-Reactive: <lint-rule or test> (optional)
+- ADR-NNN (Name): <how this bead uses / extends the contract>
+- Helper: <path/to/helper>            # optional, include if applicable
+- Enforcer-Proactive: <codegen tool>  # optional
+- Enforcer-Reactive: <lint rule / test>  # optional
 
 ## Coverage Expected
-- Packages: <list of affected packages>
-- Status nach Bead: <what turns green in the matrix after this bead>
+- Packages: <list of packages touched>
+- Status nach Bead: <which matrix cells turn green>
 
 ## Gaps to Close
 - [ ] None
 ```
 
-### ADR bullet format
-
-The `- ADR-NNN (Name): description` bullet is **required**. The format must match:
-
-```
-- ADR-<digits> (<Name>): <non-empty description>
-```
-
-Examples:
-- `- ADR-001 (TypedIDs): This bead uses typed ID helpers throughout the adapter layer.`
-- `- ADR-042 (EventSourcing): Adds domain event recording to the payment module.`
-
-Optional bullets (`Helper:`, `Enforcer-Proactive:`, `Enforcer-Reactive:`) may appear in
-any order after the ADR bullet. They are valid if used, but not required.
-
 ---
 
 ## Parser Rules
 
-The linter (`bd_lint_contracts.py`) enforces three rules, plus one false-negative check.
+### Rule 3a — No empty sections
 
-### Rule 3a — Empty Section
+A section header without any bullet points is a lint failure. If you truly have
+nothing to say, delete the section — but you should not have the `touches-contract`
+label either in that case.
 
-**Condition:** `## Architecture Contracts Touched` header exists but has zero bullet points.
+### Rule 3b — ADR bullet required
 
-**Error:** `rule=3a: '## Architecture Contracts Touched' section exists but contains no bullet points`
+The `## Architecture Contracts Touched` section must contain **at least one** bullet
+in the exact format:
 
-**Fix:** Add at least one `- ADR-NNN (Name): ...` bullet.
+```
+- ADR-NNN (Name): <description of what this bead does with the contract>
+```
 
----
+Examples of **valid** ADR bullets:
 
-### Rule 3b — ADR Bullet Required
+```
+- ADR-001 (Identity): extends typed ID helper for new PatientVisit entity
+- ADR-007 (Caching): switches from in-memory to Redis via existing cache contract
+```
 
-**Condition:** Section has bullets, but none match the ADR format
-`- ADR-NNN (Name): description`.
+Examples of **invalid** ADR bullets (fail rule 3b):
 
-**Error:** `rule=3b: ... must contain at least one ADR bullet in format: '- ADR-NNN (Name): <description>'`
+```
+- ADR (Identity): missing number
+- ADR-001: missing name in parentheses
+- This bead uses ADR-001       # must start with "- ADR-"
+```
 
-**Fix:** Add a correctly formatted ADR bullet. Note:
-- `ADR001` (no hyphen) → invalid
-- `- ADR-001 TypedIDs: ...` (no parens) → invalid
-- `- ADR-001 (TypedIDs): ...` → valid
+Optional bullets (`- Helper:`, `- Enforcer-Proactive:`, `- Enforcer-Reactive:`) do **not**
+satisfy rule 3b. They complement the mandatory ADR bullet.
 
----
+### Rule 3c — Gaps to Close section is mandatory
 
-### Rule 3c — Gaps to Close Section
+Every `touches-contract` bead must have a `## Gaps to Close` section with at least
+one checkbox bullet. Valid bullet values:
 
-**Condition (3c-missing):** `## Architecture Contracts Touched` is present but
-`## Gaps to Close` section is missing entirely.
-
-**Condition (3c-empty):** `## Gaps to Close` exists but has no bullet points.
-
-**Condition (3c-invalid):** `## Gaps to Close` has bullets but none match valid patterns.
-
-**Error:** `rule=3c: ...`
-
-**Fix:** Add a `## Gaps to Close` section with at least one valid bullet.
-
-#### Valid Gap Bullets
-
-All gap bullets use checkbox format `- [ ]` followed by exactly one of:
-
-| Bullet | Meaning |
+| Marker | Meaning |
 |--------|---------|
-| `- [ ] None` | Explicit acknowledgement that no gaps remain |
-| `- [ ] [ADR-NEEDED] <description>` | A decision needs to be formally documented |
-| `- [ ] [HELPER-NEEDED] <description>` | A helper utility should be created |
-| `- [ ] [ENFORCER-PROACTIVE-NEEDED] <description>` | A code-gen/builder should be created |
-| `- [ ] [ENFORCER-REACTIVE-NEEDED] <description>` | A lint rule or test should be created |
+| `- [ ] None` | No gaps — all contracts are fully addressed |
+| `- [ ] [ADR-NEEDED] <description>` | A new ADR should be written |
+| `- [ ] [HELPER-NEEDED] <description>` | A shared helper is missing |
+| `- [ ] [ENFORCER-PROACTIVE-NEEDED] <description>` | Codegen / builder is missing |
+| `- [ ] [ENFORCER-REACTIVE-NEEDED] <description>` | Lint rule or test is missing |
 
-**Invalid examples:**
-- `- No gaps identified` → missing checkbox
-- `- [ ] We should look into this` → no keyword
-- `- [ ] [FIX-NEEDED] something` → unknown keyword
+An empty `## Gaps to Close` section (header only, no bullets) fails rule 3c.
+Free-text bullets without a recognised marker also fail.
 
----
+### Rule Y — Label false-negative
 
-### Rule Y — Label False-Negative Check
-
-**Condition:** A bead description contains `## Architecture Contracts Touched` but
-the bead does NOT have the `touches-contract` label.
-
-**Error:** `rule=Y: Bead description contains '## Architecture Contracts Touched' section but does NOT have the 'touches-contract' label.`
-
-**Fix:** Either add the `touches-contract` label (`bd label add <id> touches-contract`) or
-remove the section from the description.
+If a bead description contains `## Architecture Contracts Touched` but the bead
+lacks the `touches-contract` label, the linter reports a false-negative error.
+This catches cases where the section was added manually but the label was forgotten.
 
 ---
 
 ## Running the Linter
 
-### Direct Python invocation
-
 ```bash
-# Lint all open beads with touches-contract label (+ false-negative check)
+# Check all open beads with 'touches-contract' label (default)
 python3 beads-workflow/scripts/bd_lint_contracts.py
 
 # Include closed beads
 python3 beads-workflow/scripts/bd_lint_contracts.py --all
 
 # Check a single bead
-python3 beads-workflow/scripts/bd_lint_contracts.py --bead CCP-0hr
+python3 beads-workflow/scripts/bd_lint_contracts.py --bead CCP-abc
 
-# False-negative check only
+# Only run the false-negative check (rule Y)
 python3 beads-workflow/scripts/bd_lint_contracts.py --check-false-negatives
-```
 
-### Via shell wrapper (bd lint syntax)
-
-Source the extension once in your shell profile or session:
-
-```bash
-source beads-workflow/scripts/bd-lint-extension.sh
-```
-
-Then use:
-
-```bash
+# via shell extension (requires sourcing bd-lint-extension.sh first)
 bd lint --check=architecture-contracts
 bd lint --check=architecture-contracts --all
-bd lint --check=architecture-contracts --bead CCP-0hr
+bd lint --check=architecture-contracts --bead CCP-abc
+```
+
+**Install shell extension** (add to `~/.zshrc` or `~/.bashrc`):
+
+```bash
+source /path/to/beads-workflow/scripts/bd-lint-extension.sh
 ```
 
 ---
@@ -174,30 +136,27 @@ bd lint --check=architecture-contracts --bead CCP-0hr
 
 ```markdown
 ## Architecture Contracts Touched
-- ADR-001 (TypedIDs): This bead migrates all entity ID references in the adapter
-  layer to use the typed ID helper, preventing raw string concatenation.
-- Helper: lib/id-helpers.ts
-- Enforcer-Reactive: eslint/no-raw-id-concat
+- ADR-001 (Identity): adds typed ID helper for new `PatientVisit` entity;
+  uses `makeIdHelper` from packages/core/helpers/entity-id.ts
+- Helper: packages/core/helpers/entity-id.ts
+- Enforcer-Reactive: lint/rules/no-raw-id-concat.js
 
 ## Coverage Expected
-- Packages: lib/adapters, lib/core
-- Status nach Bead: ADR-001 column turns green in the matrix for lib/adapters
+- Packages: core, pvs-adapter, mira-api
+- Status nach Bead: ADR-001 green for PatientVisit layer
 
 ## Gaps to Close
-- [ ] [ENFORCER-PROACTIVE-NEEDED] Generate ID accessor functions at build time
+- [ ] [ENFORCER-PROACTIVE-NEEDED] Codegen for PatientVisit ID type does not exist yet
+- [ ] [ADR-NEEDED] No ADR yet for cross-entity ID resolution
 ```
 
 ---
 
 ## Architecture Trinity Vocabulary
 
-This convention is built around four precise terms:
-
-| Term | Role |
-|------|------|
-| **ADR** | Documents the architectural decision ("the law") |
-| **Helper** | Utility that encapsulates a common operation (passive, no enforcement) |
-| **Enforcer-Proactive** | Code-gen / builder — makes the wrong pattern structurally impossible |
-| **Enforcer-Reactive** | Lint rule or test — catches violations after the fact |
-
-See `CLAUDE.md` (Architecture Trinity Vocabulary section) for full definitions.
+| Term | Category | Role |
+|------|----------|------|
+| **ADR** | Decision Record | Documents the architectural law — context, decision, consequences |
+| **Helper** | Utility | Encapsulates a common operation for reuse; passive |
+| **Enforcer-Proactive** | Codegen / Builder | Generates code so the wrong pattern is structurally impossible |
+| **Enforcer-Reactive** | Lint / Test | Checks existing code for violations after the fact |
