@@ -218,6 +218,59 @@ class TestValidateContractsSection(unittest.TestCase):
         self.assertTrue(len(errors) > 0, "Expected error for missing section")
         self.assertTrue(any("Missing" in e or "missing" in e for e in errors))
 
+    # Rule 3b: optional bullet prefix validation
+    def test_3b_helper_without_colon_fails(self):
+        """- Helper path (no colon) is not a valid optional bullet."""
+        desc = """## Architecture Contracts Touched
+- ADR-001 (Identity): valid adr
+- Helper packages/core/id.ts
+
+## Gaps to Close
+- [ ] None
+"""
+        errors = linter.validate_contracts_section("X", desc)
+        self.assertTrue(len(errors) > 0, "Expected error for malformed Helper bullet")
+        self.assertTrue(any("Helper" in e or "prefix" in e.lower() or "invalid" in e.lower() for e in errors))
+
+    def test_3b_unrecognised_optional_prefix_fails(self):
+        """Unrecognised prefix (e.g. Enforcer: without Proactive/Reactive) must fail."""
+        desc = """## Architecture Contracts Touched
+- ADR-001 (Identity): valid adr
+- Enforcer: some-path
+
+## Gaps to Close
+- [ ] None
+"""
+        errors = linter.validate_contracts_section("X", desc)
+        self.assertTrue(len(errors) > 0, "Expected error for unrecognised prefix")
+        self.assertTrue(any("Enforcer" in e or "prefix" in e.lower() or "invalid" in e.lower() for e in errors))
+
+    def test_3b_typo_in_optional_prefix_fails(self):
+        """Typo in optional prefix (Enforcer-Proacive vs Enforcer-Proactive) must fail."""
+        desc = """## Architecture Contracts Touched
+- ADR-001 (Identity): valid adr
+- Enforcer-Proacive: some-path
+
+## Gaps to Close
+- [ ] None
+"""
+        errors = linter.validate_contracts_section("X", desc)
+        self.assertTrue(len(errors) > 0, "Expected error for typo in prefix")
+
+    def test_3b_valid_optional_bullets_with_adr_pass(self):
+        """Valid Helper + Enforcer-Proactive + Enforcer-Reactive with ADR should pass."""
+        desc = """## Architecture Contracts Touched
+- ADR-001 (Identity): valid adr
+- Helper: packages/core/helpers/entity-id.ts
+- Enforcer-Proactive: scripts/codegen/generate-entity.ts
+- Enforcer-Reactive: lint/rules/no-raw-id-concat.js
+
+## Gaps to Close
+- [ ] None
+"""
+        errors = linter.validate_contracts_section("X", desc)
+        self.assertEqual(errors, [], f"Expected no errors for valid optional bullets: {errors}")
+
 
 # ---------------------------------------------------------------------------
 # Unit tests for label false-negative check (rule Y)

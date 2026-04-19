@@ -151,6 +151,13 @@ def _bullets_in(text: str) -> list[str]:
 # ADR bullet: "- ADR-NNN (Name): description"
 _ADR_RE = re.compile(r"^-\s+ADR-\d+\s+\([^)]+\):\s+\S", re.IGNORECASE)
 
+# Optional bullet prefixes — valid if present, must use exact format
+_OPTIONAL_BULLET_RES: list[re.Pattern] = [
+    re.compile(r"^-\s+Helper:\s+\S"),
+    re.compile(r"^-\s+Enforcer-Proactive:\s+\S"),
+    re.compile(r"^-\s+Enforcer-Reactive:\s+\S"),
+]
+
 # Valid gap-close markers
 _GAP_VALID_RES: list[re.Pattern] = [
     re.compile(r"^-\s+\[\s*\]\s+None$", re.IGNORECASE),
@@ -202,6 +209,18 @@ def validate_contracts_section(bead_id: str, description: str) -> list[str]:
             "Section '## Architecture Contracts Touched' requires ≥1 ADR bullet in format "
             "'- ADR-NNN (Name): <description>' (rule 3b; Helper/Enforcer bullets are "
             "optional but do not satisfy this requirement)"
+        )
+
+    # Rule 3b (continued): optional bullets, if present, must use a recognised prefix
+    for bullet in bullets:
+        if _ADR_RE.match(bullet):
+            continue  # Valid ADR bullet — skip
+        if any(p.match(bullet) for p in _OPTIONAL_BULLET_RES):
+            continue  # Valid optional bullet — skip
+        errors.append(
+            f"Invalid bullet in '## Architecture Contracts Touched': {bullet!r}. "
+            "Each non-ADR bullet must use one of the recognised optional prefixes: "
+            "'- Helper: <path>', '- Enforcer-Proactive: <path>', or '- Enforcer-Reactive: <path>' (rule 3b)"
         )
 
     # Rule 3c: Gaps to Close section
