@@ -4,6 +4,12 @@
 # This makes `bd lint --check=architecture-contracts` work in any shell,
 # without needing to source bd-lint-extension.sh.
 #
+# What this installer does:
+#   1. COPIES (not symlinks) bd-wrapper to ~/.local/bin/bd
+#   2. COPIES bd_lint_contracts.py to ~/.local/bin/bd_lint_contracts.py
+#      (so the install is stable even after the source worktree is deleted)
+#   3. Verifies that ~/.local/bin precedes the real bd in PATH
+#
 # Usage:
 #   bash beads-workflow/scripts/install-bd-wrapper.sh
 #
@@ -15,10 +21,15 @@ set -e
 _SELF=$(readlink -f "$0" 2>/dev/null || realpath "$0" 2>/dev/null || "$0")
 _SCRIPT_DIR=$(dirname "$_SELF")
 _WRAPPER="$_SCRIPT_DIR/bd-wrapper"
+_CONTRACTS_SCRIPT="$_SCRIPT_DIR/bd_lint_contracts.py"
 
-# Sanity check
+# Sanity checks
 if [ ! -f "$_WRAPPER" ]; then
     echo "ERROR: bd-wrapper not found at $_WRAPPER" >&2
+    exit 1
+fi
+if [ ! -f "$_CONTRACTS_SCRIPT" ]; then
+    echo "ERROR: bd_lint_contracts.py not found at $_CONTRACTS_SCRIPT" >&2
     exit 1
 fi
 
@@ -30,32 +41,36 @@ if [ ! -d "$_TARGET_DIR" ]; then
 fi
 
 _TARGET="$_TARGET_DIR/bd"
+_TARGET_CONTRACTS="$_TARGET_DIR/bd_lint_contracts.py"
 
-# Handle existing target
-if [ -e "$_TARGET" ] || [ -L "$_TARGET" ]; then
-    _existing=$(readlink -f "$_TARGET" 2>/dev/null || realpath "$_TARGET" 2>/dev/null || echo "$_TARGET")
-    _new=$(readlink -f "$_WRAPPER" 2>/dev/null || realpath "$_WRAPPER" 2>/dev/null || echo "$_WRAPPER")
-    if [ "$_existing" = "$_new" ]; then
-        echo "Already installed: $_TARGET -> $_WRAPPER (no change needed)"
-    else
-        echo "WARNING: $_TARGET already exists and points elsewhere ($_existing)."
-        echo "Overwriting with symlink to $_WRAPPER ..."
-        rm -f "$_TARGET"
-        ln -s "$_WRAPPER" "$_TARGET"
-        echo "Installed: $_TARGET -> $_WRAPPER"
-    fi
-else
-    ln -s "$_WRAPPER" "$_TARGET"
-    echo "Installed: $_TARGET -> $_WRAPPER"
-fi
+# Copy wrapper script (not symlink — stable across worktree lifecycle).
+# Remove any existing target first (handles symlinks from previous installs
+# and avoids macOS cp's "source and dest are identical" error).
+echo "Installing bd wrapper to $_TARGET ..."
+rm -f "$_TARGET"
+cp "$_WRAPPER" "$_TARGET"
+chmod +x "$_TARGET"
 
-# Check if ~/.local/bin is in PATH
+# Copy the contracts linter alongside the wrapper
+echo "Installing bd_lint_contracts.py to $_TARGET_CONTRACTS ..."
+rm -f "$_TARGET_CONTRACTS"
+cp "$_CONTRACTS_SCRIPT" "$_TARGET_CONTRACTS"
+
+echo ""
+echo "Installed:"
+echo "  $_TARGET"
+echo "  $_TARGET_CONTRACTS"
+
+# ---------------------------------------------------------------------------
+# Verify PATH precedence: ~/.local/bin must appear BEFORE the real bd binary
+# ---------------------------------------------------------------------------
+echo ""
+echo "Checking PATH precedence ..."
+
+# Check if ~/.local/bin is in PATH at all
 case ":$PATH:" in
     *":$_TARGET_DIR:"*)
-        echo ""
-        echo "PATH already includes $_TARGET_DIR — you're ready to go!"
-        echo ""
-        echo "  bd lint --check=architecture-contracts"
+        : # it is in PATH, continue to precedence check below
         ;;
     *)
         echo ""
@@ -70,8 +85,42 @@ case ":$PATH:" in
         echo ""
         echo "  Then restart your shell or run: source ~/.bashrc  (or ~/.zshrc)"
         echo ""
-        echo "After that, the following command will work without sourcing any shell extension:"
-        echo ""
-        echo "  bd lint --check=architecture-contracts"
+        echo "After adding ~/.local/bin to PATH, run this installer again to verify."
+        exit 0
         ;;
 esac
+
+# Check that 'bd' resolves to our installed wrapper (not the real binary)
+_resolved_bd=$(command -v bd 2>/dev/null || echo "")
+if [ -z "$_resolved_bd" ]; then
+    echo "WARNING: 'bd' not found in PATH at all. Add ~/.local/bin to PATH and restart shell."
+elif [ "$_resolved_bd" = "$_TARGET" ]; then
+    echo "PATH precedence OK — 'bd' resolves to the installed wrapper."
+    echo ""
+    echo "Ready to use:"
+    echo "  bd lint --check=architecture-contracts"
+else
+    # Resolve symlinks to compare
+    _resolved_target=$(readlink -f "$_resolved_bd" 2>/dev/null || realpath "$_resolved_bd" 2>/dev/null || echo "$_resolved_bd")
+    _our_target=$(readlink -f "$_TARGET" 2>/dev/null || realpath "$_TARGET" 2>/dev/null || echo "$_TARGET")
+    if [ "$_resolved_target" = "$_our_target" ]; then
+        echo "PATH precedence OK — 'bd' resolves to the installed wrapper."
+        echo ""
+        echo "Ready to use:"
+        echo "  bd lint --check=architecture-contracts"
+    else
+        echo ""
+        echo "WARNING: 'bd' resolves to '$_resolved_bd', not the installed wrapper."
+        echo "This means $_TARGET_DIR does not precede the real bd in PATH."
+        echo ""
+        echo "Fix: ensure ~/.local/bin appears BEFORE other directories in PATH:"
+        echo ""
+        echo "  For bash (~/.bashrc or ~/.bash_profile):"
+        echo '    export PATH="$HOME/.local/bin:$PATH"'
+        echo ""
+        echo "  For zsh (~/.zshrc):"
+        echo '    export PATH="$HOME/.local/bin:$PATH"'
+        echo ""
+        echo "  Then restart your shell and verify with: which bd"
+    fi
+fi

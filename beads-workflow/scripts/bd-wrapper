@@ -1,44 +1,24 @@
 #!/bin/sh
 # bd-wrapper — PATH-shim that extends 'bd lint' with --check=architecture-contracts support.
 #
-# Install: symlink or copy this script to ~/.local/bin/bd (which must precede
-# the real bd binary in PATH). See install-bd-wrapper.sh for the installer.
+# Install: copy this script (and bd_lint_contracts.py) to ~/.local/bin/ via install-bd-wrapper.sh.
+# ~/.local/bin must precede the real bd binary in PATH.
 #
 # Compatible with POSIX sh, bash, and zsh.
 #
 # How it works:
 #   1. Intercepts: bd lint --check=architecture-contracts [args...]
 #      -> delegates to bd_lint_contracts.py in the same directory as this script
-#   2. Everything else -> forwarded to the real bd binary (Homebrew or system)
+#   2. Everything else -> forwarded to the real bd binary discovered from PATH
 
 # ---------------------------------------------------------------------------
-# Locate this script's real path (resolve symlinks)
+# Locate this script's real path (resolve symlinks) and its directory
 # ---------------------------------------------------------------------------
 _SELF=$(readlink -f "$0" 2>/dev/null || realpath "$0" 2>/dev/null || "$0")
 _SCRIPT_DIR=$(dirname "$_SELF")
 
 # ---------------------------------------------------------------------------
-# Find the real bd binary (skip this script itself to avoid infinite recursion)
-# ---------------------------------------------------------------------------
-_REAL_BD=""
-for _candidate in /opt/homebrew/bin/bd /usr/local/bin/bd /usr/bin/bd; do
-    if [ ! -x "$_candidate" ]; then
-        continue
-    fi
-    _resolved=$(readlink -f "$_candidate" 2>/dev/null || realpath "$_candidate" 2>/dev/null || echo "$_candidate")
-    if [ "$_resolved" != "$_SELF" ]; then
-        _REAL_BD="$_candidate"
-        break
-    fi
-done
-
-if [ -z "$_REAL_BD" ]; then
-    echo "bd-wrapper: ERROR — cannot find real bd binary (checked /opt/homebrew/bin/bd, /usr/local/bin/bd, /usr/bin/bd)" >&2
-    exit 1
-fi
-
-# ---------------------------------------------------------------------------
-# Intercept: bd lint --check=architecture-contracts [args...]
+# Handle bd lint --check=architecture-contracts early (no real bd needed)
 # ---------------------------------------------------------------------------
 if [ "$1" = "lint" ] && [ "$2" = "--check=architecture-contracts" ]; then
     _CONTRACTS_SCRIPT="$_SCRIPT_DIR/bd_lint_contracts.py"
@@ -51,6 +31,32 @@ if [ "$1" = "lint" ] && [ "$2" = "--check=architecture-contracts" ]; then
 fi
 
 # ---------------------------------------------------------------------------
-# Pass everything else to the real bd binary
+# For all other commands, find and delegate to the real bd binary.
+#
+# Strategy: walk PATH entries in order, skip any entry that resolves to this
+# script itself, and use the first real 'bd' executable found.
 # ---------------------------------------------------------------------------
+_REAL_BD=""
+_old_ifs="$IFS"
+IFS=:
+for _dir in $PATH; do
+    IFS="$_old_ifs"
+    [ -z "$_dir" ] && continue
+    _candidate="$_dir/bd"
+    [ -x "$_candidate" ] || continue
+    # Resolve symlinks and compare to ourselves
+    _resolved=$(readlink -f "$_candidate" 2>/dev/null || realpath "$_candidate" 2>/dev/null || echo "$_candidate")
+    if [ "$_resolved" != "$_SELF" ]; then
+        _REAL_BD="$_candidate"
+        break
+    fi
+    IFS=:
+done
+IFS="$_old_ifs"
+
+if [ -z "$_REAL_BD" ]; then
+    echo "bd-wrapper: ERROR — cannot find real bd binary in PATH (excluding this wrapper)" >&2
+    exit 1
+fi
+
 exec "$_REAL_BD" "$@"

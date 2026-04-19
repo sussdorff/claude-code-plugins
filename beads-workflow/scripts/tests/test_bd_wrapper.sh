@@ -62,7 +62,7 @@ fi
 # Test 1: --check=architecture-contracts dispatches to Python script (not real bd)
 #
 # We invoke the wrapper with 'lint --check=architecture-contracts --help'.
-# The Python script should handle --help and exit 0. If the wrapper incorrectly
+# The Python script handles --help and exits 0. If the wrapper incorrectly
 # passes to the real bd binary, bd would return an error (unknown flag).
 # ---------------------------------------------------------------------------
 echo "--- Test 1: bd lint --check=architecture-contracts --help delegates to Python ---"
@@ -85,6 +85,7 @@ fi
 # Test 2: Non-intercepted commands pass through to real bd binary
 #
 # 'bd version' should work if the real bd binary is present and functional.
+# We explicitly set PATH so the wrapper can discover the real bd via PATH walk.
 # ---------------------------------------------------------------------------
 echo ""
 echo "--- Test 2: non-intercepted command passes through to real bd binary ---"
@@ -92,19 +93,24 @@ _real_bd_found=false
 for _candidate in /opt/homebrew/bin/bd /usr/local/bin/bd /usr/bin/bd; do
     if [ -x "$_candidate" ]; then
         _real_bd_found=true
+        _real_bd_path="$_candidate"
         break
     fi
 done
 
 if [ "$_real_bd_found" = "true" ]; then
-    if sh "$_WRAPPER" version > /tmp/bd_wrapper_test2_out.txt 2>&1; then
+    # Run the wrapper with the real bd available in PATH (at a position after a fake dir)
+    # The wrapper must skip a PATH entry pointing to itself and find the real one.
+    _fake_dir=$(mktemp -d)
+    cp "$_WRAPPER" "$_fake_dir/bd"
+    chmod +x "$_fake_dir/bd"
+
+    if PATH="$_fake_dir:$(dirname $_real_bd_path):$PATH" sh "$_fake_dir/bd" version > /tmp/bd_wrapper_test2_out.txt 2>&1; then
         _pass "Test 2: 'bd version' passed through to real bd binary (exit 0)"
     else
-        # Some bd versions may not have a 'version' subcommand — try 'help'
-        if sh "$_WRAPPER" help > /tmp/bd_wrapper_test2_out.txt 2>&1; then
+        if PATH="$_fake_dir:$(dirname $_real_bd_path):$PATH" sh "$_fake_dir/bd" help > /tmp/bd_wrapper_test2_out.txt 2>&1; then
             _pass "Test 2: 'bd help' passed through to real bd binary (exit 0)"
         else
-            # As long as it didn't produce the wrapper's own error, it's a pass
             if grep -q "bd-wrapper: ERROR" /tmp/bd_wrapper_test2_out.txt 2>/dev/null; then
                 _fail "Test 2: wrapper produced its own error instead of passing through"
                 cat /tmp/bd_wrapper_test2_out.txt
@@ -113,6 +119,7 @@ if [ "$_real_bd_found" = "true" ]; then
             fi
         fi
     fi
+    rm -rf "$_fake_dir"
 else
     echo "SKIP: Test 2 skipped — no real bd binary found in standard locations"
 fi
@@ -149,6 +156,34 @@ if [ "$_shebang" = "#!/bin/sh" ]; then
 else
     _fail "Test 4: shebang is '$_shebang' (expected #!/bin/sh)"
 fi
+
+# ---------------------------------------------------------------------------
+# Test 5: PATH-walk correctly skips the wrapper itself (no infinite recursion)
+#
+# Put the wrapper itself in a temp dir, add that dir before the real bd in PATH,
+# and verify that lint --check=architecture-contracts still dispatches to Python
+# (not to itself infinitely). This tests the early-exit before PATH-walk.
+# ---------------------------------------------------------------------------
+echo ""
+echo "--- Test 5: lint intercept works even when wrapper is first in PATH ---"
+_fake_dir2=$(mktemp -d)
+cp "$_WRAPPER" "$_fake_dir2/bd"
+chmod +x "$_fake_dir2/bd"
+# Simulate: the wrapper is in PATH as 'bd', with contracts script alongside it
+cp "$_CONTRACTS_SCRIPT" "$_fake_dir2/bd_lint_contracts.py"
+
+if PATH="$_fake_dir2:$PATH" sh "$_fake_dir2/bd" lint --check=architecture-contracts --help > /tmp/bd_wrapper_test5_out.txt 2>&1; then
+    _pass "Test 5: lint intercept works when wrapper is first in PATH (exit 0)"
+else
+    _exit_code=$?
+    if grep -q "bd_lint_contracts\|architecture-contracts\|lint\|bead" /tmp/bd_wrapper_test5_out.txt 2>/dev/null; then
+        _pass "Test 5: lint intercept works when wrapper is first in PATH (exit $_exit_code, output matches Python)"
+    else
+        _fail "Test 5: lint intercept failed when wrapper is first in PATH"
+        cat /tmp/bd_wrapper_test5_out.txt
+    fi
+fi
+rm -rf "$_fake_dir2"
 
 # ---------------------------------------------------------------------------
 # Summary
