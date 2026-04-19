@@ -45,7 +45,7 @@ Public API:
         core_need         (str)  — content of ## Core Need (JTBD) section
         positioning       (str)  — content of ## Positioning section
         business_goal     (str)  — content of ## Business Goal section
-        not_in_vision     (str)  — content of ## NOT in Vision section
+        not_in_vision     (list[str])  — bullet items from ## NOT in Vision section
         principles        (list[Principle]) — authored principles from Value Principles
         boundary_table    (list[BoundaryRule]) — parsed boundary rules
         template_version  (int)  — from frontmatter (must be 1)
@@ -215,7 +215,7 @@ class Vision:
     core_need: str = ""
     positioning: str = ""
     business_goal: str = ""
-    not_in_vision: str = ""
+    not_in_vision: list[str] = field(default_factory=list)
     principles: list[Principle] = field(default_factory=list)
     boundary_table: list[BoundaryRule] = field(default_factory=list)
     template_version: int = 0
@@ -287,15 +287,27 @@ def _parse_value_principles(
     boundary_rule_lines: list[int] = []  # parallel list tracking line number per boundary rule
 
     # Pass 1: collect all principles (ignore table state)
+    seen_principle_ids: set[str] = set()
     for lineno, line in section_lines:
         pm = PRINCIPLE_RE.match(line)
         if pm:
             pid = pm.group(1)  # already uppercase (regex only matches P\d+)
             text = pm.group(2).strip()
+            if pid in seen_principle_ids:
+                raise VisionParseError(
+                    f"Duplicate principle ID '{pid}' — each P-ID must be unique",
+                    lineno,
+                )
+            seen_principle_ids.add(pid)
             principles.append(Principle(id=pid, text=text))
 
     # Pass 2: collect boundary table rows (with in_table state machine)
     in_table = False
+    found_table_header: bool = False
+    data_row_count: int = 0
+
+    # section_start_line is the first line number in the section (for error reporting)
+    section_start_line = section_lines[0][0] if section_lines else 1
 
     for lineno, line in section_lines:
         # Detect table rows
@@ -316,6 +328,7 @@ def _parse_value_principles(
                         lineno,
                     )
                 # Header must have 4 columns (we validated above)
+                found_table_header = True
                 continue
             else:
                 # Check if it's a separator row
@@ -339,8 +352,16 @@ def _parse_value_principles(
                     )
                 )
                 boundary_rule_lines.append(lineno)
+                data_row_count += 1
         else:
             in_table = False
+
+    # Validate: boundary table must be present with at least one data row
+    if not found_table_header or data_row_count == 0:
+        raise VisionParseError(
+            "Value Principles section missing 4-column boundary table (rule_id | rule | scope | source-section)",
+            section_start_line,
+        )
 
     # Validate: boundary rule_ids must reference known principles
     principle_ids = {p.id for p in principles}
@@ -458,7 +479,16 @@ def parse_vision(path: Path) -> Vision:
     vision.core_need = _section_text("core_need")
     vision.positioning = _section_text("positioning")
     vision.business_goal = _section_text("business_goal")
-    vision.not_in_vision = _section_text("not_in_vision")
+
+    # Parse "NOT in Vision" section into individual bullet items
+    not_in_vision_items: list[str] = []
+    for _, line in section_content["not_in_vision"]:
+        stripped = line.strip()
+        if stripped.startswith(("- ", "* ", "• ")):
+            item = stripped[2:].strip()
+            if item:
+                not_in_vision_items.append(item)
+    vision.not_in_vision = not_in_vision_items
 
     # Value Principles: principles + boundary table
     principles, boundary_rules = _parse_value_principles(section_content["value_principles"])
@@ -481,7 +511,7 @@ def _vision_to_json(vision: Vision) -> dict:
         "core_need": vision.core_need,
         "positioning": vision.positioning,
         "business_goal": vision.business_goal,
-        "not_in_vision": vision.not_in_vision,
+        "not_in_vision": list(vision.not_in_vision),
         "principles": [
             {"id": p.id, "text": p.text, "source_section": p.source_section}
             for p in vision.principles

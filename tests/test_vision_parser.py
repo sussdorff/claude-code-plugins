@@ -298,8 +298,8 @@ class TestAllSectionsParsed:
         assert len(valid_vision.business_goal.strip()) > 0
 
     def test_not_in_vision_is_non_empty(self, valid_vision):
-        assert isinstance(valid_vision.not_in_vision, str)
-        assert len(valid_vision.not_in_vision.strip()) > 0
+        assert isinstance(valid_vision.not_in_vision, list)
+        assert len(valid_vision.not_in_vision) >= 1
 
     def test_principle_text_is_non_empty(self, valid_vision):
         for p in valid_vision.principles:
@@ -311,3 +311,40 @@ class TestAllSectionsParsed:
             assert len(br.rule.strip()) > 0
             assert len(br.scope.strip()) > 0
             assert len(br.source_section.strip()) > 0
+
+
+MISSING_BOUNDARY_TABLE_FIXTURE = FIXTURES / "no_boundary_table.md"
+DUPLICATE_PRINCIPLE_FIXTURE = FIXTURES / "duplicate_principle.md"
+
+
+class TestMissingBoundaryTable:
+    """Test: Value Principles section without a 4-column boundary table raises VisionParseError."""
+
+    def test_missing_boundary_table_raises(self):
+        with pytest.raises(VisionParseError) as exc_info:
+            parse_vision(MISSING_BOUNDARY_TABLE_FIXTURE)
+        error_str = str(exc_info.value).lower()
+        assert "boundary table" in error_str
+
+
+class TestDuplicatePrincipleId:
+    """Test: Duplicate principle IDs in Value Principles section raise VisionParseError."""
+
+    def test_duplicate_principle_raises(self):
+        with pytest.raises(VisionParseError) as exc_info:
+            parse_vision(DUPLICATE_PRINCIPLE_FIXTURE)
+        error_str = str(exc_info.value)
+        assert "Duplicate" in error_str or "P1" in error_str
+
+
+class TestNotInVisionIsListOfStrings:
+    """Test: not_in_vision is a list[str] of individual bullet items, not a raw string."""
+
+    def test_not_in_vision_items_are_strings(self, valid_vision):
+        for item in valid_vision.not_in_vision:
+            assert isinstance(item, str)
+            assert len(item.strip()) > 0
+
+    def test_not_in_vision_has_expected_items(self, valid_vision):
+        # The valid fixture has 3 bullet items in NOT in Vision
+        assert len(valid_vision.not_in_vision) == 3
