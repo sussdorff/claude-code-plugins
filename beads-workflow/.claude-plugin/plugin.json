@@ -1,6 +1,6 @@
 {
   "name": "beads-workflow",
-  "version": "2026.04.35",
+  "version": "2026.04.36",
   "description": "Beads orchestration and lifecycle \u2014 wave-orchestrator, epic-init, retro, compound, bead-metrics, workplan, intake",
   "keywords": [
     "beads",
