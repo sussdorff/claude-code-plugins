@@ -118,11 +118,15 @@ def test_scanner_id_taxonomy_adapter_common_cell():
 
 
 def test_scanner_error_envelope_adapter_common_adr_proposed():
-    """Error Envelope ADR is proposed — adapter-common should show ⚠️ for ADR."""
+    """Error Envelope ADR is proposed — adapter-common should show ⚠️ for ADR.
+    check:ids script must NOT count as reactive for Error Envelope (contract-aware fix)."""
     stdout, _ = run_scanner(args=["--json"])
     data = json.loads(stdout)
     cell = data["matrix"]["Error Envelope"]["adapter-common"]
     assert cell["adr"] == "⚠️", f"Expected ⚠️ for proposed ADR, got {cell['adr']}"
+    assert cell["reactive"] == "❌", (
+        f"check:ids should NOT count as reactive for Error Envelope contract, got {cell['reactive']}"
+    )
 
 
 def test_scanner_na_for_packages_not_in_applies_to():
@@ -137,22 +141,27 @@ def test_scanner_na_for_packages_not_in_applies_to():
             )
 
 
-def test_scanner_pvs_x_isynet_id_taxonomy_full_coverage():
-    """pvs-x-isynet has id-taxonomy helper, gen-schema.ts, eslint+schema:check — should be all ✅."""
+def test_scanner_pvs_x_isynet_id_taxonomy_partial_coverage():
+    """pvs-x-isynet has id-taxonomy helper and eslint with 'no-raw-id', but gen-schema.ts
+    doesn't match ID Taxonomy search terms — proactive should be ❌."""
     stdout, _ = run_scanner(args=["--json"])
     data = json.loads(stdout)
     cell = data["matrix"]["ID Taxonomy"]["pvs-x-isynet"]
     assert cell["adr"] == "✅"
     assert cell["helper"] == "✅"
-    assert cell["proactive"] == "✅"
-    assert cell["reactive"] == "✅"
+    assert cell["proactive"] == "❌", (
+        f"gen-schema.ts tokens ['gen','schema'] don't match ID Taxonomy terms, expected ❌, got {cell['proactive']}"
+    )
+    assert cell["reactive"] == "✅", (
+        f"eslint.config.js contains 'no-raw-id' which matches 'id' term, expected ✅, got {cell['reactive']}"
+    )
 
 
 def test_scanner_gap_count():
-    """Gap count must be 5 (5 (contract, package) pairs with any ❌)."""
+    """Gap count must be 6 (6 (contract, package) pairs with any ❌ after contract-aware fixes)."""
     stdout, _ = run_scanner(args=["--json"])
     data = json.loads(stdout)
-    assert data["gap_count"] == 5, f"Expected gap_count=5, got {data['gap_count']}"
+    assert data["gap_count"] == 6, f"Expected gap_count=6, got {data['gap_count']}"
 
 
 def test_scanner_golden_output():
@@ -167,6 +176,76 @@ def test_scanner_golden_output():
         f"--- Expected ---\n{expected}\n"
         f"--- Actual ---\n{actual}"
     )
+
+
+def test_scanner_inline_list_quotes_stripped():
+    """ADR with applies_to: ["adapter-common", "pvs-x-isynet"] (quoted inline list) is parsed correctly."""
+    import tempfile
+    import pathlib
+    with tempfile.TemporaryDirectory() as tmp:
+        root = pathlib.Path(tmp)
+        (root / "docs" / "adr").mkdir(parents=True)
+        (root / "docs" / "adr" / "0001.md").write_text(
+            '---\ncontract: Test Contract\napplies_to: ["adapter-common", "pvs-x-isynet"]\nstatus: accepted\n---\n'
+        )
+        result = subprocess.run(
+            [sys.executable, str(SCANNER), str(root), "--json"],
+            capture_output=True, text=True
+        )
+        data = json.loads(result.stdout)
+        # If quotes weren't stripped, packages list would be empty or wrong
+        # (applies_to would contain '"adapter-common"' with quotes)
+        assert "Test Contract" in data["contracts"]
+        # With no packages/ dir, packages = [root.name], matrix should be built
+        assert root.name in data["packages"], f"Expected root package {root.name} in packages"
+
+
+def test_scanner_contract_aware_reactive_no_false_positive():
+    """check:ids script does NOT count as reactive for 'Error Envelope' contract."""
+    import tempfile
+    import pathlib
+    with tempfile.TemporaryDirectory() as tmp:
+        root = pathlib.Path(tmp)
+        (root / "docs" / "adr").mkdir(parents=True)
+        (root / "docs" / "adr" / "0001.md").write_text(
+            '---\ncontract: Error Envelope\napplies_to:\n  - adapter-common\nstatus: accepted\n---\n'
+        )
+        (root / "packages" / "adapter-common" / "src").mkdir(parents=True)
+        (root / "packages" / "adapter-common" / "package.json").write_text(
+            '{"name": "adapter-common", "scripts": {"check:ids": "ts-node check-ids.ts"}}'
+        )
+        result = subprocess.run(
+            [sys.executable, str(SCANNER), str(root), "--json"],
+            capture_output=True, text=True
+        )
+        data = json.loads(result.stdout)
+        cell = data["matrix"]["Error Envelope"]["adapter-common"]
+        assert cell["reactive"] == "❌", f"check:ids should not count for Error Envelope, got {cell['reactive']}"
+
+
+def test_scanner_root_only_fallback():
+    """When no packages/ dir exists, repo root is used as single package and scanned correctly."""
+    import tempfile
+    import pathlib
+    with tempfile.TemporaryDirectory() as tmp:
+        root = pathlib.Path(tmp)
+        (root / "docs" / "adr").mkdir(parents=True)
+        pkg_name = pathlib.Path(tmp).name
+        (root / "docs" / "adr" / "0001.md").write_text(
+            f'---\ncontract: ID Taxonomy\napplies_to:\n  - {pkg_name}\nstatus: accepted\n---\n'
+        )
+        # Place a helper in root src/
+        (root / "src").mkdir()
+        (root / "src" / "id-taxonomy.ts").write_text("export function makeIdHelper() {}")
+        result = subprocess.run(
+            [sys.executable, str(SCANNER), str(root), "--json"],
+            capture_output=True, text=True
+        )
+        data = json.loads(result.stdout)
+        assert pkg_name in data["packages"], f"Expected root package {pkg_name} in packages"
+        if "ID Taxonomy" in data["matrix"] and pkg_name in data["matrix"]["ID Taxonomy"]:
+            cell = data["matrix"]["ID Taxonomy"][pkg_name]
+            assert cell["helper"] == "✅", f"Root src/id-taxonomy.ts should be found as helper, got {cell['helper']}"
 
 
 def test_output_template_has_enforcement_matrix_section():
@@ -206,9 +285,12 @@ if __name__ == "__main__":
         test_scanner_id_taxonomy_adapter_common_cell,
         test_scanner_error_envelope_adapter_common_adr_proposed,
         test_scanner_na_for_packages_not_in_applies_to,
-        test_scanner_pvs_x_isynet_id_taxonomy_full_coverage,
+        test_scanner_pvs_x_isynet_id_taxonomy_partial_coverage,
         test_scanner_gap_count,
         test_scanner_golden_output,
+        test_scanner_inline_list_quotes_stripped,
+        test_scanner_contract_aware_reactive_no_false_positive,
+        test_scanner_root_only_fallback,
         test_output_template_has_enforcement_matrix_section,
         test_skill_md_has_enforcement_matrix_phase,
     ]

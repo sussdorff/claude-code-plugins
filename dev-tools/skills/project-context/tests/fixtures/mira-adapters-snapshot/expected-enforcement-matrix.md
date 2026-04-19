@@ -6,8 +6,8 @@
 
 | Contract | adapter-cli | adapter-common | pvs-charly | pvs-x-isynet | pvs-xdt |
 | --- | --- | --- | --- | --- | --- |
-| Error Envelope | n/a | ⚠️ ❌ ❌ ✅ | n/a | n/a | n/a |
-| ID Taxonomy | n/a | ✅ ✅ ❌ ✅ | ✅ ✅ ❌ ❌ | ✅ ✅ ✅ ✅ | n/a |
+| Error Envelope | n/a | ⚠️ ❌ ❌ ❌ | n/a | n/a | n/a |
+| ID Taxonomy | n/a | ✅ ✅ ❌ ✅ | ✅ ✅ ❌ ❌ | ✅ ✅ ❌ ✅ | n/a |
 | Schema Codegen | n/a | n/a | ✅ ❌ ❌ ❌ | ✅ ✅ ✅ ✅ | ✅ ❌ ❌ ❌ |
 
 ### Legend
@@ -25,10 +25,11 @@ Pairs where any sub-column is ❌ (sorted by gap-count descending):
 
 | Contract | Package | Missing |
 | --- | --- | --- |
+| Error Envelope | adapter-common | Helper, Proactive, Reactive |
 | Schema Codegen | pvs-charly | Helper, Proactive, Reactive |
 | Schema Codegen | pvs-xdt | Helper, Proactive, Reactive |
-| Error Envelope | adapter-common | Helper, Proactive |
 | ID Taxonomy | pvs-charly | Proactive, Reactive |
 | ID Taxonomy | adapter-common | Proactive |
+| ID Taxonomy | pvs-x-isynet | Proactive |
 
-Enforcement gaps: 5 (across 3 contracts)
+Enforcement gaps: 6 (across 3 contracts)

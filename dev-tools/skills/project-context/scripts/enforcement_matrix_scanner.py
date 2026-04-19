@@ -49,9 +49,9 @@ def _strip_inline_comment(value: str) -> str:
 
 
 def _parse_inline_list(value: str) -> list:
-    """Parse inline YAML list syntax [a, b, c] into a list of strings."""
+    """Parse inline YAML list syntax [a, b, c] or ["a", "b"] into a list of strings."""
     inner = value[1:-1]  # Strip [ and ]
-    items = [item.strip() for item in inner.split(",")]
+    items = [_strip_quotes(item.strip()) for item in inner.split(",")]
     return [item for item in items if item]
 
 
@@ -231,19 +231,29 @@ def _is_gen_script_value(value: str) -> bool:
     return bool(re.search(r"\bgen\b", value.lower()))
 
 
-def _has_proactive(pkg_dir: Path, repo_root: "Path | None" = None) -> bool:
+def _stem_tokens(stem: str) -> set:
+    """Split a filename stem on non-alphanumeric chars and return lowercase token set."""
+    return set(re.split(r"[^a-z0-9]+", stem.lower()))
+
+
+def _terms_match_tokens(tokens: set, search_terms: list[str]) -> bool:
+    """Return True if any search term intersects with the token set."""
+    return bool(tokens & set(search_terms))
+
+
+def _has_proactive(pkg_dir: Path, search_terms: list[str], repo_root: "Path | None" = None) -> bool:
     """
-    Check if package has proactive (codegen) enforcers:
-    - scripts/*gen*.{ts,js,py} in the package directory (gen as whole token)
-    - package.json scripts matching codegen/generate/gen-/gen: patterns
-    - repo-root scripts/ directory for gen scripts
+    Check if package has proactive (codegen) enforcers relevant to the given search_terms:
+    - scripts/*gen*.{ts,js,py} in the package directory whose stem tokens intersect search_terms
+    - package.json scripts matching codegen/generate/gen-/gen: patterns (filtered by search_terms)
+    - repo-root scripts/ directory for gen scripts (filtered by search_terms)
     """
-    # Check package scripts/ subdirectory for gen* files
+    # Check package scripts/ subdirectory for gen* files whose stem intersects search_terms
     scripts_dir = pkg_dir / "scripts"
     if scripts_dir.exists():
         for item in scripts_dir.iterdir():
-            if item.is_file():
-                if _is_gen_script_name(item.stem):
+            if item.is_file() and _is_gen_script_name(item.stem):
+                if _terms_match_tokens(_stem_tokens(item.stem), search_terms):
                     return True
 
     # Check repo-root scripts/ directory if provided
@@ -251,8 +261,8 @@ def _has_proactive(pkg_dir: Path, repo_root: "Path | None" = None) -> bool:
         root_scripts_dir = repo_root / "scripts"
         if root_scripts_dir.exists():
             for item in root_scripts_dir.iterdir():
-                if item.is_file():
-                    if _is_gen_script_name(item.stem):
+                if item.is_file() and _is_gen_script_name(item.stem):
+                    if _terms_match_tokens(_stem_tokens(item.stem), search_terms):
                         return True
 
     # Check package.json scripts
@@ -262,12 +272,33 @@ def _has_proactive(pkg_dir: Path, repo_root: "Path | None" = None) -> bool:
             data = json.loads(pkg_json.read_text())
             scripts = data.get("scripts", {})
             for key, value in scripts.items():
-                if key.lower().startswith("schema:"):
-                    return True
-                if _is_gen_package_script_key(key):
-                    return True
-                if _is_gen_script_value(str(value)):
-                    return True
+                key_lower = key.lower()
+                if key_lower.startswith("schema:"):
+                    # suffix after "schema:" — check if suffix tokens or "schema" itself matches
+                    suffix = key_lower[len("schema:"):]
+                    suffix_tokens = set(re.split(r"[^a-z0-9]+", suffix)) | {"schema"}
+                    if _terms_match_tokens(suffix_tokens, search_terms):
+                        return True
+                elif _is_gen_package_script_key(key):
+                    # Check if key suffix tokens intersect search_terms OR script value contains term
+                    # Extract suffix after prefix (gen:, gen-, codegen:, etc.)
+                    for prefix in ("codegen:", "codegen-", "generate:", "generate-", "gen:", "gen-"):
+                        if key_lower.startswith(prefix):
+                            suffix = key_lower[len(prefix):]
+                            suffix_tokens = set(re.split(r"[^a-z0-9]+", suffix))
+                            if _terms_match_tokens(suffix_tokens, search_terms):
+                                return True
+                            break
+                    else:
+                        # bare "codegen", "generate", "gen" — check script value
+                        val_lower = str(value).lower()
+                        if any(re.search(r"\b" + re.escape(term) + r"\b", val_lower) for term in search_terms):
+                            return True
+                elif _is_gen_script_value(str(value)):
+                    # Script value contains "gen" — check if any search term in value
+                    val_lower = str(value).lower()
+                    if any(re.search(r"\b" + re.escape(term) + r"\b", val_lower) for term in search_terms):
+                        return True
         except json.JSONDecodeError:
             pass
 
@@ -287,32 +318,70 @@ _ESLINT_CONFIG_NAMES = {
 }
 
 
-def _has_reactive(pkg_dir: Path, repo_root: "Path | None" = None) -> bool:
-    """
-    Check if package has reactive (lint/check) enforcers:
-    - eslint config files exist in package dir or repo root
-    - package.json scripts matching check:* patterns
-    """
-    # Check for eslint config in package directory
-    for eslint_name in _ESLINT_CONFIG_NAMES:
-        if (pkg_dir / eslint_name).exists():
-            return True
+def _eslint_content_matches(path: Path, search_terms: list[str]) -> bool:
+    """Return True if any search term appears as a whole word-token in the eslint config content."""
+    try:
+        content = path.read_text(errors="replace")
+        for term in search_terms:
+            if re.search(r"\b" + re.escape(term) + r"\b", content, re.IGNORECASE):
+                return True
+    except OSError:
+        pass
+    return False
 
-    # Check for eslint config at repo root
-    if repo_root is not None:
-        for eslint_name in _ESLINT_CONFIG_NAMES:
-            if (repo_root / eslint_name).exists():
+
+def _suffix_tokens_match(suffix: str, search_terms: list[str]) -> bool:
+    """
+    Return True if any search term matches a token in the suffix using prefix matching.
+    e.g. "ids" with term "id" → matches because "ids".startswith("id")
+    """
+    tokens = re.split(r"[^a-z0-9]+", suffix.lower())
+    tokens = [t for t in tokens if t]
+    for tok in tokens:
+        for term in search_terms:
+            if tok.startswith(term) or term.startswith(tok):
+                return True
+    return False
+
+
+def _has_reactive(pkg_dir: Path, search_terms: list[str], repo_root: "Path | None" = None) -> bool:
+    """
+    Check if package has reactive (lint/check) enforcers relevant to the given search_terms:
+    - eslint config files: read content and check for search_terms as whole word-tokens
+    - package.json check:* scripts: suffix tokens must intersect search_terms
+    - package.json schema:* scripts: "schema" in search_terms
+    """
+    # Check for eslint config in package directory — content-aware
+    for eslint_name in _ESLINT_CONFIG_NAMES:
+        eslint_path = pkg_dir / eslint_name
+        if eslint_path.exists():
+            if _eslint_content_matches(eslint_path, search_terms):
                 return True
 
-    # Check package.json check:* scripts
+    # Check for eslint config at repo root — content-aware
+    if repo_root is not None:
+        for eslint_name in _ESLINT_CONFIG_NAMES:
+            eslint_path = repo_root / eslint_name
+            if eslint_path.exists():
+                if _eslint_content_matches(eslint_path, search_terms):
+                    return True
+
+    # Check package.json scripts
     pkg_json = pkg_dir / "package.json"
     if pkg_json.exists():
         try:
             data = json.loads(pkg_json.read_text())
             scripts = data.get("scripts", {})
             for key in scripts:
-                if key.startswith("check:"):
-                    return True
+                key_lower = key.lower()
+                if key_lower.startswith("check:"):
+                    suffix = key_lower[len("check:"):]
+                    if _suffix_tokens_match(suffix, search_terms):
+                        return True
+                elif key_lower.startswith("schema:"):
+                    # schema:check etc — match if "schema" is a search term
+                    if "schema" in search_terms:
+                        return True
         except json.JSONDecodeError:
             pass
 
@@ -327,6 +396,7 @@ def build_matrix(
     adrs: list[dict],
     packages: list[str],
     repo_root: Path,
+    packages_base: "Path | None" = None,
 ) -> dict:
     """
     Build the full matrix dict:
@@ -368,11 +438,16 @@ def build_matrix(
             else:
                 adr_sym = "❌"
 
-            pkg_dir = repo_root / "packages" / pkg
+            if packages_base is not None:
+                pkg_dir = packages_base / pkg
+            else:
+                pkg_dir = repo_root / "packages" / pkg
+                if not pkg_dir.exists():
+                    pkg_dir = repo_root  # single-package / root-only fallback
 
             helper_sym = "✅" if _has_helper(pkg_dir, search_terms) else "❌"
-            proactive_sym = "✅" if _has_proactive(pkg_dir, repo_root) else "❌"
-            reactive_sym = "✅" if _has_reactive(pkg_dir, repo_root) else "❌"
+            proactive_sym = "✅" if _has_proactive(pkg_dir, search_terms, repo_root) else "❌"
+            reactive_sym = "✅" if _has_reactive(pkg_dir, search_terms, repo_root) else "❌"
 
             matrix[contract][pkg] = {
                 "adr": adr_sym,
@@ -545,11 +620,13 @@ def main():
         return
 
     contracts = sorted(adr["contract"] for adr in adrs)
+    packages_dir = repo_root / "packages"
+    packages_base = packages_dir if packages_dir.exists() else None
     if not packages:
         # Use repo root as single pseudo-package
         packages = [repo_root.name]
 
-    matrix = build_matrix(adrs, packages, repo_root)
+    matrix = build_matrix(adrs, packages, repo_root, packages_base=packages_base)
     gaps = compute_gaps(matrix, contracts, packages)
 
     if args.json:
