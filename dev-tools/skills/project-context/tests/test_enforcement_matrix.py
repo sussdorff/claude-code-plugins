@@ -141,16 +141,18 @@ def test_scanner_na_for_packages_not_in_applies_to():
             )
 
 
-def test_scanner_pvs_x_isynet_id_taxonomy_partial_coverage():
-    """pvs-x-isynet has id-taxonomy helper and eslint with 'no-raw-id', but gen-schema.ts
-    doesn't match ID Taxonomy search terms — proactive should be ❌."""
+def test_scanner_pvs_x_isynet_id_taxonomy_full_trinity():
+    """pvs-x-isynet has full ID Taxonomy trinity coverage after fixture additions:
+    ADR + helper (id-taxonomy.ts) + proactive (scripts/gen-id-types.ts) + reactive (eslint no-raw-id).
+    Note: gen-schema.ts does NOT contribute to ID Taxonomy (schema tokens don't match 'id'),
+    but the root-level scripts/gen-id-types.ts does — it uses 'gen' + 'id' + 'types' tokens."""
     stdout, _ = run_scanner(args=["--json"])
     data = json.loads(stdout)
     cell = data["matrix"]["ID Taxonomy"]["pvs-x-isynet"]
     assert cell["adr"] == "✅"
     assert cell["helper"] == "✅"
-    assert cell["proactive"] == "❌", (
-        f"gen-schema.ts tokens ['gen','schema'] don't match ID Taxonomy terms, expected ❌, got {cell['proactive']}"
+    assert cell["proactive"] == "✅", (
+        f"scripts/gen-id-types.ts tokens ['gen','id','types'] match ID Taxonomy terms, expected ✅, got {cell['proactive']}"
     )
     assert cell["reactive"] == "✅", (
         f"eslint.config.js contains 'no-raw-id' which matches 'id' term, expected ✅, got {cell['reactive']}"
@@ -158,10 +160,11 @@ def test_scanner_pvs_x_isynet_id_taxonomy_partial_coverage():
 
 
 def test_scanner_gap_count():
-    """Gap count must be 6 (6 (contract, package) pairs with any ❌ after contract-aware fixes)."""
+    """Gap count must be 4 (4 (contract, package) pairs with any ❌ after fixture additions).
+    fixture additions in CCP-2hd reduced gaps: error-envelope helper + gen-id-types.ts proactive."""
     stdout, _ = run_scanner(args=["--json"])
     data = json.loads(stdout)
-    assert data["gap_count"] == 6, f"Expected gap_count=6, got {data['gap_count']}"
+    assert data["gap_count"] == 4, f"Expected gap_count=4, got {data['gap_count']}"
 
 
 def test_scanner_golden_output():
