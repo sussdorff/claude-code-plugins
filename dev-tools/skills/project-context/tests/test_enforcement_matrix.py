@@ -179,25 +179,48 @@ def test_scanner_golden_output():
 
 
 def test_scanner_inline_list_quotes_stripped():
-    """ADR with applies_to: ["adapter-common", "pvs-x-isynet"] (quoted inline list) is parsed correctly."""
+    """ADR with applies_to: ["adapter-common", "pvs-x-isynet"] (quoted inline list) must match real packages."""
     import tempfile
-    import pathlib
     with tempfile.TemporaryDirectory() as tmp:
-        root = pathlib.Path(tmp)
+        root = Path(tmp)
         (root / "docs" / "adr").mkdir(parents=True)
         (root / "docs" / "adr" / "0001.md").write_text(
             '---\ncontract: Test Contract\napplies_to: ["adapter-common", "pvs-x-isynet"]\nstatus: accepted\n---\n'
         )
+        # Create real package dirs — these must be matched by the parsed applies_to
+        (root / "packages" / "adapter-common" / "src").mkdir(parents=True)
+        (root / "packages" / "pvs-x-isynet" / "src").mkdir(parents=True)
         result = subprocess.run(
             [sys.executable, str(SCANNER), str(root), "--json"],
             capture_output=True, text=True
         )
         data = json.loads(result.stdout)
-        # If quotes weren't stripped, packages list would be empty or wrong
-        # (applies_to would contain '"adapter-common"' with quotes)
-        assert "Test Contract" in data["contracts"]
-        # With no packages/ dir, packages = [root.name], matrix should be built
-        assert root.name in data["packages"], f"Expected root package {root.name} in packages"
+        matrix = data["matrix"]
+        # Under the original bug, applies_to would be ['"adapter-common"', '"pvs-x-isynet"']
+        # and both cells would be "n/a" because no quoted name matches a real package name.
+        # With the fix, both must be populated (adr != "n/a").
+        assert "Test Contract" in matrix, f"Contract not in matrix: {list(matrix.keys())}"
+        ac_cell = matrix["Test Contract"].get("adapter-common", {})
+        assert ac_cell.get("adr") != "n/a", \
+            f"adapter-common should be in applies_to (not n/a), got {ac_cell}"
+        pv_cell = matrix["Test Contract"].get("pvs-x-isynet", {})
+        assert pv_cell.get("adr") != "n/a", \
+            f"pvs-x-isynet should be in applies_to (not n/a), got {pv_cell}"
+
+
+def test_scanner_inline_list_with_trailing_comment():
+    """applies_to: [a, b] # comment must parse as list [a, b], not scalar string."""
+    import importlib.util
+    spec = importlib.util.spec_from_file_location("scanner", str(SCANNER))
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+
+    adr_text = "---\ncontract: X\napplies_to: [adapter-common, pvs-x-isynet] # lint target set\nstatus: accepted\n---\n"
+    fm = mod.parse_frontmatter(adr_text)
+    assert isinstance(fm["applies_to"], list), \
+        f"applies_to should be a list, got {type(fm['applies_to'])}: {fm['applies_to']}"
+    assert fm["applies_to"] == ["adapter-common", "pvs-x-isynet"], \
+        f"Wrong applies_to: {fm['applies_to']}"
 
 
 def test_scanner_contract_aware_reactive_no_false_positive():
@@ -289,6 +312,7 @@ if __name__ == "__main__":
         test_scanner_gap_count,
         test_scanner_golden_output,
         test_scanner_inline_list_quotes_stripped,
+        test_scanner_inline_list_with_trailing_comment,
         test_scanner_contract_aware_reactive_no_false_positive,
         test_scanner_root_only_fallback,
         test_output_template_has_enforcement_matrix_section,

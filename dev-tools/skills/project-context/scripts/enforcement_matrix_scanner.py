@@ -51,7 +51,7 @@ def _strip_inline_comment(value: str) -> str:
 def _parse_inline_list(value: str) -> list:
     """Parse inline YAML list syntax [a, b, c] or ["a", "b"] into a list of strings."""
     inner = value[1:-1]  # Strip [ and ]
-    items = [_strip_quotes(item.strip()) for item in inner.split(",")]
+    items = [_strip_quotes(_strip_inline_comment(item.strip())) for item in inner.split(",")]
     return [item for item in items if item]
 
 
@@ -91,12 +91,11 @@ def parse_frontmatter(text: str) -> dict:
                 result[current_key] = current_list
             else:
                 current_list = None
-                # Check for inline list syntax
+                # Strip inline comment first, then detect list vs scalar
+                value = _strip_inline_comment(value)
                 if value.startswith("[") and value.endswith("]"):
                     result[current_key] = _parse_inline_list(value)
                 else:
-                    # Strip inline comment, then strip quotes
-                    value = _strip_inline_comment(value)
                     value = _strip_quotes(value)
                     result[current_key] = value
     return result
