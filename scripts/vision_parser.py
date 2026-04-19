@@ -226,15 +226,14 @@ class Vision:
 # Internal helpers
 # ---------------------------------------------------------------------------
 
-def _parse_frontmatter(content: str) -> tuple[dict[str, str], int]:
+def _parse_frontmatter(content: str) -> dict[str, str]:
     """Parse YAML-like frontmatter between --- delimiters.
 
-    Returns a tuple of (fields_dict, end_line_number).
-    end_line_number is 1-based index of the line AFTER the closing ---.
-    If no frontmatter, returns ({}, 1).
+    Returns a dict of key/value pairs found in the frontmatter block.
+    If no frontmatter, returns {}.
     """
     if not content.startswith("---"):
-        return {}, 1
+        return {}
 
     # Find the closing --- on its own line (exact match, not substring of ----)
     lines_after_open = content[3:].split("\n")
@@ -244,7 +243,7 @@ def _parse_frontmatter(content: str) -> tuple[dict[str, str], int]:
             close_idx = i
             break
     if close_idx is None:
-        return {}, 1
+        return {}
 
     front_block = "\n".join(lines_after_open[:close_idx]).strip()
     result: dict[str, str] = {}
@@ -253,9 +252,7 @@ def _parse_frontmatter(content: str) -> tuple[dict[str, str], int]:
             key, _, val = line.partition(":")
             result[key.strip()] = val.strip()
 
-    # Count lines up to and including closing --- (close_idx lines after open + 1 for opening)
-    end_line = close_idx + 2  # opening line + close_idx lines + 1-based
-    return result, end_line
+    return result
 
 
 def _parse_table_row(line: str) -> list[str] | None:
@@ -289,27 +286,22 @@ def _parse_value_principles(
     boundary_rules: list[BoundaryRule] = []
     boundary_rule_lines: list[int] = []  # parallel list tracking line number per boundary rule
 
-    # Two passes: collect principles first, then boundary table
-    # State machine for table detection
-    in_table = False
-    header_seen = False  # tracks whether we've seen the header row
-    table_start_line = 0
-
+    # Pass 1: collect all principles (ignore table state)
     for lineno, line in section_lines:
-        # Try to match principle
         pm = PRINCIPLE_RE.match(line)
-        if pm and not in_table:
+        if pm:
             pid = pm.group(1)  # already uppercase (regex only matches P\d+)
             text = pm.group(2).strip()
             principles.append(Principle(id=pid, text=text))
-            continue
 
+    # Pass 2: collect boundary table rows (with in_table state machine)
+    in_table = False
+
+    for lineno, line in section_lines:
         # Detect table rows
         if TABLE_ROW_RE.match(line):
             if not in_table:
                 in_table = True
-                table_start_line = lineno
-                header_seen = False
                 # First table row must NOT be a separator
                 if TABLE_SEPARATOR_RE.match(line):
                     raise VisionParseError(
@@ -324,7 +316,6 @@ def _parse_value_principles(
                         lineno,
                     )
                 # Header must have 4 columns (we validated above)
-                header_seen = True
                 continue
             else:
                 # Check if it's a separator row
@@ -385,7 +376,7 @@ def parse_vision(path: Path) -> Vision:
     lines = raw_text.splitlines()
 
     # --- Frontmatter ---
-    frontmatter, fm_end_line = _parse_frontmatter(raw_text)
+    frontmatter = _parse_frontmatter(raw_text)
 
     if "template_version" not in frontmatter:
         raise VisionParseError("Missing frontmatter 'template_version'", 1)
@@ -411,7 +402,6 @@ def parse_vision(path: Path) -> Vision:
     section_order: list[str] = []  # order in which sections appear
 
     current_section: str | None = None
-    current_section_lineno: int = 0
     last_section_line: int = 0  # line number of the last successfully-seen section header
 
     for i, line in enumerate(lines, start=1):
@@ -425,7 +415,12 @@ def parse_vision(path: Path) -> Vision:
                     last_canonical = section_order[-1]
                     last_idx = REQUIRED_SECTIONS_ORDER.index(last_canonical)
                     this_idx = REQUIRED_SECTIONS_ORDER.index(canonical)
-                    if this_idx <= last_idx:
+                    if this_idx == last_idx:
+                        raise VisionParseError(
+                            f"Duplicate section '{SECTION_DISPLAY[canonical]}'",
+                            i,
+                        )
+                    elif this_idx < last_idx:
                         raise VisionParseError(
                             f"Section '{SECTION_DISPLAY[canonical]}' found after "
                             f"'{SECTION_DISPLAY[last_canonical]}'",
@@ -433,7 +428,6 @@ def parse_vision(path: Path) -> Vision:
                         )
                 section_order.append(canonical)
                 current_section = canonical
-                current_section_lineno = i
                 last_section_line = i
             else:
                 # Unknown H2 — ignore it (don't reset current_section)

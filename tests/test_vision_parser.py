@@ -43,7 +43,7 @@ class TestParseValidVision:
     def test_principles_count(self, valid_vision):
         assert len(valid_vision.principles) >= 3
 
-    def test_boundary_table_count_matches_principles(self, valid_vision):
+    def test_valid_fixture_has_one_boundary_rule_per_principle(self, valid_vision):
         # Each principle should have exactly one boundary rule
         assert len(valid_vision.boundary_table) == len(valid_vision.principles)
 
@@ -204,6 +204,67 @@ Reduce drift.
 
         with pytest.raises(VisionParseError):
             parse_vision(vision_file)
+
+
+class TestPrinciplesAfterBoundaryTable:
+    """Test 7: principles declared AFTER the boundary table are still collected."""
+
+    def test_principle_after_table_is_collected(self, tmp_path: Path):
+        """P4 declared after the boundary table must be parsed and not cause a cross-ref error."""
+        content = """\
+---
+document_type: prescriptive-present
+template_version: 1
+generator: vision-author
+---
+
+## Vision Statement
+
+We build great tools.
+
+## Target Group
+
+Developers on long-lived codebases.
+
+## Core Need (JTBD)
+
+Teams need architectural quality without manual review.
+
+## Positioning
+
+Our tool provides automated enforcement with zero config.
+
+## Value Principles
+
+- **P1**: Boundaries are enforced at commit time.
+- **P2**: Rules are expressed once.
+- **P3**: Violations are shown in context.
+
+| rule_id | rule | scope | source-section |
+|---------|------|-------|----------------|
+| P1 | Commit-time enforcement | git hooks | Value Principles |
+| P2 | Single-source rules | all components | Value Principles |
+| P3 | In-context violations | developer workflow | Value Principles |
+| P4 | Post-table principle | full system | Value Principles |
+
+- **P4**: A principle written after the boundary table.
+
+## Business Goal
+
+Reduce drift by 80%.
+
+## NOT in Vision
+
+- Auto-fixing violations.
+"""
+        vision_file = tmp_path / "vision.md"
+        vision_file.write_text(content, encoding="utf-8")
+
+        vision = parse_vision(vision_file)
+        principle_ids = [p.id for p in vision.principles]
+        assert "P4" in principle_ids, f"Expected P4 in principles, got: {principle_ids}"
+        assert len(vision.principles) == 4
+        assert len(vision.boundary_table) == 4
 
 
 class TestRawTextPreserved:
