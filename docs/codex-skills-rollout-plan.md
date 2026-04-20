@@ -171,6 +171,51 @@ Abnahme für den Pilot:
    Wo lohnt sich `agents/openai.yaml` wirklich, und wo reicht ein schlankes
    `SKILL.md`?
 
+## Decisions (locked CCP-c2p, 2026-04-20)
+
+The following decisions from the open questions section are now locked based on
+the CCP-c2p pilot results. See `docs/codex-pilot-evidence.md` for invocation evidence.
+
+### 1. Source of Truth
+
+**Decision:** `dev-tools/skills/{name}/` remains the source of truth.
+`.agents/skills/` is a committed build artifact derived by `scripts/sync-codex-skills`.
+
+**Rationale:** The plugin-folder layout gives skills their canonical place in the
+monorepo. `.agents/skills/` is the Codex-facing export layer. Keeping dev-tools as
+source prevents double-maintenance: edit once (dev-tools), sync once, commit both.
+`scripts/sync-codex-skills --check` enforces that the export layer never drifts.
+
+**Rule:** Never edit `.agents/skills/` directly. Edit `dev-tools/skills/{name}/`
+and run `scripts/sync-codex-skills` to propagate.
+
+### 2. Sync Mechanism
+
+**Decision:** `scripts/sync-codex-skills` (rsync-based copy script) is the canonical
+sync mechanism.
+
+**Rationale:** An explicit copy keeps the export layer as inspectable, diffable,
+committable state. Symlinks would hide changes; a project-setup hook would add ceremony.
+The script covers repo-scoped sync (default) and user-scoped sync (`--user`).
+
+**User-scoped path:** `~/.codex/skills/` — Phase 0 verified: this is the active Codex
+load path on this machine (Codex v0.121.0, 2026-04-20). `~/.agents/skills/` does not
+exist and was never needed.
+
+**CI enforcement:** `scripts/sync-codex-skills --check` exits 1 when `.agents/skills/`
+diverges from `dev-tools/skills/`. Wire into pre-commit or CI to prevent drift.
+
+### 3. Metadata Depth
+
+**Decision:** Minimum Codex metadata for each pilot skill is `agents/openai.yaml` with
+three fields under `interface`: `display_name`, `short_description`, `default_prompt`.
+These live in `dev-tools/skills/{name}/agents/openai.yaml` (source) and are synced
+automatically to `.agents/skills/` and `~/.codex/skills/`.
+
+**Rationale:** The `frontend-skill` reference confirms this schema is sufficient for
+Codex UI integration. No additional `model`, `tags`, or extra keys are required for the
+pilot. Richer metadata (e.g. `argument-hint`) can be added per skill as needs emerge.
+
 ## Nächste Beads
 
 Die folgenden Work-Items sind bereits angelegt und nach Wave-Review
