@@ -267,11 +267,13 @@ def update_verification_tokens(
     the verification-agent's token cost. Uses <usage> block parsing
     rather than ccusage (which only gives session-level totals).
     """
+    import sys
+
     if not db_path.exists():
         return
     conn = sqlite3.connect(str(db_path))
     try:
-        conn.execute(
+        cur = conn.execute(
             """
             UPDATE bead_runs
             SET verification_tokens = ?
@@ -282,6 +284,12 @@ def update_verification_tokens(
             (tokens, bead_id),
         )
         conn.commit()
+        if cur.rowcount == 0:
+            print(
+                f"update_verification_tokens: no row found for bead_id={bead_id!r} — "
+                "ensure insert_bead_run was called first",
+                file=sys.stderr,
+            )
     finally:
         conn.close()
 

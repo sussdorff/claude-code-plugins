@@ -42,22 +42,29 @@ class TestProvenanceFieldsInVerificationAgent:
         assert "docs_required" in content
 
 
+def phase4_section(content: str) -> str:
+    """Return only the Phase 4: Completion Verification section of the orchestrator."""
+    start = content.find("### Phase 4: Completion Verification")
+    end = content.find("### Phase 4a:", start)
+    return content[start:end] if start != -1 else ""
+
+
 class TestProvenanceInOrchestrator:
     def test_phase4_template_contains_standards_applied(self):
         content = BEAD_ORCHESTRATOR_MD.read_text()
-        assert "standards_applied" in content
+        assert "standards_applied" in phase4_section(content)
 
     def test_phase4_template_contains_skills_referenced(self):
         content = BEAD_ORCHESTRATOR_MD.read_text()
-        assert "skills_referenced" in content
+        assert "skills_referenced" in phase4_section(content)
 
     def test_phase4_template_contains_adrs_in_scope(self):
         content = BEAD_ORCHESTRATOR_MD.read_text()
-        assert "adrs_in_scope" in content
+        assert "adrs_in_scope" in phase4_section(content)
 
     def test_phase4_template_contains_docs_required(self):
         content = BEAD_ORCHESTRATOR_MD.read_text()
-        assert "docs_required" in content
+        assert "docs_required" in phase4_section(content)
 
     def test_phase36_references_verification_tokens(self):
         content = BEAD_ORCHESTRATOR_MD.read_text()
@@ -89,6 +96,29 @@ class TestUpdateVerificationTokens:
             conn2.close()
             assert row is not None
             assert row[0] == 42000
+        finally:
+            db_path.unlink(missing_ok=True)
+
+    def test_update_verification_tokens_updates_most_recent_row(self):
+        """Verify that update_verification_tokens updates only the most recent row."""
+        with tempfile.NamedTemporaryFile(suffix=".db", delete=False) as f:
+            db_path = Path(f.name)
+        try:
+            conn = init_db(db_path)
+            insert_bead_run(conn, BeadRun(bead_id="test-456", date="2026-04-19"))
+            insert_bead_run(conn, BeadRun(bead_id="test-456", date="2026-04-20"))
+            conn.close()
+            update_verification_tokens("test-456", 99999, db_path=db_path)
+            conn2 = sqlite3.connect(str(db_path))
+            rows = conn2.execute(
+                "SELECT id, verification_tokens FROM bead_runs WHERE bead_id='test-456' ORDER BY id ASC"
+            ).fetchall()
+            conn2.close()
+            assert len(rows) == 2
+            first_row_tokens = rows[0][1]
+            second_row_tokens = rows[1][1]
+            assert second_row_tokens == 99999, "Most recent (second) row should be updated"
+            assert first_row_tokens == 0, "First row should remain untouched"
         finally:
             db_path.unlink(missing_ok=True)
 
