@@ -123,6 +123,7 @@ class BeadRun:
     phase2_triggered: int = 0
     phase2_findings: int = 0
     phase2_critical: int = 0
+    run_id: str = ""
 
 
 def init_db(db_path: Path = DB_PATH) -> sqlite3.Connection:
@@ -200,7 +201,13 @@ def parse_usage(text: str) -> dict[str, int]:
 
 
 def insert_bead_run(conn: sqlite3.Connection, run: BeadRun) -> None:
-    """Insert a BeadRun row into bead_runs. Commits after insert."""
+    """Insert a BeadRun row into bead_runs. Commits after insert.
+
+    Automatically generates and populates run_id (UUID4) if the BeadRun
+    does not already have one set.
+    """
+    if not run.run_id:
+        run.run_id = str(uuid.uuid4())
     conn.execute(
         """
         INSERT INTO bead_runs (
@@ -208,8 +215,9 @@ def insert_bead_run(conn: sqlite3.Connection, run: BeadRun) -> None:
             review_tokens, verification_tokens, uat_tokens, constraint_tokens,
             total_tokens, quality_grade, tdd_grade, ak_count,
             wave_id, model_impl, model_review,
-            phase2_triggered, phase2_findings, phase2_critical
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            phase2_triggered, phase2_findings, phase2_critical,
+            run_id
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """,
         (
             run.bead_id,
@@ -231,6 +239,7 @@ def insert_bead_run(conn: sqlite3.Connection, run: BeadRun) -> None:
             run.phase2_triggered,
             run.phase2_findings,
             run.phase2_critical,
+            run.run_id,
         ),
     )
     conn.commit()
@@ -244,22 +253,81 @@ def upsert_ccusage_row(
     cache_read_tokens: int,
     cache_creation_tokens: int,
     reasoning_tokens: int = 0,
+    run_id: str | None = None,
     db_path: Path = DB_PATH,
 ) -> str:
     """
-    UPSERT ccusage-sourced token + cost data for a (bead_id, date) row.
+    UPSERT ccusage-sourced token + cost data for a bead_runs row.
 
-    Updates the most recent matching row in place if present; otherwise inserts a
-    new row with only the ccusage-sourced fields populated (orchestrator-authored
-    fields like quality_grade, wave_id stay at defaults).
+    When run_id is provided, the target row is looked up by run_id directly
+    (WHERE run_id = ?), preventing cross-contamination between multiple same-day
+    runs of the same bead.
+
+    When run_id is absent (backward-compat for old callers), falls back to the
+    previous (bead_id, date) lookup — most recent matching row in place if
+    present; otherwise inserts a new row. If the found row has no run_id, one
+    is generated and written back to maintain identity going forward.
 
     Returns: 'updated' or 'inserted'.
     """
     conn = init_db(db_path)
     try:
+        if run_id is not None:
+            # New model: look up by run_id for precise isolation
+            cur = conn.execute(
+                "SELECT id FROM bead_runs WHERE run_id = ?",
+                (run_id,),
+            )
+            row = cur.fetchone()
+            if row is not None:
+                conn.execute(
+                    """
+                    UPDATE bead_runs
+                    SET total_tokens = ?,
+                        cost_usd = ?,
+                        cache_read_tokens = ?,
+                        cache_creation_tokens = ?,
+                        reasoning_tokens = ?
+                    WHERE run_id = ?
+                    """,
+                    (
+                        total_tokens,
+                        cost_usd,
+                        cache_read_tokens,
+                        cache_creation_tokens,
+                        reasoning_tokens,
+                        run_id,
+                    ),
+                )
+                conn.commit()
+                return "updated"
+            # run_id was provided but row not found — insert with that run_id
+            conn.execute(
+                """
+                INSERT INTO bead_runs (
+                    bead_id, date, total_tokens, cost_usd,
+                    cache_read_tokens, cache_creation_tokens, reasoning_tokens,
+                    run_id
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    bead_id,
+                    date_str,
+                    total_tokens,
+                    cost_usd,
+                    cache_read_tokens,
+                    cache_creation_tokens,
+                    reasoning_tokens,
+                    run_id,
+                ),
+            )
+            conn.commit()
+            return "inserted"
+
+        # Backward-compat path: look up by (bead_id, date)
         cur = conn.execute(
             """
-            SELECT id FROM bead_runs
+            SELECT id, run_id FROM bead_runs
             WHERE bead_id = ? AND date = ?
             ORDER BY id DESC LIMIT 1
             """,
@@ -267,6 +335,14 @@ def upsert_ccusage_row(
         )
         row = cur.fetchone()
         if row is not None:
+            existing_run_id = row[1]
+            # Backfill run_id if missing on the found row
+            if not existing_run_id:
+                existing_run_id = str(uuid.uuid4())
+                conn.execute(
+                    "UPDATE bead_runs SET run_id = ? WHERE id = ?",
+                    (existing_run_id, row[0]),
+                )
             conn.execute(
                 """
                 UPDATE bead_runs
@@ -293,8 +369,9 @@ def upsert_ccusage_row(
             """
             INSERT INTO bead_runs (
                 bead_id, date, total_tokens, cost_usd,
-                cache_read_tokens, cache_creation_tokens, reasoning_tokens
-            ) VALUES (?, ?, ?, ?, ?, ?, ?)
+                cache_read_tokens, cache_creation_tokens, reasoning_tokens,
+                run_id
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 bead_id,
@@ -304,6 +381,7 @@ def upsert_ccusage_row(
                 cache_read_tokens,
                 cache_creation_tokens,
                 reasoning_tokens,
+                str(uuid.uuid4()),
             ),
         )
         conn.commit()
@@ -317,23 +395,42 @@ def update_phase2_metrics(
     triggered: bool,
     findings: int,
     critical: int,
+    run_id: str | None = None,
     db_path: Path = DB_PATH,
 ) -> None:
-    """Update phase2 columns on the most recent row for a bead."""
+    """Update phase2 columns on a bead_runs row.
+
+    When run_id is provided, targets that specific run (WHERE run_id = ?),
+    preventing a delayed phase2 update from writing to the wrong run when
+    multiple runs exist for the same bead.
+
+    When run_id is absent (backward-compat for old callers), falls back to
+    updating the most recent row for the given bead_id.
+    """
     if not db_path.exists():
         return
     conn = sqlite3.connect(str(db_path))
     try:
-        conn.execute(
-            """
-            UPDATE bead_runs
-            SET phase2_triggered = ?, phase2_findings = ?, phase2_critical = ?
-            WHERE id = (
-                SELECT id FROM bead_runs WHERE bead_id = ? ORDER BY id DESC LIMIT 1
+        if run_id is not None:
+            conn.execute(
+                """
+                UPDATE bead_runs
+                SET phase2_triggered = ?, phase2_findings = ?, phase2_critical = ?
+                WHERE run_id = ?
+                """,
+                (int(triggered), findings, critical, run_id),
             )
-            """,
-            (int(triggered), findings, critical, bead_id),
-        )
+        else:
+            conn.execute(
+                """
+                UPDATE bead_runs
+                SET phase2_triggered = ?, phase2_findings = ?, phase2_critical = ?
+                WHERE id = (
+                    SELECT id FROM bead_runs WHERE bead_id = ? ORDER BY id DESC LIMIT 1
+                )
+                """,
+                (int(triggered), findings, critical, bead_id),
+            )
         conn.commit()
     finally:
         conn.close()
