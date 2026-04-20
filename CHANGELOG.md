@@ -1,3 +1,14 @@
+## [2026.04.60] - 2026-04-20
+
+### Miscellaneous Tasks
+
+- *(CCP-2vo.8)* Add validation infrastructure — canonical beads, sibling dispatch, retrospective template
+
+### Bug Fixes
+
+- *(CCP-2vo.8)* Restore issues.jsonl drift, fix non-existent bd metrics commands
+- *(CCP-2vo.8)* Replace non-existent wall_clock_s with impl_duration_ms in dispatch query
+
 ## [2026.04.57] - 2026-04-20
 
 ### Miscellaneous Tasks
