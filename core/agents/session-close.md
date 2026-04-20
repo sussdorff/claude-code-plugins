@@ -30,7 +30,8 @@ You do NOT implement code — you close sessions.
 
 Received as the invocation prompt:
 - Optional flags: `--dry-run`, `--skip-audit`, `--skip-simplify`,
-  `--skip-learnings`, `--skip-debrief`, `--skip-summary`, `--skip-push`
+  `--skip-learnings`, `--skip-debrief`, `--skip-summary`, `--skip-push`,
+  `--skip-pipeline`
 - Mode flags: `--debrief-only`, `--ship-only`
 - Optional: repo paths for multi-repo awareness
 
@@ -47,7 +48,7 @@ MODE: debrief-only | ship-only | full (default)
 | Mode flag | Steps executed | Description |
 |-----------|----------------|-------------|
 | `--debrief-only` | Steps 10-12c only | Run Phase A (learnings, debrief, summary, turn-log). No git operations. |
-| `--ship-only` | Steps 1-7, 9, 13-17 | Run Phase B (commit, changelog, merge, push, close). Skip Steps 10-12c. |
+| `--ship-only` | Steps 1-7, 9, 13-17 | Run Phase B (commit, changelog, merge, push, pipeline-watch, close). Skip Steps 10-12c. |
 | _(none)_ | Steps 10-12c, then 1-7, 9, 13-17 | Full run: Phase A first, then Phase B. |
 
 **Execution order (default):** Phase A (debrief) runs first, then Phase B (ship). This ensures learnings are captured even if the push fails.
@@ -72,11 +73,14 @@ Timeline:
   [4] merge feature -> main                   <- immediately after [3]
   [5] version bump + tag                      <- on main, after merge
   [6] push                                    <- immediately after [5]
-  [7] close beads + dolt sync                 <- only after push succeeds
+  [6a] pipeline watch (gh run watch)          <- blocks until CI finishes
+  [7] close beads + dolt sync                 <- only after push AND pipeline pass
 ```
 
 Steps [3], [4], [5] happen as fast as possible in sequence to minimize the window where
-another session-close could push between our second merge and our push.
+another session-close could push between our second merge and our push. Step [6a] is a
+blocking gate: if CI fails, [7] does not run and beads stay `in_progress` so the broken
+change remains visible in the tracker.
 
 **Why merge, not rebase:** Worktrees with existing merge commits break on rebase
 (CLAUDE.md rule: `git pull --no-rebase`). Always use `git merge`.
@@ -89,6 +93,9 @@ HANDLERS_DIR="$HOME/.claude/plugins/cache/sussdorff-plugins/core/agents/session-
 ```
 
 ## Phase B: Ship-Close (Steps 1-7, 9, 13-17)
+
+**Step order within Phase B:** 1 → 2 → 3 → 4 → 5 → 6 → 7 → 9 → 13 → 14 → 15 → 15b → 16 → 16a → 16b → 16c → 17.
+Step 16a (pipeline watch) is a **blocking gate**: on `PIPELINE_STATUS=failed`, abort before 16b so beads stay `in_progress`.
 
 ### Step 1: Setup & First Merge
 
@@ -429,11 +436,67 @@ Skip if `--skip-push`.
    [ -n "$LATEST_TAG" ] && git -C "$GIT_PUSH_DIR" push origin "$LATEST_TAG"
    ```
 
+### Step 16a: Pipeline Watch
+
+Skip if `--skip-pipeline`. Skip cleanly (non-blocking) if `gh` is missing, not authenticated,
+the remote is not GitHub, or no workflow run registers for the push commit.
+
+**Why:** Before Step 16a existed, beads got closed the instant `git push` returned success.
+If CI went red minutes later (missing secret, cross-platform break, deploy hook failure),
+the bead was already closed and the broken change was invisible in the beads tracker.
+All orchestrator gates run locally in the worktree — they can't see CI-only failures.
+
+**Run the handler:**
+```bash
+GIT_PUSH_DIR="${MAIN_REPO:-$REPO_ROOT}"
+PUSH_SHA=$(git -C "$GIT_PUSH_DIR" rev-parse HEAD)
+
+PIPELINE_OUT=$(bash "$HANDLERS_DIR/pipeline-watch.sh" \
+  --repo-dir "$GIT_PUSH_DIR" \
+  --sha "$PUSH_SHA" \
+  ${DRY_RUN:+--dry-run})
+PIPELINE_EXIT=$?
+```
+
+Parse the KV output:
+```
+PIPELINE_STATUS=<passed|failed|skipped_no_gh|skipped_not_authed|skipped_no_workflow|skipped_dry_run>
+PIPELINE_RUN_ID=<id>      # only on passed/failed
+PIPELINE_RUN_URL=<url>    # only on passed/failed
+```
+
+**Decision tree:**
+
+| Status | Handler exit | Action |
+|--------|--------------|--------|
+| `passed` | 0 | Continue to Step 16b. Record `PIPELINE_STATUS=passed run=<url>` for Step 17. |
+| `failed` | 1 | **Abort Phase B.** Do NOT run Step 16b (beads stay `in_progress`). Do NOT run Step 16c. Report the run URL to the user. Jump to Step 17 and include `PIPELINE_STATUS=failed run=<url>`. |
+| `skipped_no_gh` / `skipped_not_authed` / `skipped_no_workflow` | 0 | Log the reason, continue to Step 16b. Non-blocking fallback — `gh` missing or no workflow is not a reason to leave beads open. |
+| `skipped_dry_run` | 0 | Dry-run preview only. Continue. |
+
+**On FAIL — user-facing report:**
+```
+=== PIPELINE FAILED ===
+Commit: <PUSH_SHA>
+Run:    <PIPELINE_RUN_URL>
+
+Session-close aborted before Step 16b. Beads remain in_progress so the broken
+change is still visible in the tracker. Investigate the pipeline, push a fix,
+then re-run `session-close --ship-only --skip-learnings --skip-debrief --skip-summary`.
+```
+
+**`--skip-pipeline`**: Skips Step 16a entirely and proceeds straight to Step 16b.
+Use only when you know the repo has no CI or you want to close despite a red build
+(emergency bypass). Recorded as `PIPELINE_STATUS=skipped_flag` in Step 17.
+
 ### Step 16b: Close Beads
+
+**Prerequisite:** Step 16a returned `passed`, a `skipped_*` state, or `--skip-pipeline` was set.
+Never run 16b after `PIPELINE_STATUS=failed`.
 
 **CRITICAL:** This is the ONLY place where beads get closed. The bead-orchestrator
 intentionally leaves beads `in_progress` — they are closed here after everything is
-merged, tagged, and pushed.
+merged, tagged, pushed, and the CI pipeline has passed.
 
 1. Find in-progress beads for this session:
    ```bash
@@ -556,6 +619,7 @@ Print the technical details after the What's New section:
 - Second merge from main: result
 - Worktree merged (Y/N/N/A)
 - Push status
+- Pipeline status: `passed` / `failed` (+ run URL) / `skipped_no_gh` / `skipped_not_authed` / `skipped_no_workflow` / `skipped_flag` / `skipped_dry_run`
 
 After summary, the session is done. If in a worktree, Claude Code handles cleanup on exit.
 
@@ -583,6 +647,8 @@ For each repo with changes:
 | bd command missing | Warn, skip beads steps |
 | git-cliff missing | Warn, skip changelog |
 | Dolt push fails | Warn, continue (non-blocking) |
+| Pipeline watch: `failed` | STOP. Skip Step 16b and 16c. Beads stay `in_progress`. Report run URL. |
+| Pipeline watch: `skipped_*` | Warn with reason, continue to Step 16b (non-blocking fallback) |
 
 ## References
 - Tool boundaries for this agent: `malte/standards/agents/tool-boundaries.md`
@@ -597,7 +663,8 @@ For each repo with changes:
 - ALWAYS use `bd dolt pull && bd dolt push --force` (Dolt bug dolthub/dolt#10807)
 - Do NOT use `git push --force`
 - Do NOT use `git add -A` or `git add .` — always stage specific files
-- Do NOT close beads before Step 16b — beads stay in_progress until merge+push is complete
+- Do NOT close beads before Step 16b — beads stay in_progress until merge+push+pipeline-pass are complete
+- Do NOT run Step 16b when Step 16a returned `PIPELINE_STATUS=failed` — red pipelines must leave beads visible in the tracker
 
 ## Flags Reference
 
@@ -612,3 +679,4 @@ For each repo with changes:
 | `--skip-debrief` | Skip session debrief (Step 11) |
 | `--skip-summary` | Skip session summary (Step 12) |
 | `--skip-push` | Skip push & sync (Step 16) |
+| `--skip-pipeline` | Skip pipeline watch (Step 16a). Emergency bypass — closes beads even without CI confirmation. |
