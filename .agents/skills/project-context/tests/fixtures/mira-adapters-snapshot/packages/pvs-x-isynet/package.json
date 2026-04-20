@@ -1,0 +1,9 @@
+{
+  "name": "pvs-x-isynet",
+  "version": "1.0.0",
+  "scripts": {
+    "build": "tsc",
+    "schema:check": "ts-node scripts/gen-schema.ts --check",
+    "schema:generate": "ts-node scripts/gen-schema.ts"
+  }
+}
