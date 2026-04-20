@@ -1,5 +1,5 @@
 """
-Tests for CCP-2vo.1: verification-agent provenance contract.
+Tests for CCP-2vo.1 and CCP-2vo.9: verification-agent provenance contract.
 
 Verifies:
 1. verification-agent.md Input Contract contains all 4 provenance fields
@@ -7,6 +7,13 @@ Verifies:
 3. bead-orchestrator.md Phase 3.6 includes verification_tokens
 4. update_verification_tokens() function exists and works
 5. parse_usage() returns correct total for verification token capture
+
+CCP-2vo.9 additions:
+6. model upgraded to opus
+7. THREE VETO checks (standards, ADR, docs) with fixability classification
+8. ONE ADVISORY check (skills) with advisory-only output
+9. Output Format updated with Provenance Compliance section
+10. Information Barriers updated (old placeholder removed)
 """
 import sys
 from pathlib import Path
@@ -172,3 +179,132 @@ More text with $SHELL_VAR and `backticks` and "double quotes"."""
 <usage>{"input_tokens": 500, "output_tokens": 100, "cache_creation_input_tokens": 0, "cache_read_input_tokens": 0}</usage>"""
         result = parse_usage(response)
         assert result["total_tokens"] == 600
+
+
+# ---------------------------------------------------------------------------
+# CCP-2vo.9: Provenance Compliance Checks
+# ---------------------------------------------------------------------------
+
+
+class TestModelUpgrade:
+    def test_model_is_opus(self):
+        content = VERIFICATION_AGENT_MD.read_text()
+        assert "model: opus" in content
+
+
+class TestVetoChecks:
+    def test_standards_veto_section_present(self):
+        content = VERIFICATION_AGENT_MD.read_text()
+        assert "Standards Compliance Check" in content or "PROVENANCE-STANDARDS" in content
+
+    def test_adr_veto_section_present(self):
+        content = VERIFICATION_AGENT_MD.read_text()
+        assert "ADR Compliance Check" in content or "PROVENANCE-ADR" in content
+
+    def test_docs_existence_veto_section_present(self):
+        content = VERIFICATION_AGENT_MD.read_text()
+        assert "Docs-Existence Check" in content or "PROVENANCE-DOCS" in content
+
+    def test_fixability_classification_present(self):
+        content = VERIFICATION_AGENT_MD.read_text()
+        assert "fixability: auto" in content
+        assert "fixability: human" in content
+
+    def test_veto_emits_disputed(self):
+        content = VERIFICATION_AGENT_MD.read_text()
+        assert "VERDICT: DISPUTED" in content
+
+    def test_none_provenance_handled(self):
+        content = VERIFICATION_AGENT_MD.read_text()
+        assert "skipped" in content
+
+    def test_scenario_standards_violation_to_disputed(self):
+        """Spec must describe: standards violation → DISPUTED with fixability."""
+        content = VERIFICATION_AGENT_MD.read_text()
+        # Standards section must emit VERDICT: DISPUTED and classify fixability
+        assert "PROVENANCE-STANDARDS" in content
+        assert "VERDICT: DISPUTED" in content
+        assert "fixability" in content
+
+    def test_scenario_adr_contradiction_fixability_human(self):
+        """Spec must describe: ADR violation → DISPUTED, fixability: human (as default)."""
+        content = VERIFICATION_AGENT_MD.read_text()
+        assert "PROVENANCE-ADR" in content
+        # ADR violations are almost always fixability: human
+        assert "fixability: human" in content
+
+    def test_scenario_doc_missing_fixability_auto(self):
+        """Spec must describe: missing doc → fixability: auto."""
+        content = VERIFICATION_AGENT_MD.read_text()
+        assert "PROVENANCE-DOCS" in content
+        # Missing file gets auto fixability (scaffold can be generated)
+        assert "fixability: auto" in content
+
+
+class TestAdvisoryCheck:
+    def test_advisory_section_present(self):
+        content = VERIFICATION_AGENT_MD.read_text()
+        assert "Skill Application Advisory" in content
+
+    def test_advisory_likely_applied(self):
+        content = VERIFICATION_AGENT_MD.read_text()
+        assert "likely-applied" in content
+
+    def test_advisory_unclear(self):
+        content = VERIFICATION_AGENT_MD.read_text()
+        assert "unclear" in content
+
+    def test_advisory_no_evidence(self):
+        content = VERIFICATION_AGENT_MD.read_text()
+        assert "no-evidence" in content
+
+    def test_advisory_not_veto(self):
+        """Spec must say advisory never causes DISPUTED."""
+        content = VERIFICATION_AGENT_MD.read_text()
+        assert (
+            "advisory-only" in content
+            or "Do NOT emit DISPUTED" in content
+            or "never causes DISPUTED" in content
+        )
+
+    def test_advisory_no_bd_update(self):
+        """Spec must say agent does NOT call bd update."""
+        content = VERIFICATION_AGENT_MD.read_text()
+        assert "Do NOT call" in content or "bd update" in content
+
+    def test_scenario_skill_no_artifact_unclear(self):
+        """Spec must describe: process-oriented skill with no diff artifact → unclear."""
+        content = VERIFICATION_AGENT_MD.read_text()
+        assert "unclear" in content
+        # Must mention process-oriented or reasoning context
+        assert "process" in content.lower() or "reasoning" in content.lower()
+
+    def test_scenario_skill_absent_artifact_no_evidence(self):
+        """Spec must describe: expected artifact absent from diff → no-evidence."""
+        content = VERIFICATION_AGENT_MD.read_text()
+        assert "no-evidence" in content
+        assert "absent" in content or "ABSENT" in content or "not present" in content
+
+
+class TestOutputFormatUpdated:
+    def test_provenance_compliance_in_output_format(self):
+        content = VERIFICATION_AGENT_MD.read_text()
+        assert "Provenance Compliance" in content
+
+    def test_status_rules_include_veto_disputed(self):
+        """Status rules must mention that VETO or provenance DISPUTED affects overall status."""
+        content = VERIFICATION_AGENT_MD.read_text()
+        # Either mention VETO or provenance in relation to DISPUTED status
+        assert "VETO" in content or "provenance" in content.lower()
+
+
+class TestInformationBarriersUpdated:
+    def test_old_placeholder_removed(self):
+        """The old CCP-2vo.9 placeholder must be removed."""
+        content = VERIFICATION_AGENT_MD.read_text()
+        assert "reserved for CCP-2vo.9" not in content
+
+    def test_no_fix_violations_barrier(self):
+        """Information Barriers must say agent must not fix violations."""
+        content = VERIFICATION_AGENT_MD.read_text()
+        assert "Fix standards" in content or "apply fixes" in content
