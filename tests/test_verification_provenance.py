@@ -295,7 +295,7 @@ class TestOutputFormatUpdated:
         """Status rules must mention that VETO or provenance DISPUTED affects overall status."""
         content = VERIFICATION_AGENT_MD.read_text()
         # Either mention VETO or provenance in relation to DISPUTED status
-        assert "VETO" in content or "provenance" in content.lower()
+        assert "Provenance-integrity UNVERIFIABLE" in content
 
 
 class TestInformationBarriersUpdated:
@@ -307,4 +307,4 @@ class TestInformationBarriersUpdated:
     def test_no_fix_violations_barrier(self):
         """Information Barriers must say agent must not fix violations."""
         content = VERIFICATION_AGENT_MD.read_text()
-        assert "Fix standards" in content or "apply fixes" in content
+        assert "Read-only verifier — classify fixability only" in content or "classify fixability only" in content

@@ -275,7 +275,7 @@ For each required doc path listed in `docs_required`:
    - If missing: DISPUTED with `fixability: auto` (scaffold can be machine-generated)
 2. **Coverage sub-check:** Does the file's content cover the bead's acceptance criteria?
    - If present but clearly stale or missing coverage: DISPUTED with `fixability: human`
-   - If coverage is adequate: pass
+   - If coverage is adequate: emit the block with `VERDICT: VERIFIED` and omit the `fixability` field
 ```
 PROVENANCE-DOCS: "<doc-path>"
 EXISTENCE: present | missing
@@ -309,7 +309,7 @@ For each skill listed in `skills_referenced`:
 
 **IMPORTANT:** This is advisory-only. Do NOT emit DISPUTED for any skill finding.
 Do NOT call `bd update`. Do NOT write any files.
-Emit the advisory block in your response text:
+Emit the advisory block as a top-level section **immediately after** the `## Verification Report` block (after `### Summary`):
 
 ```
 ## Skill Application Advisory
@@ -374,7 +374,7 @@ PROVENANCE-DOCS: <skipped | VERIFIED | N DISPUTED>
 **Status rules:**
 - `VERIFIED`: All verifiable AKs confirmed, tests pass
 - `DISPUTED`: One or more claims contradicted by evidence; also set when any VETO check (standards/ADR/docs) produces a DISPUTED finding
-- `PARTIAL`: Some verified, some unverifiable, none disputed
+- `PARTIAL`: Some verified, some unverifiable, none disputed. Provenance-integrity UNVERIFIABLE findings (missing standard/ADR file on disk) also map to PARTIAL — the check could not be performed but no violation was detected.
 
 ## Information Barriers
 
