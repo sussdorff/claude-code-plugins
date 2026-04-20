@@ -12,6 +12,8 @@
 #   --dry-run         Print what would be copied without doing it.
 #   --skills LIST     Comma-separated skill names to sync (default: all pilots).
 #                     Example: --skills project-context,bug-triage
+#                     Empty tokens (e.g. leading/trailing commas) are an error.
+#                     A missing source directory is a fatal error (exit 2).
 #   -h, --help        Show this help and exit.
 #
 # SCOPES
@@ -130,15 +132,29 @@ OUT_OF_SYNC=()
 
 for skill in "${SKILLS[@]}"; do
   skill="${skill// /}"  # trim whitespace
+
+  # Guard: reject empty skill tokens (e.g. from "--skills ,bug-triage" or "a,,b")
+  if [[ -z "$skill" ]]; then
+    echo "ERROR: empty skill name in --skills list" >&2
+    exit 2
+  fi
+
   src="$PLUGIN_BASE/$skill"
 
+  # Guard: missing source is fatal — prevents silent drift in CI/pre-commit
   if [[ ! -d "$src" ]]; then
-    echo "WARNING: source skill not found, skipping: $src" >&2
-    continue
+    echo "ERROR: skill source not found: $src" >&2
+    exit 2
   fi
 
   # ---- repo-scoped --------------------------------------------------------
   repo_dst="$REPO_TARGET/$skill"
+
+  # Guard: refuse to sync if repo_dst resolves to the skills root itself
+  if [[ "$(realpath "$repo_dst" 2>/dev/null || echo "$repo_dst")" == "$(realpath "$REPO_TARGET" 2>/dev/null || echo "$REPO_TARGET")" ]]; then
+    echo "ERROR: refusing to sync to skills root (empty or '.' skill name?)" >&2
+    exit 2
+  fi
 
   if $OPT_CHECK; then
     if dirs_in_sync "$src" "$repo_dst"; then
