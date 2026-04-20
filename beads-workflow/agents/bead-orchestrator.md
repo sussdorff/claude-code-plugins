@@ -1,10 +1,11 @@
 ---
 name: bead-orchestrator
 description: >-
-  Autonomous orchestrator for single-bead implementation. Runs sizing check,
-  claiming, implementation subagent spawning, review loop (review-agent, max 3
-  iterations), verification, and handoff. Does NOT close beads — session-close
-  handles closing after merge+push.
+  Autonomous orchestrator for single-bead implementation. Runs Phase 0-16:
+  sizing/claim, context, implementation (Sonnet), review (Opus, 1 fix cycle),
+  Codex adversarial, verification (Opus VETO), MoC, UAT, constraints,
+  changelog, session-close. Does NOT close beads — session-close handles
+  closing after merge+push.
 tools: Read, Write, Edit, Bash, Grep, Glob, Agent, mcp__open-brain__save_memory, mcp__open-brain__search, mcp__open-brain__timeline, mcp__open-brain__get_context
 mcpServers:
   - open-brain
@@ -926,14 +927,14 @@ Do NOT spawn `core:session-close`.
 | Subagent crashed | Retry once, then warn user |
 | Tests remain FAILED | Stop, leave in_progress, report |
 | Git conflict | Report to user, do not force |
-| Subagent reduces scope | Orchestrator completes gaps (Phase 9) |
+| Subagent reduces scope | Spawn second impl subagent with specific gap prompt (Phase 5 re-run) |
 | Verification VETO (human) | Stop, leave in_progress, escalate to user |
 | Codex still-broken after fix | Axis B auto-accept, log decision, proceed |
 
 ## Constraints
 
 - Tool boundaries for this agent defined in `malte/standards/agents/tool-boundaries.md`
-- Do NOT implement code yourself (except small gaps in Phase 9)
+- Do NOT implement code yourself — delegate to impl subagent (Phase 5), fix-agent (Phase 6/8), or verification-fix (Phase 10)
 - Do NOT use `bd edit` (opens $EDITOR, blocks agents)
 - Do NOT close beads — EVER. Beads are closed by session-close as the absolute last step after merge+push. The orchestrator hands off, it does not close. **Exception:** Closing a parent bead during slicing (Phase 0) is permitted.
 - Do NOT create beads for new work discovered during implementation — report to user instead
