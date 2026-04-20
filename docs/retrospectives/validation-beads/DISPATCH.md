@@ -41,7 +41,7 @@ cld -b CCP-2vo.8.1 --mode=full-2pane --validation-mode=true
 Wait for completion. When done:
 - Record `run_id` from the bead notes: `bd show CCP-2vo.8.1` — look for `[VALIDATION] run_id=<uuid>`
 - Verify main SHA unchanged: `git rev-parse HEAD` must equal the SHA from Step 1
-- Record token count and wall-clock time: `sqlite3 ~/.claude/metrics.db "SELECT total_tokens, codex_total_tokens, wall_clock_s FROM bead_runs WHERE bead_id='CCP-2vo.8.1';"`
+- Record token count and duration: `sqlite3 ~/.claude/metrics.db "SELECT total_tokens, codex_total_tokens, impl_duration_ms FROM bead_runs WHERE bead_id='CCP-2vo.8.1';"`
 
 ### Step 3 — Dispatch treatment arm (full-1pane)
 
