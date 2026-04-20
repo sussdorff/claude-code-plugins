@@ -30,7 +30,7 @@ If any condition is NOT met, use the full `bead-orchestrator` instead.
 You are a lightweight orchestration layer. You:
 1. Claim the bead and gather minimal context
 2. Spawn ONE Sonnet implementer subagent
-3. Trigger ONE Codex review via codex-companion.mjs
+3. Trigger ONE Codex review via codex-exec.sh
 4. Handle fix injection (max 2 iterations) or escalate
 5. Hand off to session-close
 
@@ -40,7 +40,7 @@ You do NOT implement code yourself. You do NOT review code yourself.
 
 Unlike the full bead-orchestrator (which spawns a separate `cld -br` review pane),
 the quick-fix agent runs everything in ONE pane. The Codex review happens inline via
-`codex-companion.mjs` — no cmux-reviewer agent, no second surface. This halves the
+`codex-exec.sh` — no cmux-reviewer agent, no second surface. This halves the
 resource footprint per bead.
 
 **Consequence for wave-orchestrator:** Quick-fix beads consume 1 pane each. Full beads
@@ -99,6 +99,18 @@ Gather minimal context:
    ```
    Store this SHA as `PRE_IMPL_SHA` in your context — you need it for the Codex review base.
 
+4. Create a metrics run (store `RUN_ID` for codex-exec.sh calls):
+   ```python
+   import sys; sys.path.insert(0, 'beads-workflow/lib/orchestrator')
+   try:
+       from metrics import start_run
+       run_id = start_run('<bead_id>', wave_id=None, mode='quick-fix')
+   except Exception:
+       import uuid; run_id = str(uuid.uuid4())  # fallback if metrics unavailable
+   print(run_id)
+   ```
+   Store the printed value as `RUN_ID` in your context.
+
 ### Phase 1: Spawn Implementer
 
 Spawn a single Sonnet subagent to implement the fix.
@@ -140,37 +152,47 @@ Wait for the subagent to complete. If it reports failure, STOP and report to use
 
 After the implementer commits, trigger a Codex adversarial review on the diff.
 
-#### Step 1: Locate Codex companion
+#### Step 1: Locate codex-exec.sh and prepare diff
 
 ```bash
-CODEX_COMPANION=$(find ~/.claude/plugins -path '*/openai-codex/*/scripts/codex-companion.mjs' -type f 2>/dev/null | sort -r | head -1)
-[ -z "$CODEX_COMPANION" ] && CODEX_COMPANION=$(find ~/.claude/plugins -name codex-companion.mjs -type f 2>/dev/null | head -1)
+# Locate codex-exec.sh (prefer repo-local, fall back to installed)
+CODEX_EXEC="beads-workflow/scripts/codex-exec.sh"
+if [[ ! -f "$CODEX_EXEC" ]]; then
+  CODEX_EXEC=$(find ~/.claude/plugins -name codex-exec.sh -type f 2>/dev/null | sort -r | head -1)
+fi
 ```
 
 If not found: **skip review, proceed to Phase 3 with a warning.** Quick fixes should not be
 blocked by missing tooling — log it and move on.
 
+Capture the diff:
+```bash
+DIFF=$(git diff {PRE_IMPL_SHA}...HEAD)
+```
+
 #### Step 2: Run adversarial review (Iteration 1)
 
 ```bash
-FOCUS="This review is scoped to bead {BEAD_ID}: '{TITLE}' (type={TYPE}, priority=P{N}).
-Stated intent: '{first 200 chars of description}'.
-For EACH finding, classify as:
-REGRESSION (new defect in THIS diff — BLOCKING),
-PRE_EXISTING (already present before — NOT blocking),
-OUT_OF_SCOPE (unrelated — NOT blocking).
-This is a quick fix — only REGRESSION findings matter."
+RUN_ID={RUN_ID} BEAD_ID={BEAD_ID} PHASE_LABEL=codex-adversarial ITERATION=1 \
+  "$CODEX_EXEC" "Review this diff for regressions and bugs:
 
-node "$CODEX_COMPANION" adversarial-review \
-  --json \
-  --base {PRE_IMPL_SHA} \
-  --scope branch \
-  "$FOCUS"
+## Bead: {BEAD_ID} — {TITLE}
+## Intent: {first 200 chars of description}
+## Diff:
+$DIFF
+
+For EACH finding, classify as:
+REGRESSION: <file>:<line> — <description> (new defect in THIS diff — BLOCKING)
+PRE_EXISTING: <file>:<line> — <description> (already present before — NOT blocking)
+OUT_OF_SCOPE: <file>:<line> — <description> (unrelated — NOT blocking)
+
+This is a quick fix — only REGRESSION findings matter.
+Report only actual bugs and regressions. If none: LGTM"
 ```
 
 #### Step 3: Parse result
 
-Filter by classification:
+Look for `REGRESSION:` lines in the output. LGTM or no REGRESSION lines = CLEAN.
 - **No REGRESSION findings → CLEAN.** Proceed to Phase 3.
 - **REGRESSION findings → FINDINGS.** Enter fix loop.
 
@@ -198,14 +220,20 @@ Agent(subagent_type="general-purpose", description="Fix review findings {BEAD_ID
 
 Wait for the subagent to return, then proceed to Iteration 2 re-review.
 
-**Iteration 2 (re-review):** After fix is committed, run a neutral `review` (NOT adversarial):
+**Iteration 2 (re-review):** After fix is committed, run a neutral re-review to verify fixes:
 
 ```bash
-LAST_SHA=$(git rev-parse HEAD~1)  # or the SHA before the fix commit
-node "$CODEX_COMPANION" review \
-  --json \
-  --base $LAST_SHA \
-  --scope branch
+DIFF2=$(git diff $LAST_SHA...HEAD)
+RUN_ID={RUN_ID} BEAD_ID={BEAD_ID} PHASE_LABEL=codex-fix-check ITERATION=2 \
+  "$CODEX_EXEC" "Verify these fixes resolve the reported regressions:
+
+## Bead: {BEAD_ID}
+## Diff of fixes:
+$DIFF2
+
+Original REGRESSION findings: {Phase 1 REGRESSION lines}
+
+Report: VERIFIED or STILL-BROKEN:<finding>"
 ```
 
 - **Iter 2 CLEAN → Phase 3.**
@@ -220,19 +248,13 @@ node "$CODEX_COMPANION" review \
 
 ```bash
 uv run python -c "
-import os, sys
-from pathlib import Path
-_candidates = [os.environ.get('CLAUDE_PLUGIN_ROOT'), str(Path.home()/'code/claude-code-plugins/beads-workflow'), str(Path.home()/'.claude/plugins/beads-workflow')]
-_lib = next((Path(c)/'lib' for c in _candidates if c and (Path(c)/'lib/orchestrator/metrics.py').exists()), None)
-if _lib is None:
-    print('Metrics skipped: plugin lib not found', file=sys.stderr); sys.exit(0)
-sys.path.insert(0, str(_lib))
+import sys; sys.path.insert(0, 'beads-workflow/lib/orchestrator')
 try:
-    from orchestrator.metrics import update_phase2_metrics
-    update_phase2_metrics(bead_id='{BEAD_ID}', triggered=True, findings={TOTAL}, critical={CRITICAL})
-    print('Metrics saved')
+    from metrics import rollup_run
+    rollup_run('{RUN_ID}')
+    print('Rollup complete')
 except Exception as e:
-    print(f'Metrics skipped: {e}')
+    print(f'Rollup skipped: {e}')
 "
 ```
 
@@ -249,14 +271,17 @@ Agent(subagent_type="core:session-close", description="Session close for {BEAD_I
   Quick-fix complete:
   - Review iterations: {N}
   - Regressions fixed: {count}
-  - Commits on branch: <git log output for the branch>
+  - Commits on branch: <git log --oneline output for the branch>
 
-  Run the full session-close pipeline:
-  1. Double-merge main → feature
-  2. Conventional commit + changelog + CalVer tag
-  3. Learnings + session summary (open-brain)
-  4. Merge feature → main + push + bd dolt commit/push
-  5. Close the bead
+  Run the COMPLETE session-close pipeline — ALL phases are MANDATORY:
+  1. Double-merge: merge main → feature branch (resolve conflicts if any)
+  2. Conventional commit + changelog entry + CalVer version tag
+  3. Learnings + session summary (open-brain save)
+  4. Merge feature → main + git push + bd dolt commit && bd dolt pull && bd dolt push --force
+  5. Close the bead: bd close {BEAD_ID}
+
+  Do NOT stop after phase 3. Do NOT emit 'Next: ...' — complete all 5 phases before returning.
+  The bead is NOT closed until step 5 completes successfully.
 ")
 ```
 
@@ -316,7 +341,7 @@ The old cmux-send-to-self approach is deprecated — do not reintroduce it.
 - **Skip review gracefully if Codex unavailable.** Quick fixes should not be blocked by missing
   tooling. Log a warning and proceed.
 - **Never use `Skill("codex:...")`.** Those slash-commands have `disable-model-invocation: true`.
-  Always invoke via `node "$CODEX_COMPANION" ...` through Bash.
+  Always invoke via `RUN_ID=... BEAD_ID=... PHASE_LABEL=... beads-workflow/scripts/codex-exec.sh <prompt>` through Bash.
 - **Guard rail is mandatory.** If a bead is too large (M+ effort, feature type), refuse and
   redirect to bead-orchestrator. Don't try to quick-fix a complex bead.
 - **Minimal context, not no context.** Read the files mentioned in the bead. Check for obvious
