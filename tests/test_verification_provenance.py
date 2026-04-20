@@ -294,8 +294,8 @@ class TestOutputFormatUpdated:
     def test_status_rules_include_veto_disputed(self):
         """Status rules must mention that VETO or provenance DISPUTED affects overall status."""
         content = VERIFICATION_AGENT_MD.read_text()
-        # Either mention VETO or provenance in relation to DISPUTED status
-        assert "Provenance-integrity UNVERIFIABLE" in content
+        # Missing standard/ADR files now produce DISPUTED (not UNVERIFIABLE), which is a VETO violation
+        assert "stale provenance paths are VETO violations" in content
 
 
 class TestInformationBarriersUpdated:

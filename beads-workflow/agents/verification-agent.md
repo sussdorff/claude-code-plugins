@@ -195,6 +195,14 @@ Scan for acceptance criteria that are NOT marked in the Completion Report:
 Run AFTER the standard truth checks and Unclaimed Work Check. Produces additional
 DISPUTED findings (VETO checks) and advisory output (ADVISORY check).
 
+### Provenance Input Normalization
+
+Before running any check, normalize each provenance field:
+- Treat `"none"`, empty string `""`, whitespace-only, and empty list `[]` as equivalent to `"none"` (skip the check).
+- If the field value contains one or more non-empty path strings after stripping whitespace, proceed with those paths.
+
+This normalization applies to all four fields: `standards_applied`, `adrs_in_scope`, `docs_required`, `skills_referenced`.
+
 ### Standards Compliance Check
 
 **Input:** `standards_applied` from Caller Provenance. Skip this check entirely if value is "none".
@@ -227,7 +235,8 @@ PROVENANCE-STANDARDS: skipped (no standards in provenance)
 **If a listed standard file does not exist on disk:** Emit:
 ```
 PROVENANCE-STANDARDS: "<path>" — file not found (provenance integrity warning)
-VERDICT: UNVERIFIABLE
+VERDICT: DISPUTED
+fixability: human
 ```
 
 ### ADR Compliance Check
@@ -262,7 +271,8 @@ PROVENANCE-ADR: skipped (no ADRs in provenance)
 **If a listed ADR file does not exist:** Emit:
 ```
 PROVENANCE-ADR: "<path>" — file not found (provenance integrity warning)
-VERDICT: UNVERIFIABLE
+VERDICT: DISPUTED
+fixability: human
 ```
 
 ### Docs-Existence Check
@@ -276,10 +286,14 @@ For each required doc path listed in `docs_required`:
 2. **Coverage sub-check:** Does the file's content cover the bead's acceptance criteria?
    - If present but clearly stale or missing coverage: DISPUTED with `fixability: human`
    - If coverage is adequate: emit the block with `VERDICT: VERIFIED` and omit the `fixability` field
+
+If `EXISTENCE: missing`, omit the COVERAGE field entirely (the doc is missing — coverage is moot).
+If `EXISTENCE: present`, emit COVERAGE as `adequate` (→ VERIFIED) or `stale` (→ DISPUTED).
+
 ```
 PROVENANCE-DOCS: "<doc-path>"
 EXISTENCE: present | missing
-COVERAGE: adequate | stale | not-assessed
+COVERAGE: adequate | stale
 VERDICT: VERIFIED | DISPUTED
 fixability: auto | human
 ```
@@ -372,8 +386,8 @@ VERDICT: DISPUTED
 fixability: auto | human
 
 <Summary lines (one per check):>
-PROVENANCE-STANDARDS: <skipped | VERIFIED | N DISPUTED | UNVERIFIABLE>
-PROVENANCE-ADR: <skipped | VERIFIED | N DISPUTED | UNVERIFIABLE>
+PROVENANCE-STANDARDS: <skipped | VERIFIED | N DISPUTED>
+PROVENANCE-ADR: <skipped | VERIFIED | N DISPUTED>
 PROVENANCE-DOCS: <skipped | VERIFIED | N DISPUTED>
 
 ### Summary
@@ -393,8 +407,8 @@ PROVENANCE-DOCS: <skipped | VERIFIED | N DISPUTED>
 
 **Status rules:**
 - `VERIFIED`: All verifiable AKs confirmed, tests pass
-- `DISPUTED`: One or more claims contradicted by evidence; also set when any VETO check (standards/ADR/docs) produces a DISPUTED finding
-- `PARTIAL`: Some verified, some unverifiable, none disputed. Provenance-integrity UNVERIFIABLE findings (missing standard/ADR file on disk) also map to PARTIAL — the check could not be performed but no violation was detected.
+- `DISPUTED`: One or more claims contradicted by evidence; also set when any VETO check (standards/ADR/docs) produces a DISPUTED finding. Missing standard/ADR files on disk produce DISPUTED findings and therefore also trigger DISPUTED status — stale provenance paths are VETO violations, not ignorable gaps.
+- `PARTIAL`: Some verified, some unverifiable, none disputed.
 
 ## Information Barriers
 
