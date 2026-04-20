@@ -1,3 +1,10 @@
+## [2026.04.56] - 2026-04-20
+
+### Chores
+
+- *(CCP-2vo.6)* Migrate quick-fix agent to codex-exec.sh, fix session-close handoff (CCP-7cn folded in)
+- *(CCP-2vo.6)* Address codex adversarial findings — LAST_SHA, RUN_ID fallback, phase2 metrics
+
 ## [2026.04.49] - 2026-04-20
 
 ### Features
