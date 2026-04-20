@@ -13,7 +13,7 @@ expected_complexity: trivial — one guard clause + one test
 
 ## Scenario
 
-A developer runs `bd metrics rollup <bead_id>` against a bead created before the
+A developer triggers a metrics rollup via `uv run python -c "import sys; sys.path.insert(0, 'beads-workflow/lib/orchestrator'); from metrics import rollup_run; rollup_run('<run_id>')"` (or by letting `codex-exec.sh` handle it automatically on the next orchestrator run) against a bead created before the
 `run_id` backfill migration (CCP-2vo.2). The DB row has `run_id = NULL`. The
 `rollup_run()` helper executes a `WHERE run_id = ?` query with `None`, which
 SQLite silently treats as `WHERE run_id IS NULL`, matching no rows and returning
