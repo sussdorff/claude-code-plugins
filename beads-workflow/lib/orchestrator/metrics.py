@@ -9,6 +9,7 @@ from __future__ import annotations
 import json
 import re
 import sqlite3
+import sys
 from dataclasses import dataclass, field
 from datetime import date, datetime
 from pathlib import Path
@@ -267,8 +268,6 @@ def update_verification_tokens(
     the verification-agent's token cost. Uses <usage> block parsing
     rather than ccusage (which only gives session-level totals).
     """
-    import sys
-
     if not db_path.exists():
         return
     conn = sqlite3.connect(str(db_path))

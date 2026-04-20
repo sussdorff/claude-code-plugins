@@ -99,6 +99,17 @@ class TestUpdateVerificationTokens:
         finally:
             db_path.unlink(missing_ok=True)
 
+    def test_update_verification_tokens_warns_when_no_row(self, capsys):
+        with tempfile.NamedTemporaryFile(suffix=".db", delete=False) as f:
+            db_path = Path(f.name)
+        try:
+            init_db(db_path)  # initialize schema but don't insert any row
+            update_verification_tokens("nonexistent-bead", 1000, db_path=db_path)
+            captured = capsys.readouterr()
+            assert "nonexistent-bead" in captured.err
+        finally:
+            db_path.unlink(missing_ok=True)
+
     def test_update_verification_tokens_updates_most_recent_row(self):
         """Verify that update_verification_tokens updates only the most recent row."""
         with tempfile.NamedTemporaryFile(suffix=".db", delete=False) as f:
