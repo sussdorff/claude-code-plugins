@@ -114,10 +114,13 @@ exit_code = int("${CODEX_EXIT}")
 # Optional DB path override for testing
 _db_env = os.environ.get("METRICS_DB_PATH", "")
 
-# Sum usage across all turn.completed events
+# Sum usage across all turn.completed events.
+# Project convention (matches parse_usage() and test_metrics_run_api.py):
+#   total = input + cached_input + output + reasoning  (all fields additive)
 total_input = 0
 total_cached = 0
 total_output = 0
+total_reasoning = 0
 
 with open(tmpfile) as f:
     for line in f:
@@ -130,11 +133,12 @@ with open(tmpfile) as f:
             continue
         if event.get("type") == "turn.completed":
             usage = event.get("usage", {})
-            total_input  += usage.get("input_tokens", 0)
-            total_cached += usage.get("cached_input_tokens", 0)
-            total_output += usage.get("output_tokens", 0)
+            total_input    += usage.get("input_tokens", 0)
+            total_cached   += usage.get("cached_input_tokens", 0)
+            total_output   += usage.get("output_tokens", 0)
+            total_reasoning += usage.get("reasoning_output_tokens", 0)
 
-total_tokens = total_input + total_output
+total_tokens = total_input + total_cached + total_output + total_reasoning
 
 if total_tokens == 0:
     print("codex-exec.sh: WARNING: no turn.completed events found — no DB record written", file=sys.stderr)
@@ -155,7 +159,7 @@ insert_agent_call(
     input_tokens=total_input,
     cached_input_tokens=total_cached,
     output_tokens=total_output,
-    reasoning_output_tokens=0,
+    reasoning_output_tokens=total_reasoning,
     total_tokens=total_tokens,
     duration_ms=duration_ms,
     exit_code=exit_code,

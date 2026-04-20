@@ -152,10 +152,11 @@ def test_shell_script_writes_db(tmp_path: Path) -> None:
     assert input_tokens > 0, f"input_tokens should be > 0, got {input_tokens}"
     assert output_tokens > 0, f"output_tokens should be > 0, got {output_tokens}"
 
-    # The mock emits: input=1000, cached=200, output=500 → total = 1500
+    # Project convention: total = input + cached_input + output + reasoning (all additive).
+    # The mock emits: input=1000, cached=200, output=500, reasoning=0 → total = 1700
     assert input_tokens == 1000
     assert output_tokens == 500
-    assert total_tokens == 1500
+    assert total_tokens == 1700, f"Expected 1700 (1000+200+500), got {total_tokens}"
 
     # Assertion 3: rollup propagates codex_total_tokens
     rollup_run(run_id, db_path=db)
