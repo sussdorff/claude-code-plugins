@@ -887,17 +887,31 @@ Agent(subagent_type="beads-workflow:verification-agent", prompt="""
 """)
 ```
 
-**Token capture**: After the verification-agent returns, call `update_verification_tokens()`:
+**Token capture**: After the verification-agent returns, call `update_verification_tokens()`.
+Write the response to a temp file first to avoid shell quoting / triple-quote injection issues:
+
 ```bash
+# 1. Write the verification-agent response to a temp file (safe: no shell embedding)
+cat > /tmp/verify-response-{BEAD_ID}.txt << 'VERIFY_EOF'
+<PASTE_VERIFICATION_AGENT_RESPONSE_HERE>
+VERIFY_EOF
+
+# 2. Parse and update tokens
 uv run python -c "
 import sys; from pathlib import Path
 sys.path.insert(0, str(Path('$CLAUDE_PLUGIN_ROOT')/'beads-workflow/lib'))
 from orchestrator.metrics import parse_usage, update_verification_tokens
-tokens = parse_usage('''<PASTE_VERIFICATION_AGENT_RESPONSE_HERE>''')['total_tokens']
+response = Path('/tmp/verify-response-{BEAD_ID}.txt').read_text()
+tokens = parse_usage(response)['total_tokens']
 update_verification_tokens('{BEAD_ID}', tokens)
+print(f'verification_tokens: {tokens}')
 "
+
+# 3. Clean up
+rm -f /tmp/verify-response-{BEAD_ID}.txt
 ```
 This is the **canonical path** — `update_verification_tokens()` always runs after Phase 4, unconditionally.
+The temp-file pattern prevents `'''` sequences or shell metacharacters in the response from causing early termination or injection.
 
 **Processing Verification Report:**
 

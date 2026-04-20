@@ -151,3 +151,24 @@ Some text after"""
         response = "<usage>{not valid json}</usage>"
         result = parse_usage(response)
         assert result["total_tokens"] == 0
+
+    def test_parse_usage_handles_triple_quotes_in_response(self):
+        """parse_usage must survive triple-quote sequences in the response text.
+
+        The orchestrator template previously embedded the response inside a Python
+        triple-quoted string, so a '''  in SAW: output would cause a SyntaxError.
+        The fix (temp-file pattern) avoids embedding entirely; this test verifies
+        parse_usage itself is unaffected by such content regardless of the caller.
+        """
+        response = """Verification output with triple quotes: '''some code'''
+<usage>{"input_tokens": 2000, "output_tokens": 300, "cache_creation_input_tokens": 0, "cache_read_input_tokens": 0}</usage>
+More text with $SHELL_VAR and `backticks` and "double quotes"."""
+        result = parse_usage(response)
+        assert result["total_tokens"] == 2300
+
+    def test_parse_usage_handles_shell_metacharacters_in_response(self):
+        """parse_usage must survive shell metacharacters that would break inline eval."""
+        response = r"""Response containing $VAR $(subshell) `backtick` and \n newlines
+<usage>{"input_tokens": 500, "output_tokens": 100, "cache_creation_input_tokens": 0, "cache_read_input_tokens": 0}</usage>"""
+        result = parse_usage(response)
+        assert result["total_tokens"] == 600
