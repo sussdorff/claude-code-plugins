@@ -727,8 +727,10 @@ The wave orchestrator then surfaces the stall to the user in the status table an
 
 **False-positive guard:** Long Codex adversarial runs (Opus reasoning, 15+ min) can sit
 silent mid-execution. Before emitting a stall, `wave-completion.sh` applies a guard:
-1. Query `agent_calls` for recent activity: if any row for this bead has `recorded_at` within
-   the last 5 minutes, the run is actively logging → **NOT stalled, skip alert**.
+1. Query `agent_calls` for recent activity: `agent_calls` is read from `~/.claude/metrics.db`
+   via `sqlite3` (not via `bd sql` — this table is a SQLite file, not in the Dolt beads DB).
+   If any row for this bead has `recorded_at` within the last 5 minutes, the run is actively
+   logging → **NOT stalled, skip alert**.
 2. Scrollback fallback (if `agent_calls` query fails or returns 0): check the surface
    scrollback for tool-use markers (Bash, Read, Write, Edit, Grep, etc.) in the last 30
    lines. If present, the run recently executed tools → **NOT stalled, skip alert**.

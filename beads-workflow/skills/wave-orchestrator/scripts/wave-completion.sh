@@ -105,8 +105,8 @@ for i in $(seq 0 $((BEAD_COUNT - 1))); do
   if [[ "$SURFACE_IDLE" == "true" && "$BD_STATUS" == "in_progress" && "$ELAPSED_MIN" -ge "$STALL_THRESHOLD_MIN" ]]; then
     IS_ACTIVE=false
 
-    # Primary guard: query agent_calls for recent activity
-    RECENT_CALLS=$(bd sql "SELECT COUNT(*) FROM agent_calls WHERE bead_id='${BEAD_ID}' AND recorded_at > datetime('now', '-${ACTIVE_WINDOW_MIN} minutes')" 2>/dev/null | grep -E '^[0-9]+' | tail -1 || echo "0")
+    # Primary guard: query agent_calls for recent activity (agent_calls lives in ~/.claude/metrics.db, not in the Dolt beads DB)
+    RECENT_CALLS=$(sqlite3 ~/.claude/metrics.db "SELECT COUNT(*) FROM agent_calls WHERE bead_id='${BEAD_ID}' AND recorded_at > datetime('now', '-${ACTIVE_WINDOW_MIN} minutes')" 2>/dev/null || echo "0")
     if [[ "${RECENT_CALLS:-0}" =~ ^[1-9] ]]; then
       IS_ACTIVE=true
     fi
@@ -126,8 +126,11 @@ for i in $(seq 0 $((BEAD_COUNT - 1))); do
     if [[ "$IS_ACTIVE" == "false" ]]; then
       STALL_TS=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
       echo "STALL: $BEAD_ID surface idle but bd status != closed (elapsed: ${ELAPSED_MIN}min)" >&2
-      # Write diagnostic note to bead (non-blocking)
-      bd update "$BEAD_ID" --append-notes="STALL-DETECTED: wave-orchestrator observed surface idle + bd in_progress at ${STALL_TS}. Manual investigation required." 2>/dev/null || true
+      # Write diagnostic note to bead only once (idempotency guard — avoid duplicate notes on every poll)
+      EXISTING_STALL=$(bd show "$BEAD_ID" 2>/dev/null | grep -c "STALL-DETECTED" || echo "0")
+      if [[ "${EXISTING_STALL:-0}" -eq 0 ]]; then
+        bd update "$BEAD_ID" --append-notes="STALL-DETECTED: wave-orchestrator observed surface idle + bd in_progress at ${STALL_TS}. Manual investigation required." 2>/dev/null || true
+      fi
       # Track for JSON output
       STALLS=$(echo "${STALLS}" | jq \
         --arg id "$BEAD_ID" \
