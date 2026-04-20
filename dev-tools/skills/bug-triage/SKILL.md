@@ -34,7 +34,7 @@ Verify the bug actually exists before analyzing causes.
   - Exact error message (full traceback, not paraphrased)
   - Steps to reproduce (numbered, precise)
   - Environment details (OS, Python/Node version, dependencies)
-  - Relevant logs from `~/.claude/events.db` or application logs
+  - Relevant application logs or recent agent event logs if available
 - Say: "I cannot reproduce this bug with the information provided. Please share [specific items]."
 - Wait for the additional information before proceeding to Phase 2.
 </investigation>
@@ -44,53 +44,30 @@ Verify the bug actually exists before analyzing causes.
 <investigation>
 Analyze the confirmed bug to find its root cause. Consult historical data first.
 
-### Step 1: Query buglog.json
+### Step 1: Query project bug history
 
-Load the project's bug history via `malte/hooks/buglog.py`:
-
-```python
-import sys
-# NOTE: "malte/hooks" is a relative path — CWD must be the repo root when running this.
-# Alternative: use Path(__file__).resolve().parent to derive an absolute path.
-sys.path.insert(0, "malte/hooks")
-from buglog import load_buglog, search_buglog
-
-entries = load_buglog(cwd=".")
-matches = search_buglog(entries, query="<error message or symptom>")
-for m in matches:
-    print(m["error_pattern"], "→", m["root_cause"], "→", m["fix"])
-```
+Query the project's bug history if a bug log is available (see your harness adapter for project-specific lookup).
 
 WHY: buglog.json contains past bug fixes for this project. Identical or similar bugs may have been fixed before — skip re-investigation.
 
-### Step 2: Query events.db for recent errors
+### Step 2: Query recent error logs
 
-```bash
-sqlite3 ~/.claude/events.db "
-  SELECT substr(timestamp,1,19)||'Z', json_extract(metadata,'$.error') as err, tool
-  FROM events
-  WHERE event_type = 'error'
-    AND date(timestamp) >= date('now', '-7 days')
-  ORDER BY timestamp DESC LIMIT 20
-"
-```
+Query recent error logs from your agent's event log if available (see your harness adapter for the concrete query).
 
-WHY: events.db shows what tools were used and when errors occurred. Correlate timestamps with the reported bug.
+WHY: recent error logs show what tools were used and when errors occurred. Correlate timestamps with the reported bug.
 
-### Step 3: Query open-brain for past context
+### Step 3: Query cross-session memory or notes
 
-```
-mcp__open-brain__search(query="<error message or symptom>")
-```
+Query cross-session memory or notes if your agent runtime supports it (see your harness adapter for tool invocation).
 
-WHY: open-brain stores cross-project memories and learnings. A similar bug may have been encountered in a different project or session.
+WHY: cross-session memory may capture learnings from a different project or session where the same bug already appeared.
 
-If open-brain is unavailable (MCP server down or timeout), skip this step gracefully and continue with synthesis — do not let a missing MCP server block the investigation.
+If this source is unavailable, skip this step gracefully and continue with synthesis — do not let a missing runtime integration block the investigation.
 
 **Fallback paths:**
-- If buglog.json is missing or empty, skip Step 1 and go directly to Step 2 (events.db).
-- If events.db is missing, skip Step 2 and go directly to Step 3 (open-brain).
-- If open-brain is unavailable, skip Step 3 and go directly to Step 4 (synthesis).
+- If project bug history is missing or empty, skip Step 1 and go directly to Step 2 (recent error logs).
+- If recent error logs are unavailable, skip Step 2 and go directly to Step 3 (cross-session memory or notes).
+- If cross-session memory is unavailable, skip Step 3 and go directly to Step 4 (synthesis).
 - If all three are absent, proceed with manual code investigation based on the reproduction from Phase 1.
 
 ### Step 4: Synthesize
@@ -176,7 +153,4 @@ If any existing tests fail → diagnose before committing. The fix must not brea
 
 ## Reference
 
-- buglog hook: `malte/hooks/buglog.py` — `search_buglog()`, `load_buglog()`, `write_backlink()`
-- Event log skill: `/event-log` — query `~/.claude/events.db`
-- open-brain: `mcp__open-brain__search` — cross-project memory search
 - Beads CLI: `bd create --title="..." --type=task --priority=1`

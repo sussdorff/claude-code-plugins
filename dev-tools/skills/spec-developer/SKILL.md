@@ -1,18 +1,18 @@
 ---
 name: spec-developer
-model: opus
-disable-model-invocation: true
 description: >
   Deep feature specification through adaptive Q&A. Use when planning complex
   features needing thorough requirements exploration before implementation.
   Triggers on "spec developer", "feature spec", "deep spec", "requirements spec".
+model: opus
+disable-model-invocation: true
 ---
 
 # Spec Developer
 
 Produces comprehensive 500-700 line feature specifications through an extensive, adaptive Q&A dialog. Asks 20+ insightful, non-obvious clarifying questions that challenge assumptions and surface edge cases before any implementation planning begins.
 
-Complementary to `/epic-init` and `/plan`: this skill comes *before* both. Flow: `/spec-developer` -> spec document -> `/plan` or `/epic-init` uses spec as input.
+Complementary to task-breakdown or epic-planning tools: this skill comes *before* them. Flow: spec conversation -> spec document -> downstream planning uses the spec as input.
 
 ## Modes
 
@@ -24,7 +24,7 @@ Complementary to `/epic-init` and `/plan`: this skill comes *before* both. Flow:
 
 ## Arguments
 
-$ARGUMENTS
+Pass arguments directly when invoking this skill. Arguments control the operating mode and optional feature description.
 
 | Flag | Effect |
 |------|--------|
@@ -35,10 +35,10 @@ $ARGUMENTS
 
 Examples:
 ```
-/spec-developer
-/spec-developer "Patient intake FHIR workflow"
-/spec-developer --explore "CLI log rotation tool"
-/spec-developer --review malte/plans/spec-intake.md
+spec-developer
+spec-developer "Patient intake FHIR workflow"
+spec-developer --explore "CLI log rotation tool"
+spec-developer --review docs/specs/spec-intake.md
 ```
 
 ---
@@ -47,8 +47,8 @@ Examples:
 
 ### Phase 0: Context Loading
 
-1. Read `~/.claude/CLAUDE.md` (user profile, conventions)
-2. Read `./CLAUDE.md` (project context, tech stack, architecture)
+1. Read the user's global settings or conventions file if available (see your harness adapter (e.g. `SKILL.claude-adapter.md`) for harness-specific path).
+2. Load the project conventions file (e.g. `./CLAUDE.md` or equivalent; see your harness adapter for the exact path and read mechanism)
 3. Detect tech stack from project files (package.json, pyproject.toml, Cargo.toml, go.mod, etc.)
 4. Summarize: "Project: **[Name]**, Stack: **[Stack]**. Ready to develop your spec."
 
@@ -68,7 +68,7 @@ Collect findings into a context summary. Use this to inform smarter, more target
 
 Load `references/question-bank.md` for the full question catalog.
 
-Ask 3-4 questions per round using `read` with `"Send a message to the user and wait for a response"` tool. Each round has a theme that builds on previous answers. Adapt questions based on what you learn -- skip irrelevant ones, add follow-ups where answers reveal complexity.
+Ask questions interactively, waiting for the user's response between each round. Each round has a theme that builds on previous answers. Adapt questions based on what you learn -- skip irrelevant ones, add follow-ups where answers reveal complexity.
 
 **Round order:**
 
@@ -96,7 +96,7 @@ After all rounds complete, generate the spec document using `references/spec-tem
 **Output rules:**
 
 - Target 500-700 lines of Markdown
-- Save to `malte/plans/spec-<feature-name>.md` (kebab-case)
+- Save to `docs/specs/spec-<feature-name>.md` (kebab-case; see your harness adapter for project-specific path)
 - Every functional requirement must be numbered and testable
 - Include all "I don't know" answers as Open Questions
 - Data model section includes entity relationships and state transitions
@@ -134,9 +134,9 @@ When invoked with `--review <path>`:
 
 - Do NOT ask more than 4 questions per round (user fatigue)
 - Do NOT make implementation decisions -- this is requirements, not design
-- Do NOT produce task breakdowns or work estimates (use `/epic-init` for that)
+- Do NOT produce task breakdowns or work estimates (use a task-breakdown tool for that)
 - Do NOT skip the refinement loop (Phase 4) -- always ask what's missing
-- Do NOT generate specs shorter than 400 lines -- if the feature is too small for a spec, tell the user to use `/plan` instead
+- Do NOT generate specs shorter than 400 lines -- if the feature is too small for a spec, tell the user to use a lighter planning tool instead
 
 ## Resources
 
