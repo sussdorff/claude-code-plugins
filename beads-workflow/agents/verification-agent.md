@@ -236,7 +236,7 @@ PROVENANCE-STANDARDS: skipped (no standards in provenance)
 ```
 PROVENANCE-STANDARDS: "<path>" — file not found (provenance integrity warning)
 VERDICT: DISPUTED
-fixability: human
+fixability: auto
 ```
 
 ### ADR Compliance Check
@@ -272,7 +272,7 @@ PROVENANCE-ADR: skipped (no ADRs in provenance)
 ```
 PROVENANCE-ADR: "<path>" — file not found (provenance integrity warning)
 VERDICT: DISPUTED
-fixability: human
+fixability: auto
 ```
 
 ### Docs-Existence Check

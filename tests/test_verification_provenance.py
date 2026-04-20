@@ -298,6 +298,29 @@ class TestOutputFormatUpdated:
         assert "stale provenance paths are VETO violations" in content
 
 
+class TestMissingFileFixability:
+    def test_standards_missing_file_fixability_auto(self):
+        content = VERIFICATION_AGENT_MD.read_text()
+        # Find the file-not-found block for standards and confirm fixability: auto
+        # Strategy: assert the spec contains the complete "file not found" + "fixability: auto" pattern
+        assert "file not found" in content
+        # Check that the block immediately following "file not found" for standards uses auto
+        # Simple approach: check the phrase appears in context
+        idx = content.find('file not found (provenance integrity warning)')
+        assert idx != -1
+        snippet = content[idx:idx+200]
+        assert "fixability: auto" in snippet
+
+    def test_adr_missing_file_fixability_auto(self):
+        content = VERIFICATION_AGENT_MD.read_text()
+        # Find the SECOND occurrence of "file not found" (ADR block)
+        first = content.find('file not found (provenance integrity warning)')
+        second = content.find('file not found (provenance integrity warning)', first + 1)
+        assert second != -1, "Expected two file-not-found blocks (standards and ADR)"
+        snippet = content[second:second+200]
+        assert "fixability: auto" in snippet
+
+
 class TestInformationBarriersUpdated:
     def test_old_placeholder_removed(self):
         """The old CCP-2vo.9 placeholder must be removed."""
