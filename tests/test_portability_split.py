@@ -14,17 +14,29 @@ SKILL_ROOTS = [
 
 # Patterns that MUST NOT appear in portable SKILL.md
 FORBIDDEN_IN_PORTABLE = [
+    # Named MCP tool invocations
     r"mcp__open-brain",
+    # Harness-specific file paths
     r"~/.claude/events\.db",
     r"~/.claude/CLAUDE\.md",
     r"malte/hooks/buglog",
+    # Slash-command invocations
     r"/event-log",
     r"/epic-init\b",
+    r"^/[a-z][a-z0-9-]+(?:\s|$)",  # generic slash-command at start of line
+    # Harness-specific agent names
     r"bead-orchestrator",
     r"session-close",
-    r"disable-model-invocation",
+    # Non-runtime Claude frontmatter keys
+    # NOTE: runtime-consumed keys (model, disable-model-invocation) are EXEMPT —
+    # they must stay in SKILL.md because the harness loader only reads SKILL.md frontmatter.
+    # See docs/codex-skills-portability-rules.md Rule 5.
     r"\$ARGUMENTS",
-    r"^/[a-z][a-z0-9-]+(?:\s|$)",  # slash-command at start of line, followed by space or EOL
+    # Imperative references to CLAUDE.md as a direct read target
+    r"(?:^|\s)Read\s+`?\.?/?CLAUDE\.md",
+    # Named Claude tool identifiers in imperative instructions
+    r"\bUse\s+(?:the\s+)?(?:Read|Glob|Grep|Bash|Edit|Write|NotebookEdit|WebFetch|WebSearch|Task|TodoWrite)(?:\s+tools?|\s+tool)?\b",
+    r"\bCall\s+(?:the\s+)?(?:Read|Glob|Grep|Bash|Edit|Write|NotebookEdit|WebFetch|WebSearch|Task|TodoWrite)\b",
 ]
 
 def test_portable_skill_has_no_harness_specific_content():

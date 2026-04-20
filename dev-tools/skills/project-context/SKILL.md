@@ -69,11 +69,11 @@ Pass arguments directly when invoking this skill. Supported flags: `--force`, `-
 
 ### Phase 1: Gather Sources
 
-Collect all available context. Use Read and Glob tools (NOT grep/find/cat).
+Collect all available context using your harness's file-read and glob primitives (see your harness adapter for specific tool names). Avoid raw shell text-grep for source discovery; use the provided glob/read primitives.
 
-**1a. CLAUDE.md** (primary source for principles and invariants):
-Read `./CLAUDE.md`. If not found: note "CLAUDE.md not present — deriving principles from codebase analysis only."
-Follow symlinks: CLAUDE.md may be a symlink. Read the resolved file content.
+**1a. Project conventions file** (primary source for principles and invariants):
+Load `./CLAUDE.md` or the equivalent project conventions file for your harness. If not found: note "conventions file not present — deriving principles from codebase analysis only."
+Follow symlinks: the conventions file may be a symlink. Load the resolved file content.
 
 **1b. Architecture documents** (secondary source):
 Glob `docs/architecture/**/*.md`, `docs/arch/*.md`, `docs/design/*.md`, `ADR-*.md`, `architecture.md`.

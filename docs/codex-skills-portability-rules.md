@@ -61,15 +61,48 @@ Not all YAML frontmatter keys are portable. Classify each key before placing it:
 - `description` — human-readable purpose, harness-agnostic
 - `tags` — categorization labels, harness-agnostic
 
-**Harness-specific frontmatter keys** (must go in `SKILL.<harness>-adapter.md` only):
+**Runtime-consumed harness keys** (MUST remain in `SKILL.md`, adapter copy is documentation only):
 
-- `model:` — selects a Claude model (e.g. `opus`, `inherit`); meaningless outside Claude Code
-- `disable-model-invocation:` — Claude Code routing flag; no equivalent in other runtimes
-- `argument-hint:` — populates Claude Code's slash-command UI hint; harness-specific display metadata
+Some frontmatter keys are harness-specific in semantics but must stay in `SKILL.md` because the
+harness loader reads frontmatter **only from `SKILL.md`** — it never reads adapter files.
+Moving these to the adapter silently drops runtime behavior.
+
+- `model:` — selects the model used at dispatch time (e.g. `model: opus`). Codex-users can
+  ignore it; Claude Code needs it in `SKILL.md` to route correctly.
+- `disable-model-invocation:` — Claude Code routing flag. Same rule: must be in `SKILL.md`
+  for the runtime to see it.
+
+These keys MAY also be duplicated in the adapter for human documentation, but `SKILL.md` is
+the **source of truth** for their values.
+
+**Non-runtime harness display keys** (adapter only, safe to omit from `SKILL.md`):
+
+- `argument-hint:` — populates the Claude Code slash-command UI hint; no runtime effect;
+  adapter-only is fine.
 
 **Template variables**:
 
-- `$ARGUMENTS` — a Claude Code template variable that is replaced at invocation time. It MUST NOT appear in `SKILL.md`. Replace it with plain prose describing what arguments the skill accepts.
+- `$ARGUMENTS` — a Claude Code template variable replaced at invocation time. It MUST NOT
+  appear in `SKILL.md`. Replace it with plain prose describing what arguments the skill accepts.
+
+## Rule 6: No harness tool identifiers in portable instructions
+
+Portable cores MUST NOT name the harness's concrete tool identifiers in imperative workflow
+steps. Naming them creates instructions that are meaningless or misleading on other runtimes.
+
+Examples of **forbidden** phrasing in `SKILL.md`:
+- `Use Read and Glob tools (NOT grep/find/cat).`
+- `Call the Bash tool to run the command.`
+- `Read \`./CLAUDE.md\` (project context, …)`
+
+Required replacement pattern:
+1. **Tool references** → describe the *capability*: "load the file", "glob for matching files",
+   "run the shell command". Let the harness adapter name the concrete tool.
+2. **Harness convention files** (`CLAUDE.md`) → reference abstractly as "the project
+   conventions file" or "load `./CLAUDE.md` or the equivalent conventions file for your
+   harness (see your harness adapter for the exact path and read mechanism)."
+
+The adapter may then say: "In Claude Code, use the `Read` tool to load `./CLAUDE.md`."
 
 ## Pilot Skills
 
@@ -87,8 +120,10 @@ Use this checklist before considering a skill split complete:
 - No `~/.claude/` paths appear in `SKILL.md`
 - No slash-command invocation syntax appears in `SKILL.md`
 - No `bead-orchestrator` or `session-close` names appear in `SKILL.md`
+- No harness tool identifiers (`Read`, `Glob`, `Grep`, `Bash`, `Edit`, `Write`, etc.) appear in imperative instructions in `SKILL.md`
+- No direct imperative to `Read ./CLAUDE.md` — reference abstractly as "project conventions file"
 - Every harness-specific step has a fallback in `SKILL.md`
 - Harness details live only in `SKILL.<harness>-adapter.md`
-- No `model:` or `disable-model-invocation:` frontmatter keys in `SKILL.md`
-- No `argument-hint:` frontmatter key in `SKILL.md`
+- Runtime-consumed keys (`model:`, `disable-model-invocation:`) remain in `SKILL.md` (Rule 5)
+- Non-runtime display keys (`argument-hint:`) belong in adapter only
 - No `$ARGUMENTS` template variable in `SKILL.md`
