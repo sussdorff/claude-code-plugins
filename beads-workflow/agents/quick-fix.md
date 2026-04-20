@@ -105,9 +105,10 @@ Gather minimal context:
    try:
        from metrics import start_run
        run_id = start_run('<bead_id>', wave_id=None, mode='quick-fix')
-   except Exception:
-       import uuid; run_id = str(uuid.uuid4())  # fallback if metrics unavailable
-   print(run_id)
+       print(run_id)
+   except Exception as e:
+       print(f'WARNING: metrics unavailable ({e}) — Codex review will be skipped', file=__import__("sys").stderr)
+       print('')  # empty run_id signals skip
    ```
    Store the printed value as `RUN_ID` in your context.
 
@@ -164,6 +165,8 @@ fi
 
 If not found: **skip review, proceed to Phase 3 with a warning.** Quick fixes should not be
 blocked by missing tooling — log it and move on.
+
+If `RUN_ID` is empty (metrics unavailable): **skip review, proceed to Phase 3 with a warning.**
 
 Capture the diff:
 ```bash
@@ -223,6 +226,7 @@ Wait for the subagent to return, then proceed to Iteration 2 re-review.
 **Iteration 2 (re-review):** After fix is committed, run a neutral re-review to verify fixes:
 
 ```bash
+LAST_SHA=$(git rev-parse HEAD~1)
 DIFF2=$(git diff $LAST_SHA...HEAD)
 RUN_ID={RUN_ID} BEAD_ID={BEAD_ID} PHASE_LABEL=codex-fix-check ITERATION=2 \
   "$CODEX_EXEC" "Verify these fixes resolve the reported regressions:
@@ -250,11 +254,12 @@ Report: VERIFIED or STILL-BROKEN:<finding>"
 uv run python -c "
 import sys; sys.path.insert(0, 'beads-workflow/lib/orchestrator')
 try:
-    from metrics import rollup_run
+    from metrics import rollup_run, update_phase2_metrics
     rollup_run('{RUN_ID}')
-    print('Rollup complete')
+    update_phase2_metrics(bead_id='{BEAD_ID}', triggered=True, findings={TOTAL_FINDINGS}, critical={REGRESSION_COUNT}, run_id='{RUN_ID}')
+    print('Metrics updated')
 except Exception as e:
-    print(f'Rollup skipped: {e}')
+    print(f'Metrics skipped: {e}')
 "
 ```
 
