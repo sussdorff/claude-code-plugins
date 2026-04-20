@@ -9,14 +9,20 @@ User-scoped path: `~/.codex/skills/`
 
 This document records four Codex invocations that together constitute the CCP-c2p pilot evidence.
 
-- **project-context** (Invocation 1): exercised end-to-end via `--dry-run` — Codex loaded the skill,
-  ran its multi-phase analysis workflow, and produced the full docs/project-context.md output
-  without writing a file. This is the strongest form of evidence because it exercises the full
-  workflow, not just the skill description.
-- **spec-developer and bug-triage** (Invocations 2–3): validated via explicit invocation + description
-  round-trip — Codex loaded the SKILL.md, read its instructions, and produced an accurate
-  paraphrase of the skill's workflow and output format. Their full workflows are multi-round/
-  interactive Q&A processes that are out of scope for a single-transcript pilot run.
+All three skills are validated via **explicit invocation + description round-trip**: Codex received
+a prompt naming the skill, loaded the skill's `SKILL.md` from `~/.codex/skills/`, read its
+instructions, and produced an accurate paraphrase of the skill's purpose and output format.
+No full end-to-end workflow run (e.g. `--dry-run` codebase analysis) was captured in this
+evidence set — a `--dry-run` attempt timed out during the pilot session. Full workflow
+execution should be treated as a follow-up evidence task.
+
+- **project-context** (Invocation 1): description round-trip — Codex loaded SKILL.md and
+  accurately described what the skill analyzes and what document it produces.
+- **spec-developer** (Invocation 2): description round-trip — Codex loaded SKILL.md and
+  accurately described the Q&A workflow and Markdown output format.
+- **bug-triage** (Invocation 3): description round-trip — Codex loaded SKILL.md and accurately
+  described all 4 phases. Their full workflows are multi-round/interactive processes out of
+  scope for a single-transcript pilot run.
 - **Negative check** (Invocation 4): confirms no pilot skill auto-triggers on an unrelated prompt.
 
 ---
@@ -121,9 +127,12 @@ or bug-triage. No pilot skill was auto-triggered by an unrelated geography quest
 
 | Check | Result | Notes |
 |-------|--------|-------|
-| project-context explicit invocation | ✅ PASS | Skill loaded from `~/.codex/skills/project-context/SKILL.md` |
-| spec-developer explicit invocation | ✅ PASS | Skill loaded from `~/.codex/skills/spec-developer/SKILL.md` |
-| bug-triage explicit invocation | ✅ PASS | Skill loaded from `~/.codex/skills/bug-triage/SKILL.md` |
+| project-context explicit invocation | ✅ PASS | Skill loaded; description round-trip only |
+| spec-developer explicit invocation | ✅ PASS | Skill loaded; description round-trip only |
+| bug-triage explicit invocation | ✅ PASS | Skill loaded; description round-trip only |
 | Negative check (unrelated prompt) | ✅ PASS | No pilot skill auto-triggered |
 
-All Phase 1 acceptance criteria for AC#2 satisfied.
+Phase 1 AC#2 is satisfied at the discovery-and-description level: Codex successfully loads and
+reads each skill from `~/.codex/skills/`, and explicit invocations return accurate skill
+descriptions. Full workflow execution was not captured and should be treated as a follow-up
+evidence task (full `--dry-run` run timed out during this pilot session).
