@@ -3,6 +3,10 @@
 #
 # Usage: wave-status.sh <wave-config.json>
 #
+# 1-surface-per-bead mode: after CCP-2vo.4, bead-orchestrator runs all phases
+# (implementation + Codex adversarial review) inline in a single pane. There is
+# no separate cmux-reviewer surface to monitor.
+#
 # Input: JSON file with wave configuration:
 #   {
 #     "dispatch_time": "2026-03-30T14:00:00",
@@ -91,7 +95,7 @@ for i in $(seq 0 $((BEAD_COUNT - 1))); do
       STATUS="session_close"
       DETAIL="Implementation done, session close running"
     fi
-    if echo "$SCREEN" | grep -q "review-agent\|cmux-reviewer\|Review iteration"; then
+    if echo "$SCREEN" | grep -q "review-agent\|Review iteration\|Codex review"; then
       STATUS="in_review"
       # Try to extract iteration number
       ITER=$(echo "$SCREEN" | grep -oE "iteration [0-9]+/[0-9]+" | tail -1)

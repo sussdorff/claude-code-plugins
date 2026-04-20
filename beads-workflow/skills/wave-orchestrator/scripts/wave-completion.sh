@@ -21,9 +21,27 @@ if [[ ! -f "$CONFIG" ]]; then
 fi
 
 BEAD_COUNT=$(jq '.beads | length' "$CONFIG")
+WAVE_ID=$(jq -r '.wave_id // "unknown"' "$CONFIG")
 ALL_CLOSED=true
 ALL_IDLE=true
 STRAGGLERS="[]"
+STALLS="[]"
+
+# Stall detection thresholds
+STALL_THRESHOLD_MIN=15
+ACTIVE_WINDOW_MIN=5
+
+# Compute elapsed minutes from dispatch time (used for stall detection)
+DISPATCH_TIME=$(jq -r '.dispatch_time // empty' "$CONFIG")
+if [[ -n "$DISPATCH_TIME" ]]; then
+  DISPATCH_EPOCH=$(date -j -u -f "%Y-%m-%dT%H:%M:%S" "$DISPATCH_TIME" +%s 2>/dev/null \
+    || date -u -d "${DISPATCH_TIME}Z" +%s 2>/dev/null \
+    || echo "0")
+  NOW_EPOCH=$(date -u +%s)
+  ELAPSED_MIN=$(( (NOW_EPOCH - DISPATCH_EPOCH) / 60 ))
+else
+  ELAPSED_MIN=0
+fi
 
 # Position-based idle check: last non-empty line must be the prompt,
 # and the line immediately before it must NOT be an active-thinking marker.
@@ -83,6 +101,52 @@ for i in $(seq 0 $((BEAD_COUNT - 1))); do
   if [[ "$SURFACE_IDLE" != "true" ]]; then
     ALL_IDLE=false
   fi
+
+  # Stall detection: surface idle + bd in_progress + elapsed >= threshold
+  if [[ "$SURFACE_IDLE" == "true" && "$BD_STATUS" == "in_progress" && "$ELAPSED_MIN" -ge "$STALL_THRESHOLD_MIN" ]]; then
+    IS_ACTIVE=false
+
+    # Primary guard: query agent_calls for recent activity (agent_calls lives in ~/.claude/metrics.db, not in the Dolt beads DB)
+    # Use epoch-second comparison to avoid text-sort mismatch between ISO-8601+TZ stored values
+    # and SQLite's datetime() which produces bare "YYYY-MM-DD HH:MM:SS" strings.
+    RECENT_CALLS=$(sqlite3 ~/.claude/metrics.db \
+      "SELECT COUNT(*) FROM agent_calls WHERE bead_id='${BEAD_ID}' AND (strftime('%s','now') - strftime('%s', recorded_at)) < $((ACTIVE_WINDOW_MIN * 60))" \
+      2>/dev/null || echo "0")
+    if [[ "${RECENT_CALLS:-0}" =~ ^[1-9] ]]; then
+      IS_ACTIVE=true
+    fi
+
+    # Fallback guard: check scrollback for recent tool-use markers
+    if [[ "$IS_ACTIVE" == "false" ]]; then
+      SCREEN_FULL=$(cmux read-screen --surface "$SURFACE" --scrollback --lines 100 2>&1 || true)
+      if echo "$SCREEN_FULL" | grep -qE "invalid_params|not a terminal|Surface.*not found"; then
+        SCREEN_FULL=""
+      fi
+      RECENT_TOOL_USE=$(echo "$SCREEN_FULL" | tail -30 | grep -cE '\bBash\b|\bRead\b|\bWrite\b|\bEdit\b|\bGrep\b|\bGlob\b|\bAgent\b|ToolUse|tool_use' || echo "0")
+      if [[ "${RECENT_TOOL_USE:-0}" -gt 0 ]]; then
+        IS_ACTIVE=true
+      fi
+    fi
+
+    if [[ "$IS_ACTIVE" == "false" ]]; then
+      STALL_TS=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+      echo "STALL: $BEAD_ID surface idle but bd status != closed (elapsed: ${ELAPSED_MIN}min)" >&2
+      # Write diagnostic note to bead only once per wave run (idempotency guard).
+      # Use a temp-file marker keyed to wave_id+bead_id — avoids parsing bd show output
+      # (which includes the description, not just notes, making grep-based checks unreliable).
+      STALL_MARKER="/tmp/wave-stall-${WAVE_ID}-${BEAD_ID}"
+      if [[ ! -f "$STALL_MARKER" ]]; then
+        touch "$STALL_MARKER"
+        bd update "$BEAD_ID" --append-notes="STALL-DETECTED: wave-orchestrator observed surface idle + bd in_progress at ${STALL_TS}. Manual investigation required." 2>/dev/null || true
+      fi
+      # Track for JSON output
+      STALLS=$(echo "${STALLS}" | jq \
+        --arg id "$BEAD_ID" \
+        --arg ts "$STALL_TS" \
+        --argjson elapsed "$ELAPSED_MIN" \
+        '. + [{id: $id, detected_at: $ts, elapsed_minutes: $elapsed}]')
+    fi
+  fi
 done
 
 # Check for follow-up beads that might have been created
@@ -124,12 +188,14 @@ jq -n \
   --argjson all_surfaces_idle "$ALL_IDLE" \
   --argjson stragglers "$STRAGGLERS" \
   --argjson follow_up_beads "$FOLLOW_UPS" \
+  --argjson stalls "${STALLS}" \
   '{
     complete: $complete,
     all_beads_closed: $all_beads_closed,
     all_surfaces_idle: $all_surfaces_idle,
     stragglers: $stragglers,
-    unclosed_follow_ups: $follow_up_beads
+    unclosed_follow_ups: $follow_up_beads,
+    stalls: $stalls
   }'
 
 if [[ "$COMPLETE" == "true" ]]; then
