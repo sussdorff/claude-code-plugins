@@ -51,6 +51,26 @@ That means the portable core should say what to do when:
 
 The core stays usable even when the adapter is never read.
 
+## Rule 5: YAML frontmatter metadata
+
+Not all YAML frontmatter keys are portable. Classify each key before placing it:
+
+**Portable frontmatter keys** (safe in `SKILL.md`):
+
+- `name` — skill identifier, harness-agnostic
+- `description` — human-readable purpose, harness-agnostic
+- `tags` — categorization labels, harness-agnostic
+
+**Harness-specific frontmatter keys** (must go in `SKILL.<harness>-adapter.md` only):
+
+- `model:` — selects a Claude model (e.g. `opus`, `inherit`); meaningless outside Claude Code
+- `disable-model-invocation:` — Claude Code routing flag; no equivalent in other runtimes
+- `argument-hint:` — populates Claude Code's slash-command UI hint; harness-specific display metadata
+
+**Template variables**:
+
+- `$ARGUMENTS` — a Claude Code template variable that is replaced at invocation time. It MUST NOT appear in `SKILL.md`. Replace it with plain prose describing what arguments the skill accepts.
+
 ## Pilot Skills
 
 | Skill | Portable core keeps | Claude adapter keeps |
@@ -69,3 +89,5 @@ Use this checklist before considering a skill split complete:
 - No `bead-orchestrator` or `session-close` names appear in `SKILL.md`
 - Every harness-specific step has a fallback in `SKILL.md`
 - Harness details live only in `SKILL.<harness>-adapter.md`
+- No `model:` or `disable-model-invocation:` frontmatter keys in `SKILL.md`
+- No `$ARGUMENTS` template variable in `SKILL.md`

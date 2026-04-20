@@ -46,19 +46,19 @@ Analyze the confirmed bug to find its root cause. Consult historical data first.
 
 ### Step 1: Query project bug history
 
-Query the project's bug history if a bug log is available (see Claude adapter for project-specific lookup).
+Query the project's bug history if a bug log is available (see your harness adapter for project-specific lookup).
 
 WHY: buglog.json contains past bug fixes for this project. Identical or similar bugs may have been fixed before — skip re-investigation.
 
 ### Step 2: Query recent error logs
 
-Query recent error logs from your agent's event log if available (see Claude adapter for the concrete query).
+Query recent error logs from your agent's event log if available (see your harness adapter for the concrete query).
 
 WHY: recent error logs show what tools were used and when errors occurred. Correlate timestamps with the reported bug.
 
 ### Step 3: Query cross-session memory or notes
 
-Query cross-session memory or notes if your agent runtime supports it (see Claude adapter for tool invocation).
+Query cross-session memory or notes if your agent runtime supports it (see your harness adapter for tool invocation).
 
 WHY: cross-session memory may capture learnings from a different project or session where the same bug already appeared.
 

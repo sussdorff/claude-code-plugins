@@ -1,6 +1,8 @@
 ---
 harness: claude
 skill: project-context
+model: inherit
+argument-hint: "[--force] [--dry-run] [--section=<name>]"
 ---
 
 # Project Context — Claude Harness Adapter

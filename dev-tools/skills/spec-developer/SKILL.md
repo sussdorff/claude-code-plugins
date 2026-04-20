@@ -1,7 +1,5 @@
 ---
 name: spec-developer
-model: opus
-disable-model-invocation: true
 description: >
   Deep feature specification through adaptive Q&A. Use when planning complex
   features needing thorough requirements exploration before implementation.
@@ -24,7 +22,7 @@ Complementary to task-breakdown or epic-planning tools: this skill comes *before
 
 ## Arguments
 
-$ARGUMENTS
+Pass arguments directly when invoking this skill. Arguments control the operating mode and optional feature description.
 
 | Flag | Effect |
 |------|--------|
@@ -47,7 +45,7 @@ spec-developer --review docs/specs/spec-intake.md
 
 ### Phase 0: Context Loading
 
-1. Read the user's global settings or conventions file if available (see Claude adapter for harness-specific path).
+1. Read the user's global settings or conventions file if available (see your harness adapter (e.g. `SKILL.claude-adapter.md`) for harness-specific path).
 2. Read `./CLAUDE.md` (project context, tech stack, architecture)
 3. Detect tech stack from project files (package.json, pyproject.toml, Cargo.toml, go.mod, etc.)
 4. Summarize: "Project: **[Name]**, Stack: **[Stack]**. Ready to develop your spec."
@@ -96,7 +94,7 @@ After all rounds complete, generate the spec document using `references/spec-tem
 **Output rules:**
 
 - Target 500-700 lines of Markdown
-- Save to `docs/specs/spec-<feature-name>.md` (kebab-case; see Claude adapter for project-specific path)
+- Save to `docs/specs/spec-<feature-name>.md` (kebab-case; see your harness adapter for project-specific path)
 - Every functional requirement must be numbered and testable
 - Include all "I don't know" answers as Open Questions
 - Data model section includes entity relationships and state transitions

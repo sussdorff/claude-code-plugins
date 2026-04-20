@@ -1,13 +1,11 @@
 ---
 name: project-context
-model: inherit
 description: >-
   Generate docs/project-context.md (Constitution Pattern) from an existing codebase.
   Analyzes CLAUDE.md, architecture docs, and directory structure to produce a readable,
   editable, git-versioned context document covering Tech Stack, Architecture Principles,
   Module Map, Established Patterns, and Critical Invariants. Triggers on: project context, generate project context,
   project-context, create project-context, constitution document, codebase context.
-argument-hint: "[--force] [--dry-run] [--section=<name>]"
 tags: project, documentation, architecture
 ---
 
@@ -24,7 +22,7 @@ Consumed by orchestration agents as project context for new implementations.
 
 ## When to Use
 
-- After setting up a new project (project setup → project context generation; see Claude adapter for invocation details)
+- After setting up a new project (project setup → project context generation; see your harness adapter (e.g. `SKILL.claude-adapter.md`) for invocation details)
 - When onboarding someone new to the codebase
 - When starting a major refactor and want to document current state first
 - When your orchestration workflow injects project context into implementation sessions
@@ -37,7 +35,7 @@ Consumed by orchestration agents as project context for new implementations.
 
 ## Arguments
 
-`$ARGUMENTS`
+Pass arguments directly when invoking this skill. Supported flags: `--force`, `--dry-run`, `--section=<name>`.
 
 | Flag | Effect |
 |------|--------|
@@ -50,7 +48,7 @@ Consumed by orchestration agents as project context for new implementations.
 
 ### Phase 0: Pre-flight
 
-1. Parse `$ARGUMENTS` to detect flags (`--force`, `--dry-run`, `--section=<name>`)
+1. Parse the arguments passed to this skill invocation to detect flags (`--force`, `--dry-run`, `--section=<name>`)
 
 2. Check if `docs/project-context.md` already exists:
    ```bash
@@ -219,9 +217,9 @@ The template covers these required sections:
 
 **Consumed by:**
 - Orchestration agents: reads `docs/project-context.md` for project context injection
-- Session summary tools: may append new architecture decisions after significant sessions (see Claude adapter for specifics)
+- Session summary tools: may append new architecture decisions after significant sessions (see your harness adapter for specifics)
 
 **Related skills:**
-- Project setup — sets up a new project (see Claude adapter for invocation details)
+- Project setup — sets up a new project (see your harness adapter for invocation details)
 - Project health — quality assessment (run independently)
-- Spec developer — deep feature specs (uses project-context as input context; see Claude adapter for invocation details)
+- Spec developer — deep feature specs (uses project-context as input context; see your harness adapter for invocation details)

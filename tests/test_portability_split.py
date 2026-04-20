@@ -22,6 +22,9 @@ FORBIDDEN_IN_PORTABLE = [
     r"/epic-init\b",
     r"bead-orchestrator",
     r"session-close",
+    r"disable-model-invocation",
+    r"\$ARGUMENTS",
+    r"^/[a-z][a-z0-9-]+",
 ]
 
 def test_portable_skill_has_no_harness_specific_content():
@@ -30,7 +33,7 @@ def test_portable_skill_has_no_harness_specific_content():
         assert skill_file.exists(), f"{skill_file} does not exist"
         content = skill_file.read_text()
         for pattern in FORBIDDEN_IN_PORTABLE:
-            matches = re.findall(pattern, content)
+            matches = re.findall(pattern, content, re.MULTILINE)
             assert not matches, (
                 f"Forbidden pattern '{pattern}' found in {skill_file}: {matches}"
             )

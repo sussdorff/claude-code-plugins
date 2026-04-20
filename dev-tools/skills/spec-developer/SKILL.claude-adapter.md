@@ -1,6 +1,8 @@
 ---
 harness: claude
 skill: spec-developer
+model: opus
+disable-model-invocation: true
 ---
 
 # Spec Developer — Claude Harness Adapter
