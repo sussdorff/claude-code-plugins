@@ -48,6 +48,13 @@ _MIGRATE_COLUMNS = [
     ("phase2_triggered", "INTEGER DEFAULT 0"),
     ("phase2_findings", "INTEGER DEFAULT 0"),
     ("phase2_critical", "INTEGER DEFAULT 0"),
+    # CCP-d7b: ccusage-sourced fields (tokens from Claude Code JSONL / Codex JSONL
+    # via the ccusage and @ccusage/codex CLI tools). Populated post-bead-close by
+    # ingest_ccusage.py and ingest_codex.py; the orchestrator no longer touches them.
+    ("cache_read_tokens", "INTEGER DEFAULT 0"),
+    ("cache_creation_tokens", "INTEGER DEFAULT 0"),
+    ("reasoning_tokens", "INTEGER DEFAULT 0"),
+    ("cost_usd", "REAL DEFAULT 0.0"),
 ]
 
 _USAGE_RE = re.compile(r"<usage>(.*?)</usage>", re.DOTALL)
@@ -171,6 +178,82 @@ def insert_bead_run(conn: sqlite3.Connection, run: BeadRun) -> None:
         ),
     )
     conn.commit()
+
+
+def upsert_ccusage_row(
+    bead_id: str,
+    date_str: str,
+    total_tokens: int,
+    cost_usd: float,
+    cache_read_tokens: int,
+    cache_creation_tokens: int,
+    reasoning_tokens: int = 0,
+    db_path: Path = DB_PATH,
+) -> str:
+    """
+    UPSERT ccusage-sourced token + cost data for a (bead_id, date) row.
+
+    Updates the most recent matching row in place if present; otherwise inserts a
+    new row with only the ccusage-sourced fields populated (orchestrator-authored
+    fields like quality_grade, wave_id stay at defaults).
+
+    Returns: 'updated' or 'inserted'.
+    """
+    conn = init_db(db_path)
+    try:
+        cur = conn.execute(
+            """
+            SELECT id FROM bead_runs
+            WHERE bead_id = ? AND date = ?
+            ORDER BY id DESC LIMIT 1
+            """,
+            (bead_id, date_str),
+        )
+        row = cur.fetchone()
+        if row is not None:
+            conn.execute(
+                """
+                UPDATE bead_runs
+                SET total_tokens = ?,
+                    cost_usd = ?,
+                    cache_read_tokens = ?,
+                    cache_creation_tokens = ?,
+                    reasoning_tokens = ?
+                WHERE id = ?
+                """,
+                (
+                    total_tokens,
+                    cost_usd,
+                    cache_read_tokens,
+                    cache_creation_tokens,
+                    reasoning_tokens,
+                    row[0],
+                ),
+            )
+            conn.commit()
+            return "updated"
+
+        conn.execute(
+            """
+            INSERT INTO bead_runs (
+                bead_id, date, total_tokens, cost_usd,
+                cache_read_tokens, cache_creation_tokens, reasoning_tokens
+            ) VALUES (?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                bead_id,
+                date_str,
+                total_tokens,
+                cost_usd,
+                cache_read_tokens,
+                cache_creation_tokens,
+                reasoning_tokens,
+            ),
+        )
+        conn.commit()
+        return "inserted"
+    finally:
+        conn.close()
 
 
 def update_phase2_metrics(

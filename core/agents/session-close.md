@@ -475,7 +475,26 @@ merged, tagged, pushed, and the CI pipeline has passed.
    ```
    Capture: bead ID, type (`feat`/`fix`/`chore`/`refactor`/`task`), title, and close reason.
 
-5. Sync:
+5. **Ingest ccusage + Codex metrics** for each closed bead (non-blocking). This
+   replaces the orchestrator's former Phase 3.6 inline token capture — tokens and
+   USD cost now come from the authoritative JSONL logs ccusage reads.
+
+   ```bash
+   PLUGIN_LIB="${CLAUDE_PLUGIN_ROOT:-$HOME/code/claude-code-plugins/beads-workflow}/lib/orchestrator"
+   SINCE=$(date -v-7d +%Y%m%d 2>/dev/null || date -d '-7 days' +%Y%m%d)
+   for id in $CLOSED_IDS; do
+     # Claude Code tokens (attribution via cwd/worktree path in sessionId)
+     python3 "$PLUGIN_LIB/ingest_ccusage.py" --bead "$id" --since "$SINCE" || true
+     # Codex tokens (requires explicit --bead + time window; no cwd available)
+     python3 "$PLUGIN_LIB/ingest_codex.py" --bead "$id" --since "$SINCE" || true
+   done
+   ```
+
+   Both handlers exit 0 even on failure (missing binaries, CLI errors). Failures
+   print warnings to stderr; capture them for Step 17 summary. Skipping is fine —
+   the grading-row was already written in Phase 3.6.
+
+6. Sync:
    ```bash
    bd dolt commit && bd dolt pull && bd dolt push --force
    ```

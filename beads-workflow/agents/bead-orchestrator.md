@@ -785,70 +785,44 @@ Parse `Quality: A | B | C` and `TDD: A | B | C` from the final review report. If
 completeness, and scenario coverage — not just test existence. `--skip-tests` only
 affects the MoC Coverage check within the review (the review-agent skips check #2).
 
-### Phase 3.6: Token Capture
+### Phase 3.6: Token Capture (optional, minimal)
 
-After the review loop completes, persist token usage to `~/.claude/metrics.db` for cost tracking.
+Token and cost capture is handled **post-bead-close** by session-close Step 16b via
+`beads-workflow/lib/orchestrator/ingest_ccusage.py` (Claude Code) and `ingest_codex.py`
+(Codex). Both read from the `ccusage` / `@ccusage/codex` CLI tools and UPSERT into
+`~/.claude/metrics.db`. The orchestrator no longer parses `<usage>` blocks or writes
+tokens directly.
 
-**Parse `<usage>` blocks** from each subagent response collected during this bead run:
-- Implementation subagent: `impl_tokens`, `impl_duration_ms`
-- Review agent responses: `review_tokens` (sum across all iterations)
-- Verification agent: `verification_tokens`
-- UAT validator (if PAUL mode): `uat_tokens`
-- Constraint checker: `constraint_tokens`
+**What the orchestrator still does here:**
 
-**Determine model assignments** from the model strategy config that was read in Phase 3:
-- `MODEL_IMPL`: the model used for implementation (e.g. `codex`, `sonnet`)
-- `MODEL_REVIEW`: the model used for review (e.g. `opus`, `sonnet`)
-- `WAVE_ID`: if set by the wave-orchestrator via the `WAVE_ID` environment variable, capture it.
-  Check: `echo $WAVE_ID`. If empty, use empty string.
+1. **Write grading fields** that ccusage cannot know (quality, TDD, wave, model assignment).
+   Use the `insert_bead_run` helper with zeroed token fields — tokens are filled in later:
+   ```bash
+   uv run python -c "
+   import sys; from pathlib import Path
+   sys.path.insert(0, str(Path('$CLAUDE_PLUGIN_ROOT')/'beads-workflow/lib'))
+   from orchestrator.metrics import init_db, insert_bead_run, BeadRun
+   from datetime import date
+   conn = init_db()
+   insert_bead_run(conn, BeadRun(
+       bead_id='{BEAD_ID}', date=str(date.today()),
+       quality_grade='{QUALITY_GRADE}', tdd_grade='{TDD_GRADE}',
+       ak_count={AK_COUNT}, wave_id='{WAVE_ID}',
+       model_impl='{MODEL_IMPL}', model_review='{MODEL_REVIEW}',
+       review_iterations={REVIEW_ITERATIONS},
+   ))
+   "
+   ```
+2. **Log to bead notes** for human-readable history:
+   ```bash
+   bd update {BEAD_ID} --append-notes="Grading: quality={QUALITY_GRADE} tdd={TDD_GRADE} review_iterations={REVIEW_ITERATIONS}"
+   ```
 
-**Write the row:**
-```bash
-uv run python -c "
-import os, sys
-from pathlib import Path
-_candidates = [os.environ.get('CLAUDE_PLUGIN_ROOT'), str(Path.home()/'code/claude-code-plugins/beads-workflow'), str(Path.home()/'.claude/plugins/beads-workflow')]
-_lib = next((Path(c)/'lib' for c in _candidates if c and (Path(c)/'lib/orchestrator/metrics.py').exists()), None)
-if _lib is None:
-    print('Metrics skipped: plugin lib not found', file=sys.stderr); sys.exit(0)
-sys.path.insert(0, str(_lib))
-from orchestrator.metrics import init_db, insert_bead_run, BeadRun
-from datetime import date
+Tokens (`total_tokens`, `cache_read_tokens`, `cache_creation_tokens`, `cost_usd`) are
+populated by ingest_ccusage.py / ingest_codex.py after session-close runs `bd close`.
+The `phase2_*` columns are still updated by the cmux-reviewer via `update_phase2_metrics()`.
 
-conn = init_db()
-run = BeadRun(
-    bead_id='{BEAD_ID}',
-    date=str(date.today()),
-    impl_tokens={IMPL_TOKENS},
-    impl_duration_ms={IMPL_DURATION_MS},
-    review_iterations={REVIEW_ITERATIONS},
-    review_tokens={REVIEW_TOKENS},
-    verification_tokens={VERIFICATION_TOKENS},
-    uat_tokens={UAT_TOKENS},
-    constraint_tokens={CONSTRAINT_TOKENS},
-    total_tokens={TOTAL_TOKENS},
-    quality_grade='{QUALITY_GRADE}',  # Sanitize: strip any single-quotes from grade strings before substituting
-    tdd_grade='{TDD_GRADE}',  # Sanitize: strip any single-quotes from grade strings before substituting
-    ak_count={AK_COUNT},
-    wave_id='{WAVE_ID}',
-    model_impl='{MODEL_IMPL}',
-    model_review='{MODEL_REVIEW}',
-)
-insert_bead_run(conn, run)
-print(f'Metrics saved: {run.total_tokens:,} total tokens (impl={MODEL_IMPL}, review={MODEL_REVIEW})')
-"
-```
-
-**Note:** `phase2_triggered`, `phase2_findings`, and `phase2_critical` are written by
-the cmux-reviewer after Phase 2 completes. The orchestrator writes 0 defaults; the
-cmux-reviewer updates the row via `update_phase2_metrics()` (see metrics.py).
-
-**If the script fails** (DB not writable, import error): log a warning to bead notes and continue. Token capture is non-blocking.
-
-**Log to bead notes:**
-```bash
-bd update {BEAD_ID} --append-notes="Token capture: {TOTAL_TOKENS} total tokens (impl={IMPL_TOKENS}, review={REVIEW_TOKENS}, verify={VERIFICATION_TOKENS})"
-```
+If the grading-row insert fails, log a warning and continue — non-blocking.
 
 ### Phase 4: Completion Verification
 
