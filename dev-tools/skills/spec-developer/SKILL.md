@@ -4,6 +4,8 @@ description: >
   Deep feature specification through adaptive Q&A. Use when planning complex
   features needing thorough requirements exploration before implementation.
   Triggers on "spec developer", "feature spec", "deep spec", "requirements spec".
+model: opus
+disable-model-invocation: true
 ---
 
 # Spec Developer
@@ -46,7 +48,7 @@ spec-developer --review docs/specs/spec-intake.md
 ### Phase 0: Context Loading
 
 1. Read the user's global settings or conventions file if available (see your harness adapter (e.g. `SKILL.claude-adapter.md`) for harness-specific path).
-2. Read `./CLAUDE.md` (project context, tech stack, architecture)
+2. Load the project conventions file (e.g. `./CLAUDE.md` or equivalent; see your harness adapter for the exact path and read mechanism)
 3. Detect tech stack from project files (package.json, pyproject.toml, Cargo.toml, go.mod, etc.)
 4. Summarize: "Project: **[Name]**, Stack: **[Stack]**. Ready to develop your spec."
 
