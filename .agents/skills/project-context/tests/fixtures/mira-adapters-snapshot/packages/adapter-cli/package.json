@@ -1,0 +1,7 @@
+{
+  "name": "adapter-cli",
+  "version": "1.0.0",
+  "scripts": {
+    "build": "tsc"
+  }
+}
