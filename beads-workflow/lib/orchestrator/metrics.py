@@ -1,7 +1,7 @@
 """
 Bead Metrics — SQLite persistence for per-bead token cost tracking.
 DB location: ~/.claude/metrics.db
-Table: bead_runs
+Tables: bead_runs, agent_calls
 """
 
 from __future__ import annotations
@@ -10,8 +10,9 @@ import json
 import re
 import sqlite3
 import sys
+import uuid
 from dataclasses import dataclass, field
-from datetime import date, datetime
+from datetime import date, datetime, timezone
 from pathlib import Path
 
 DB_PATH = Path.home() / ".claude" / "metrics.db"
@@ -56,7 +57,39 @@ _MIGRATE_COLUMNS = [
     ("cache_creation_tokens", "INTEGER DEFAULT 0"),
     ("reasoning_tokens", "INTEGER DEFAULT 0"),
     ("cost_usd", "REAL DEFAULT 0.0"),
+    # CCP-2vo.2: run identity, mode, and rollup columns
+    ("mode", "TEXT DEFAULT 'full-2pane'"),
+    ("codex_total_tokens", "INTEGER DEFAULT 0"),
+    ("codex_runs", "INTEGER DEFAULT 0"),
+    ("fix_agent_tokens", "INTEGER DEFAULT 0"),
+    ("fix_agent_invocations", "INTEGER DEFAULT 0"),
+    ("auto_decisions", "INTEGER DEFAULT 0"),
+    ("deviations_from_reco", "INTEGER DEFAULT 0"),
+    ("session_close_tokens", "INTEGER DEFAULT 0"),
+    ("session_close_duration_ms", "INTEGER DEFAULT 0"),
 ]
+
+_CREATE_AGENT_CALLS_SQL = """
+CREATE TABLE IF NOT EXISTS agent_calls (
+  id                       INTEGER PRIMARY KEY AUTOINCREMENT,
+  run_id                   TEXT NOT NULL,
+  bead_id                  TEXT NOT NULL,
+  wave_id                  TEXT,
+  phase_label              TEXT NOT NULL,
+  agent_label              TEXT NOT NULL,
+  model                    TEXT NOT NULL,
+  iteration                INTEGER DEFAULT 1,
+  input_tokens             INTEGER DEFAULT 0,
+  cached_input_tokens      INTEGER DEFAULT 0,
+  output_tokens            INTEGER DEFAULT 0,
+  reasoning_output_tokens  INTEGER DEFAULT 0,
+  total_tokens             INTEGER DEFAULT 0,
+  duration_ms              INTEGER DEFAULT 0,
+  exit_code                INTEGER DEFAULT 0,
+  recorded_at              TEXT NOT NULL,
+  FOREIGN KEY (run_id) REFERENCES bead_runs(run_id)
+)
+"""
 
 _USAGE_RE = re.compile(r"<usage>(.*?)</usage>", re.DOTALL)
 
@@ -91,10 +124,11 @@ class BeadRun:
     phase2_triggered: int = 0
     phase2_findings: int = 0
     phase2_critical: int = 0
+    run_id: str = ""
 
 
 def init_db(db_path: Path = DB_PATH) -> sqlite3.Connection:
-    """Initialize DB and ensure bead_runs table exists. Migrates schema if needed."""
+    """Initialize DB and ensure bead_runs and agent_calls tables exist. Migrates schema if needed."""
     db_path.parent.mkdir(parents=True, exist_ok=True)
     conn = sqlite3.connect(str(db_path))
     conn.execute(CREATE_TABLE_SQL)
@@ -103,6 +137,29 @@ def init_db(db_path: Path = DB_PATH) -> sqlite3.Connection:
     for col_name, col_def in _MIGRATE_COLUMNS:
         if col_name not in existing:
             conn.execute(f"ALTER TABLE bead_runs ADD COLUMN {col_name} {col_def}")
+
+    # CCP-2vo.2: run_id identity — add column, backfill UUIDs, create unique index
+    existing = {row[1] for row in conn.execute("PRAGMA table_info(bead_runs)")}
+    if "run_id" not in existing:
+        conn.execute("ALTER TABLE bead_runs ADD COLUMN run_id TEXT")
+    rows_needing_uuid = conn.execute(
+        "SELECT id FROM bead_runs WHERE run_id IS NULL OR run_id = ''"
+    ).fetchall()
+    for row in rows_needing_uuid:
+        conn.execute(
+            "UPDATE bead_runs SET run_id = ? WHERE id = ?",
+            (str(uuid.uuid4()), row[0]),
+        )
+    conn.execute(
+        "CREATE UNIQUE INDEX IF NOT EXISTS idx_bead_runs_run_id ON bead_runs(run_id)"
+    )
+
+    # CCP-2vo.2: agent_calls child table
+    conn.execute(_CREATE_AGENT_CALLS_SQL)
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_agent_calls_run ON agent_calls(run_id)")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_agent_calls_bead ON agent_calls(bead_id)")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_agent_calls_model ON agent_calls(model)")
+
     conn.commit()
     return conn
 
@@ -145,7 +202,13 @@ def parse_usage(text: str) -> dict[str, int]:
 
 
 def insert_bead_run(conn: sqlite3.Connection, run: BeadRun) -> None:
-    """Insert a BeadRun row into bead_runs. Commits after insert."""
+    """Insert a BeadRun row into bead_runs. Commits after insert.
+
+    Automatically generates and populates run_id (UUID4) if the BeadRun
+    does not already have one set.
+    """
+    if not run.run_id:
+        run.run_id = str(uuid.uuid4())
     conn.execute(
         """
         INSERT INTO bead_runs (
@@ -153,8 +216,9 @@ def insert_bead_run(conn: sqlite3.Connection, run: BeadRun) -> None:
             review_tokens, verification_tokens, uat_tokens, constraint_tokens,
             total_tokens, quality_grade, tdd_grade, ak_count,
             wave_id, model_impl, model_review,
-            phase2_triggered, phase2_findings, phase2_critical
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            phase2_triggered, phase2_findings, phase2_critical,
+            run_id
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """,
         (
             run.bead_id,
@@ -176,6 +240,7 @@ def insert_bead_run(conn: sqlite3.Connection, run: BeadRun) -> None:
             run.phase2_triggered,
             run.phase2_findings,
             run.phase2_critical,
+            run.run_id,
         ),
     )
     conn.commit()
@@ -189,22 +254,81 @@ def upsert_ccusage_row(
     cache_read_tokens: int,
     cache_creation_tokens: int,
     reasoning_tokens: int = 0,
+    run_id: str | None = None,
     db_path: Path = DB_PATH,
 ) -> str:
     """
-    UPSERT ccusage-sourced token + cost data for a (bead_id, date) row.
+    UPSERT ccusage-sourced token + cost data for a bead_runs row.
 
-    Updates the most recent matching row in place if present; otherwise inserts a
-    new row with only the ccusage-sourced fields populated (orchestrator-authored
-    fields like quality_grade, wave_id stay at defaults).
+    When run_id is provided, the target row is looked up by run_id directly
+    (WHERE run_id = ?), preventing cross-contamination between multiple same-day
+    runs of the same bead.
+
+    When run_id is absent (backward-compat for old callers), falls back to the
+    previous (bead_id, date) lookup — most recent matching row in place if
+    present; otherwise inserts a new row. If the found row has no run_id, one
+    is generated and written back to maintain identity going forward.
 
     Returns: 'updated' or 'inserted'.
     """
     conn = init_db(db_path)
     try:
+        if run_id is not None:
+            # New model: look up by run_id for precise isolation
+            cur = conn.execute(
+                "SELECT id FROM bead_runs WHERE run_id = ?",
+                (run_id,),
+            )
+            row = cur.fetchone()
+            if row is not None:
+                conn.execute(
+                    """
+                    UPDATE bead_runs
+                    SET total_tokens = ?,
+                        cost_usd = ?,
+                        cache_read_tokens = ?,
+                        cache_creation_tokens = ?,
+                        reasoning_tokens = ?
+                    WHERE run_id = ?
+                    """,
+                    (
+                        total_tokens,
+                        cost_usd,
+                        cache_read_tokens,
+                        cache_creation_tokens,
+                        reasoning_tokens,
+                        run_id,
+                    ),
+                )
+                conn.commit()
+                return "updated"
+            # run_id was provided but row not found — insert with that run_id
+            conn.execute(
+                """
+                INSERT INTO bead_runs (
+                    bead_id, date, total_tokens, cost_usd,
+                    cache_read_tokens, cache_creation_tokens, reasoning_tokens,
+                    run_id
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    bead_id,
+                    date_str,
+                    total_tokens,
+                    cost_usd,
+                    cache_read_tokens,
+                    cache_creation_tokens,
+                    reasoning_tokens,
+                    run_id,
+                ),
+            )
+            conn.commit()
+            return "inserted"
+
+        # Backward-compat path: look up by (bead_id, date)
         cur = conn.execute(
             """
-            SELECT id FROM bead_runs
+            SELECT id, run_id FROM bead_runs
             WHERE bead_id = ? AND date = ?
             ORDER BY id DESC LIMIT 1
             """,
@@ -212,6 +336,14 @@ def upsert_ccusage_row(
         )
         row = cur.fetchone()
         if row is not None:
+            existing_run_id = row[1]
+            # Backfill run_id if missing on the found row
+            if not existing_run_id:
+                existing_run_id = str(uuid.uuid4())
+                conn.execute(
+                    "UPDATE bead_runs SET run_id = ? WHERE id = ?",
+                    (existing_run_id, row[0]),
+                )
             conn.execute(
                 """
                 UPDATE bead_runs
@@ -238,8 +370,9 @@ def upsert_ccusage_row(
             """
             INSERT INTO bead_runs (
                 bead_id, date, total_tokens, cost_usd,
-                cache_read_tokens, cache_creation_tokens, reasoning_tokens
-            ) VALUES (?, ?, ?, ?, ?, ?, ?)
+                cache_read_tokens, cache_creation_tokens, reasoning_tokens,
+                run_id
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 bead_id,
@@ -249,6 +382,7 @@ def upsert_ccusage_row(
                 cache_read_tokens,
                 cache_creation_tokens,
                 reasoning_tokens,
+                str(uuid.uuid4()),
             ),
         )
         conn.commit()
@@ -298,23 +432,42 @@ def update_phase2_metrics(
     triggered: bool,
     findings: int,
     critical: int,
+    run_id: str | None = None,
     db_path: Path = DB_PATH,
 ) -> None:
-    """Update phase2 columns on the most recent row for a bead."""
+    """Update phase2 columns on a bead_runs row.
+
+    When run_id is provided, targets that specific run (WHERE run_id = ?),
+    preventing a delayed phase2 update from writing to the wrong run when
+    multiple runs exist for the same bead.
+
+    When run_id is absent (backward-compat for old callers), falls back to
+    updating the most recent row for the given bead_id.
+    """
     if not db_path.exists():
         return
     conn = sqlite3.connect(str(db_path))
     try:
-        conn.execute(
-            """
-            UPDATE bead_runs
-            SET phase2_triggered = ?, phase2_findings = ?, phase2_critical = ?
-            WHERE id = (
-                SELECT id FROM bead_runs WHERE bead_id = ? ORDER BY id DESC LIMIT 1
+        if run_id is not None:
+            conn.execute(
+                """
+                UPDATE bead_runs
+                SET phase2_triggered = ?, phase2_findings = ?, phase2_critical = ?
+                WHERE run_id = ?
+                """,
+                (int(triggered), findings, critical, run_id),
             )
-            """,
-            (int(triggered), findings, critical, bead_id),
-        )
+        else:
+            conn.execute(
+                """
+                UPDATE bead_runs
+                SET phase2_triggered = ?, phase2_findings = ?, phase2_critical = ?
+                WHERE id = (
+                    SELECT id FROM bead_runs WHERE bead_id = ? ORDER BY id DESC LIMIT 1
+                )
+                """,
+                (int(triggered), findings, critical, bead_id),
+            )
         conn.commit()
     finally:
         conn.close()
@@ -486,3 +639,192 @@ def query_wave_report(wave_id: str, db_path: Path = DB_PATH) -> str:
         _render_table(rows),
     ]
     return "\n".join(lines)
+
+
+# ---------------------------------------------------------------------------
+# CCP-2vo.2: Run identity + agent_calls public API
+# These four functions form the stable public contract for CCP-2vo.3, CCP-2vo.4, CCP-2vo.8.
+# ---------------------------------------------------------------------------
+
+
+def start_run(
+    bead_id: str,
+    wave_id: str | None = None,
+    mode: str = "full-1pane",
+    db_path: Path = DB_PATH,
+) -> str:
+    """
+    Create a new bead_runs row and return its run_id.
+
+    Run identity model: each call to start_run creates one logical run of a bead.
+    Multiple runs of the same bead_id are valid (retries, replays, A/B validation).
+    The returned run_id is a UUID4 string and is the authoritative key for
+    insert_agent_call(), rollup_run(), and get_run().
+    """
+    run_id = str(uuid.uuid4())
+    today = str(date.today())
+    conn = init_db(db_path)
+    try:
+        conn.execute(
+            """
+            INSERT INTO bead_runs (bead_id, date, wave_id, mode, run_id)
+            VALUES (?, ?, ?, ?, ?)
+            """,
+            (bead_id, today, wave_id or "", mode, run_id),
+        )
+        conn.commit()
+    finally:
+        conn.close()
+    return run_id
+
+
+def insert_agent_call(
+    run_id: str,
+    bead_id: str,
+    phase_label: str,
+    agent_label: str,
+    model: str,
+    iteration: int,
+    input_tokens: int,
+    cached_input_tokens: int,
+    output_tokens: int,
+    reasoning_output_tokens: int,
+    total_tokens: int,
+    duration_ms: int,
+    exit_code: int,
+    wave_id: str | None = None,
+    db_path: Path = DB_PATH,
+) -> int:
+    """
+    Insert one row into agent_calls. Returns the new row id.
+
+    Raises ValueError if run_id is not present in bead_runs (FK integrity check
+    done in Python since SQLite FK enforcement is optional).
+    """
+    conn = init_db(db_path)
+    try:
+        existing = conn.execute(
+            "SELECT id FROM bead_runs WHERE run_id = ?", (run_id,)
+        ).fetchone()
+        if existing is None:
+            raise ValueError(f"run_id '{run_id}' not found in bead_runs")
+
+        recorded_at = datetime.now(timezone.utc).isoformat()
+        cur = conn.execute(
+            """
+            INSERT INTO agent_calls (
+                run_id, bead_id, wave_id, phase_label, agent_label, model,
+                iteration, input_tokens, cached_input_tokens, output_tokens,
+                reasoning_output_tokens, total_tokens, duration_ms, exit_code,
+                recorded_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                run_id,
+                bead_id,
+                wave_id,
+                phase_label,
+                agent_label,
+                model,
+                iteration,
+                input_tokens,
+                cached_input_tokens,
+                output_tokens,
+                reasoning_output_tokens,
+                total_tokens,
+                duration_ms,
+                exit_code,
+                recorded_at,
+            ),
+        )
+        conn.commit()
+        return cur.lastrowid
+    finally:
+        conn.close()
+
+
+def rollup_run(run_id: str, db_path: Path = DB_PATH) -> None:
+    """
+    Aggregate agent_calls for this run_id and update bead_runs rollup columns:
+    - codex_total_tokens = SUM(total_tokens) WHERE model LIKE '%codex%' OR '%o1%' OR '%o3%'
+    - codex_runs = COUNT(*) with same filter
+    - fix_agent_tokens = SUM(total_tokens) WHERE phase_label LIKE '%fix%'
+    - fix_agent_invocations = COUNT(*) WHERE phase_label LIKE '%fix%'
+    - session_close_tokens = SUM(total_tokens) WHERE phase_label LIKE '%session%close%'
+    - session_close_duration_ms = SUM(duration_ms) WHERE phase_label LIKE '%session%close%'
+    """
+    conn = init_db(db_path)
+    try:
+        def agg(query: str, params: tuple) -> int:
+            result = conn.execute(query, params).fetchone()
+            return result[0] or 0
+
+        codex_filter = (
+            "run_id = ? AND (model LIKE '%codex%' OR model LIKE '%o1%' OR model LIKE '%o3%')"
+        )
+        codex_total_tokens = agg(
+            f"SELECT SUM(total_tokens) FROM agent_calls WHERE {codex_filter}", (run_id,)
+        )
+        codex_runs = agg(
+            f"SELECT COUNT(*) FROM agent_calls WHERE {codex_filter}", (run_id,)
+        )
+
+        fix_filter = "run_id = ? AND phase_label LIKE '%fix%'"
+        fix_agent_tokens = agg(
+            f"SELECT SUM(total_tokens) FROM agent_calls WHERE {fix_filter}", (run_id,)
+        )
+        fix_agent_invocations = agg(
+            f"SELECT COUNT(*) FROM agent_calls WHERE {fix_filter}", (run_id,)
+        )
+
+        sc_filter = "run_id = ? AND phase_label LIKE '%session%close%'"
+        session_close_tokens = agg(
+            f"SELECT SUM(total_tokens) FROM agent_calls WHERE {sc_filter}", (run_id,)
+        )
+        session_close_duration_ms = agg(
+            f"SELECT SUM(duration_ms) FROM agent_calls WHERE {sc_filter}", (run_id,)
+        )
+
+        conn.execute(
+            """
+            UPDATE bead_runs SET
+                codex_total_tokens = ?,
+                codex_runs = ?,
+                fix_agent_tokens = ?,
+                fix_agent_invocations = ?,
+                session_close_tokens = ?,
+                session_close_duration_ms = ?
+            WHERE run_id = ?
+            """,
+            (
+                codex_total_tokens,
+                codex_runs,
+                fix_agent_tokens,
+                fix_agent_invocations,
+                session_close_tokens,
+                session_close_duration_ms,
+                run_id,
+            ),
+        )
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def get_run(run_id: str, db_path: Path = DB_PATH) -> dict:
+    """
+    Fetch a bead_runs row by run_id. Returns a dict of all columns.
+    Raises KeyError if run_id not found.
+    """
+    conn = init_db(db_path)
+    conn.row_factory = sqlite3.Row
+    try:
+        row = conn.execute(
+            "SELECT * FROM bead_runs WHERE run_id = ?", (run_id,)
+        ).fetchone()
+    finally:
+        conn.close()
+
+    if row is None:
+        raise KeyError(f"run_id '{run_id}' not found in bead_runs")
+    return dict(row)
