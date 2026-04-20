@@ -21,6 +21,7 @@ if [[ ! -f "$CONFIG" ]]; then
 fi
 
 BEAD_COUNT=$(jq '.beads | length' "$CONFIG")
+WAVE_ID=$(jq -r '.wave_id // "unknown"' "$CONFIG")
 ALL_CLOSED=true
 ALL_IDLE=true
 STRAGGLERS="[]"
@@ -106,7 +107,11 @@ for i in $(seq 0 $((BEAD_COUNT - 1))); do
     IS_ACTIVE=false
 
     # Primary guard: query agent_calls for recent activity (agent_calls lives in ~/.claude/metrics.db, not in the Dolt beads DB)
-    RECENT_CALLS=$(sqlite3 ~/.claude/metrics.db "SELECT COUNT(*) FROM agent_calls WHERE bead_id='${BEAD_ID}' AND recorded_at > datetime('now', '-${ACTIVE_WINDOW_MIN} minutes')" 2>/dev/null || echo "0")
+    # Use epoch-second comparison to avoid text-sort mismatch between ISO-8601+TZ stored values
+    # and SQLite's datetime() which produces bare "YYYY-MM-DD HH:MM:SS" strings.
+    RECENT_CALLS=$(sqlite3 ~/.claude/metrics.db \
+      "SELECT COUNT(*) FROM agent_calls WHERE bead_id='${BEAD_ID}' AND (strftime('%s','now') - strftime('%s', recorded_at)) < $((ACTIVE_WINDOW_MIN * 60))" \
+      2>/dev/null || echo "0")
     if [[ "${RECENT_CALLS:-0}" =~ ^[1-9] ]]; then
       IS_ACTIVE=true
     fi
@@ -126,9 +131,12 @@ for i in $(seq 0 $((BEAD_COUNT - 1))); do
     if [[ "$IS_ACTIVE" == "false" ]]; then
       STALL_TS=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
       echo "STALL: $BEAD_ID surface idle but bd status != closed (elapsed: ${ELAPSED_MIN}min)" >&2
-      # Write diagnostic note to bead only once (idempotency guard — avoid duplicate notes on every poll)
-      EXISTING_STALL=$(bd show "$BEAD_ID" 2>/dev/null | grep -c "STALL-DETECTED" || echo "0")
-      if [[ "${EXISTING_STALL:-0}" -eq 0 ]]; then
+      # Write diagnostic note to bead only once per wave run (idempotency guard).
+      # Use a temp-file marker keyed to wave_id+bead_id — avoids parsing bd show output
+      # (which includes the description, not just notes, making grep-based checks unreliable).
+      STALL_MARKER="/tmp/wave-stall-${WAVE_ID}-${BEAD_ID}"
+      if [[ ! -f "$STALL_MARKER" ]]; then
+        touch "$STALL_MARKER"
         bd update "$BEAD_ID" --append-notes="STALL-DETECTED: wave-orchestrator observed surface idle + bd in_progress at ${STALL_TS}. Manual investigation required." 2>/dev/null || true
       fi
       # Track for JSON output

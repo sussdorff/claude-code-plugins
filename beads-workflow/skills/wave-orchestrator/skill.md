@@ -729,11 +729,17 @@ The wave orchestrator then surfaces the stall to the user in the status table an
 silent mid-execution. Before emitting a stall, `wave-completion.sh` applies a guard:
 1. Query `agent_calls` for recent activity: `agent_calls` is read from `~/.claude/metrics.db`
    via `sqlite3` (not via `bd sql` — this table is a SQLite file, not in the Dolt beads DB).
-   If any row for this bead has `recorded_at` within the last 5 minutes, the run is actively
-   logging → **NOT stalled, skip alert**.
+   The query compares epoch seconds (`strftime('%s','now') - strftime('%s', recorded_at)`) to
+   avoid text-sort mismatch between ISO-8601+TZ stored values and SQLite's `datetime()` output.
+   If any row for this bead was recorded within the last 5 minutes → **NOT stalled, skip alert**.
 2. Scrollback fallback (if `agent_calls` query fails or returns 0): check the surface
    scrollback for tool-use markers (Bash, Read, Write, Edit, Grep, etc.) in the last 30
    lines. If present, the run recently executed tools → **NOT stalled, skip alert**.
+
+**Idempotency:** The bead note is written **at most once per wave run** via a temp-file
+marker (`/tmp/wave-stall-<wave_id>-<bead_id>`). The STALL entry is still added to the
+`stalls` JSON array on every subsequent poll (useful for monitoring dashboards), but the
+bead tracker is not spammed on every 270s check.
 
 The mock scenario used in acceptance: a bead with surface-idle + bd in_progress + elapsed
 > 15 min produces a STALL alert. A second bead with surface-idle + bd in_progress but
@@ -774,7 +780,8 @@ echo $?  # 0 = all done, 1 = not yet
   "all_beads_closed": false,
   "all_surfaces_idle": true,
   "stragglers": [{"id": "mira-0al", "bd_status": "in_progress", "surface_idle": false}],
-  "unclosed_follow_ups": [{"id": "mira-fix-x3r", "status": "open"}]
+  "unclosed_follow_ups": [{"id": "mira-fix-x3r", "status": "open"}],
+  "stalls": [{"id": "mira-0al", "detected_at": "2026-04-20T14:32:00Z", "elapsed_minutes": 17}]
 }
 ```
 
