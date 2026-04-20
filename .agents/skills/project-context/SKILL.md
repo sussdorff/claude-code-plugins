@@ -1,18 +1,15 @@
 ---
 name: project-context
-model: inherit
 description: >-
   Generate docs/project-context.md (Constitution Pattern) from an existing codebase.
   Analyzes CLAUDE.md, architecture docs, and directory structure to produce a readable,
   editable, git-versioned context document covering Tech Stack, Architecture Principles,
-  Module Map, Established Patterns, and Critical Invariants. Used by bead-orchestrator
-  Phase 2 as project context. Triggers on: project context, generate project context,
+  Module Map, Established Patterns, and Critical Invariants. Triggers on: project context, generate project context,
   project-context, create project-context, constitution document, codebase context.
-argument-hint: "[--force] [--dry-run] [--section=<name>]"
 tags: project, documentation, architecture
 ---
 
-# /project-context
+# Project Context
 
 Generate `docs/project-context.md` — a human-readable, editable Constitution document that
 captures your codebase's tech stack, architecture principles, module map, patterns, and
@@ -21,14 +18,14 @@ critical invariants.
 The output is **intentionally static** — it does not auto-regenerate to avoid drift. Regenerate
 manually when your architecture changes significantly.
 
-Consumed by `bead-orchestrator` Phase 2 as project context for new implementations.
+Consumed by orchestration agents as project context for new implementations.
 
 ## When to Use
 
-- After setting up a new project (`/project-setup` → `/project-context`)
+- After setting up a new project (project setup → project context generation; see your harness adapter (e.g. `SKILL.claude-adapter.md`) for invocation details)
 - When onboarding someone new to the codebase
 - When starting a major refactor and want to document current state first
-- When bead-orchestrator Phase 2 needs `docs/project-context.md` for context injection
+- When your orchestration workflow injects project context into implementation sessions
 
 ## Do NOT
 
@@ -38,7 +35,7 @@ Consumed by `bead-orchestrator` Phase 2 as project context for new implementatio
 
 ## Arguments
 
-`$ARGUMENTS`
+Pass arguments directly when invoking this skill. Supported flags: `--force`, `--dry-run`, `--section=<name>`.
 
 | Flag | Effect |
 |------|--------|
@@ -51,7 +48,7 @@ Consumed by `bead-orchestrator` Phase 2 as project context for new implementatio
 
 ### Phase 0: Pre-flight
 
-1. Parse `$ARGUMENTS` to detect flags (`--force`, `--dry-run`, `--section=<name>`)
+1. Parse the arguments passed to this skill invocation to detect flags (`--force`, `--dry-run`, `--section=<name>`)
 
 2. Check if `docs/project-context.md` already exists:
    ```bash
@@ -62,7 +59,7 @@ Consumed by `bead-orchestrator` Phase 2 as project context for new implementatio
    - Report: "⚠️  `docs/project-context.md` already exists."
    - Show first 5 lines of the existing file so user knows what version it is
    - Ask: "Overwrite with a fresh analysis? (Use `--force` to skip this prompt)"
-   - If user says no / cancel: abort with "Aborted. Run `/project-context --force` to overwrite."
+   - If user says no / cancel: abort with "Aborted. Run this skill again with `--force` to overwrite."
    - If user says yes: continue
 
 3. Create `docs/` directory if it doesn't exist:
@@ -72,11 +69,11 @@ Consumed by `bead-orchestrator` Phase 2 as project context for new implementatio
 
 ### Phase 1: Gather Sources
 
-Collect all available context. Use Read and Glob tools (NOT grep/find/cat).
+Collect all available context using your harness's file-read and glob primitives (see your harness adapter for specific tool names). Avoid raw shell text-grep for source discovery; use the provided glob/read primitives.
 
-**1a. CLAUDE.md** (primary source for principles and invariants):
-Read `./CLAUDE.md`. If not found: note "CLAUDE.md not present — deriving principles from codebase analysis only."
-Follow symlinks: CLAUDE.md may be a symlink. Read the resolved file content.
+**1a. Project conventions file** (primary source for principles and invariants):
+Load `./CLAUDE.md` or the equivalent project conventions file for your harness. If not found: note "conventions file not present — deriving principles from codebase analysis only."
+Follow symlinks: the conventions file may be a symlink. Load the resolved file content.
 
 **1b. Architecture documents** (secondary source):
 Glob `docs/architecture/**/*.md`, `docs/arch/*.md`, `docs/design/*.md`, `ADR-*.md`, `architecture.md`.
@@ -120,7 +117,7 @@ Minimum 3 invariants.
 ### Phase 3: Generate Output
 
 **If `--dry-run`**: print full generated content to chat, do NOT write any file. End with:
-`[DRY RUN — file not written. Run `/project-context` without --dry-run to write docs/project-context.md]`
+`[DRY RUN — file not written. Run this skill without --dry-run to write docs/project-context.md]`
 
 **If `--section=<name>`**: regenerate only that section in the existing file.
 
@@ -219,10 +216,10 @@ The template covers these required sections:
 ## Integration
 
 **Consumed by:**
-- `bead-orchestrator` Phase 2: reads `docs/project-context.md` for project context injection
-- `session-close`: may append new architecture decisions after significant sessions
+- Orchestration agents: reads `docs/project-context.md` for project context injection
+- Session summary tools: may append new architecture decisions after significant sessions (see your harness adapter for specifics)
 
 **Related skills:**
-- `/project-setup` — sets up new project (run before `/project-context`)
-- `/project-health` — quality assessment (run independently)
-- `/spec-developer` — deep feature specs (uses project-context as input context)
+- Project setup — sets up a new project (see your harness adapter for invocation details)
+- Project health — quality assessment (run independently)
+- Spec developer — deep feature specs (uses project-context as input context; see your harness adapter for invocation details)

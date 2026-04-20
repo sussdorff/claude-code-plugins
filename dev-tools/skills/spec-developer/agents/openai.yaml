@@ -1,0 +1,4 @@
+interface:
+  display_name: "Spec Developer"
+  short_description: "Deep feature specification through adaptive Q&A."
+  default_prompt: "Use the spec-developer skill to produce a comprehensive feature specification. Describe the feature you want to build and its target users."
