@@ -20,6 +20,25 @@
 #       - CI ran and failed                            → PIPELINE_ERROR unset (normal failure)
 #       - push-triggered workflow exists but no run
 #         registered within --timeout                  → PIPELINE_ERROR=no_run_registered
+#
+# Why this step exists:
+#   Before pipeline-watch, beads got closed the instant `git push` returned success.
+#   If CI went red minutes later (missing secret, cross-platform break, deploy hook failure),
+#   the bead was already closed and the broken change was invisible in the beads tracker.
+#   All orchestrator gates run locally in the worktree — they can't see CI-only failures.
+#
+# Registration vs. completion:
+#   --timeout only bounds how long we wait for GitHub to *register* the run (create it in
+#   "queued" state). Once a run exists, `gh run watch` blocks until completion regardless
+#   of how long the job takes — slow self-hosted runners, Docker builds, integration suites
+#   are all fine. The timeout only fires if GitHub never creates the run at all.
+#
+# Registration-fail distinction:
+#   If the repo has a push-triggered workflow in .github/workflows/ but no run registers
+#   within the timeout, this handler returns PIPELINE_STATUS=failed with
+#   PIPELINE_ERROR=no_run_registered. That is a real problem: runner offline, webhook down,
+#   Actions disabled on the repo, or branch-protection override. It is NOT treated as
+#   "no workflow exists". Beads stay in_progress so someone can investigate.
 
 set -uo pipefail
 

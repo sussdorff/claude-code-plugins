@@ -2,8 +2,19 @@
 # version.sh - Version bump: auto-detects SemVer vs CalVer from VERSION file
 # Usage: version.sh [--dry-run] [major|minor|patch]
 #
-# SemVer: reads conventional commits to determine bump (or accepts explicit override)
-# CalVer: YYYY.0M.MICRO (increments MICRO within month, resets on new month)
+# Strategy detection (from VERSION file):
+#   SemVer: major < 2000 (e.g. "0.3.0")
+#     - Reads conventional commits to determine bump level:
+#       "feat:" → minor, "fix:" → patch, "BREAKING CHANGE" → major
+#     - Accepts explicit override: version.sh major|minor|patch
+#     - Also updates sushi-config.yaml if present
+#   CalVer: major >= 2000 (e.g. "2026.03.1")
+#     - Format: vYYYY.0M.MICRO
+#     - Increments MICRO within the current month, resets to 0 on a new month
+#
+# Output (stdout, KV lines parsed by session-close Step 15b):
+#   TAG_PENDING=<tag>   (e.g. v2026.04.47)
+#   TAG_MESSAGE=<msg>   (e.g. "Release 2026.04.47")
 
 set -euo pipefail
 
@@ -56,7 +67,7 @@ fi
 
 # Determine next version
 if [ -x "$NEXT_VERSION_SCRIPT" ] || [ -f "$NEXT_VERSION_SCRIPT" ]; then
-  NEXT_VERSION=$(bash "$NEXT_VERSION_SCRIPT" $BUMP_OVERRIDE)
+  NEXT_VERSION=$(bash "$NEXT_VERSION_SCRIPT" "$BUMP_OVERRIDE")
 else
   if [[ "$STRATEGY" == "semver" ]]; then
     # Fallback: inline SemVer calculation
@@ -94,7 +105,7 @@ else
     TAG_PREFIX="v${YEAR}.${MONTH}"
     MONTH_TAG=$(git -C "$REPO_ROOT" tag --list "${TAG_PREFIX}.*" --sort=-v:refname 2>/dev/null | head -1)
     if [ -n "$MONTH_TAG" ]; then
-      CURRENT_MICRO=$(echo "$MONTH_TAG" | sed "s/^${TAG_PREFIX}\\.//")
+      CURRENT_MICRO="${MONTH_TAG#"${TAG_PREFIX}."}"
       NEXT_MICRO=$((CURRENT_MICRO + 1))
     else
       NEXT_MICRO=0
@@ -113,7 +124,7 @@ if $DRY_RUN; then
   echo ""
   echo "[DRY-RUN] Would write $NEXT_VERSION to $VERSION_FILE"
   while IFS= read -r -d '' pj; do
-    echo "[DRY-RUN] Would update ${pj#$REPO_ROOT/}"
+    echo "[DRY-RUN] Would update ${pj#"$REPO_ROOT"/}"
   done < <(find "$REPO_ROOT" -maxdepth 3 -path '*/.claude-plugin/plugin.json' -print0 2>/dev/null)
   echo "[DRY-RUN] Would create git tag $NEXT_TAG"
 else
@@ -139,7 +150,7 @@ else
       # Insert version after "name" line
       sed -i '' "s/\"name\": \(.*\)/\"name\": \1\n  \"version\": \"$NEXT_VERSION\",/" "$PLUGIN_JSON"
     fi
-    echo "plugin.json updated: ${PLUGIN_JSON#$REPO_ROOT/}"
+    echo "plugin.json updated: ${PLUGIN_JSON#"$REPO_ROOT"/}"
     git -C "$REPO_ROOT" add "$PLUGIN_JSON"
   done < <(find "$REPO_ROOT" -maxdepth 3 -path '*/.claude-plugin/plugin.json' -print0 2>/dev/null)
 

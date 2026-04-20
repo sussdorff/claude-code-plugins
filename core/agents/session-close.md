@@ -55,9 +55,6 @@ MODE: debrief-only | ship-only | full (default)
 
 **Degenerate combo:** If `--debrief-only` is combined with `--skip-learnings --skip-debrief --skip-summary`, no steps execute — warn and exit.
 
-**Important:** In default (full) mode, Phase A (Steps 10-12) runs **before** Phase B (Steps 1-7, 9, 13-17).
-This ensures learnings are captured even if the push fails later.
-
 ## Double-Merge Strategy
 
 The core innovation: two merges from main bracket the session-close work, minimizing the
@@ -75,13 +72,7 @@ Timeline:
   [7] close beads + dolt sync                 <- only after push AND pipeline pass
 ```
 
-Steps [3], [4], [5] happen as fast as possible in sequence to minimize the window where
-another session-close could push between our second merge and our push. Step [6a] is a
-blocking gate: if CI fails, [7] does not run and beads stay `in_progress` so the broken
-change remains visible in the tracker.
-
-**Why merge, not rebase:** Worktrees with existing merge commits break on rebase
-(CLAUDE.md rule: `git pull --no-rebase`). Always use `git merge`.
+Steps [3], [4], [5] run in tight sequence to minimize the race window. Step [6a] is a blocking gate: CI fail → [7] does not run → beads stay `in_progress`.
 
 ## Handlers
 
@@ -106,8 +97,7 @@ HANDLERS_DIR="$HOME/.claude/plugins/cache/sussdorff-plugins/core/agents/session-
    ```bash
    bash "$HANDLERS_DIR/merge-from-main.sh" ${DRY_RUN:+--dry-run} --label "first"
    ```
-   Handler exits: 0 = success / skipped cleanly, 1 = transient error (warn+continue),
-   2 = merge conflict (**STOP** — report to user, do NOT force).
+   Handler exit 2 = merge conflict — see Error Handling.
 
 3. Print session header using `MERGE_FROM_MAIN_STATUS` from the handler output:
    ```
@@ -235,42 +225,18 @@ After saving, identify significant decisions and save each separately.
 
 ### Step 12c: Worktree Turn-Log Upload
 
-Only runs when in a worktree (`REPO_ROOT != MAIN_REPO`). Skip silently in main-repo
-sessions — no error, no warning. **Non-blocking**: any failure keeps the file for a
-later session-close to retry and does NOT abort session-close.
+Only runs in a worktree (`REPO_ROOT != MAIN_REPO`). **Non-blocking** — any failure keeps the file for a later retry and does NOT abort session-close.
 
-**`--dry-run` mode:** Preview-only. Report that the file exists and would be uploaded,
-without running the handler or deleting the file.
-
-1. **Check for the JSONL file:**
+1. Check for `$REPO_ROOT/.worktree-turns.jsonl` — if missing, silent skip.
+2. Set env vars and call the handler:
    ```bash
-   TURN_LOG="$REPO_ROOT/.worktree-turns.jsonl"
-   ```
-   If the file does not exist → silent skip.
-
-2. **Set env vars and call the handler:**
-   ```bash
-   export TURN_LOG
+   export TURN_LOG="$REPO_ROOT/.worktree-turns.jsonl"
    export WORKTREE_REL=$(python3 -c "import os; print(os.path.relpath('$REPO_ROOT', '$MAIN_REPO'))" 2>/dev/null || echo "")
-   _WT_BASENAME=$(basename "$REPO_ROOT")
-   export BEAD_ID_FROM_PATH=$(echo "$_WT_BASENAME" | sed -n 's/^bead-\(.*\)/\1/p')
+   export BEAD_ID_FROM_PATH=$(basename "$REPO_ROOT" | sed -n 's/^bead-\(.*\)/\1/p')
    export PROJECT_NAME=$(git -C "$REPO_ROOT" remote get-url origin 2>/dev/null | sed 's|.*/||;s|\.git$||' || basename "$REPO_ROOT")
-   # OPEN_BRAIN_URL / OPEN_BRAIN_API_KEY are read from the ambient environment
-   # (defaults: https://open-brain.sussdorff.org and empty respectively).
-
-   if [[ -n "${DRY_RUN:-}" ]]; then
-     echo "TURN_LOG_STATUS=skipped_dry_run"
-   else
-     python3 "$HANDLERS_DIR/turn-log-upload.py"
-   fi
+   [[ -n "${DRY_RUN:-}" ]] && echo "TURN_LOG_STATUS=skipped_dry_run" || python3 "$HANDLERS_DIR/turn-log-upload.py"
    ```
-
-3. Parse `TURN_LOG_STATUS` from handler output for Step 17 summary:
-   - `uploaded_deleted` — success, file is gone
-   - `empty_deleted` — file was empty, deleted, no upload attempted
-   - `error_kept parse_error=...` / `error_kept status=...` / `error_kept exc=...` —
-     file preserved, record warning, continue session-close
-   - `skipped_dry_run` — dry-run preview only
+3. Parse `TURN_LOG_STATUS` from output: `uploaded_deleted` / `empty_deleted` / `error_kept ...` / `skipped_dry_run`.
 
 ### Step 13: Kill Worktree Dev Processes
 
@@ -294,9 +260,7 @@ Catch up with any changes that landed on main while we were doing Steps 2–13:
 bash "$HANDLERS_DIR/merge-from-main.sh" ${DRY_RUN:+--dry-run} --label "second"
 ```
 
-Handler exit: 0 = success / skipped cleanly, 2 = merge conflict. On conflict:
-**STOP**, report to user — all previous work (commit, changelog, tag) is preserved
-on the feature branch. User can resolve and re-run `--ship-only`.
+Handler exit 2 = merge conflict — see Error Handling. Previous work (commit, changelog, tag) is preserved on the branch. User can resolve and re-run `--ship-only`.
 
 ### Step 15: Merge Feature into Main
 
@@ -309,43 +273,26 @@ bash "$HANDLERS_DIR/merge-feature.sh" \
   ${DRY_RUN:+--dry-run}
 ```
 
-Handler exit: 0 = success / dry-run, 2 = merge conflict. On conflict: **STOP**, report
-to user, do NOT force or delete.
+Handler exit 2 = merge conflict — see Error Handling. Do NOT force or delete.
 
-This happens immediately after Step 14 to minimize the race window where another
-session-close could push between our second merge and our own push.
+Runs immediately after Step 14 to minimize the race window for parallel session-closes.
 
-### Step 15b: Version Tag (auto-detects SemVer vs CalVer)
+### Step 15b: Version Tag
 
-**After** the second merge from main (Step 14) and the feature→main merge (Step 15),
-bump the version. This avoids merge conflicts from parallel VERSION bumps.
+Bump version after Steps 14+15 (avoids parallel VERSION conflicts). Strategy auto-detected from `VERSION` file — see `version.sh` header.
 
-The handler auto-detects the versioning strategy from the `VERSION` file:
-- **SemVer** (major < 2000, e.g. `0.3.0`): bumps based on conventional commits
-  (`feat:` → minor, `fix:` → patch, `BREAKING CHANGE` → major). For SemVer projects,
-  `sushi-config.yaml` is also updated if present.
-- **CalVer** (major >= 2000, e.g. `2026.03.1`): increments MICRO within month, resets on
-  new month. Format: `vYYYY.0M.MICRO`.
-
-Run from the main repo (or current repo if not in a worktree):
 ```bash
 WORK_DIR="${MAIN_REPO:-$REPO_ROOT}"
 bash "$HANDLERS_DIR/version.sh" [--dry-run]
 ```
 
-If VERSION file was updated by the handler:
+If VERSION updated:
 ```bash
 git -C "$WORK_DIR" add VERSION sushi-config.yaml 2>/dev/null; true
 git -C "$WORK_DIR" commit -m "chore: bump version to $(cat VERSION)"
-```
-
-The handler outputs `TAG_PENDING=<tag>` and `TAG_MESSAGE=<msg>`. Create the tag
-**after** the commit so it points to the version bump commit (not the changelog):
-```bash
-# Parse from handler output
+# Create tag AFTER commit (parse TAG_PENDING / TAG_MESSAGE from handler output)
 TAG=$(grep 'TAG_PENDING=' <<< "$VERSION_OUTPUT" | cut -d= -f2)
-MSG=$(grep 'TAG_MESSAGE=' <<< "$VERSION_OUTPUT" | cut -d= -f2)
-git -C "$WORK_DIR" tag -a "$TAG" -m "$MSG"
+git -C "$WORK_DIR" tag -a "$TAG" -m "$(grep 'TAG_MESSAGE=' <<< "$VERSION_OUTPUT" | cut -d= -f2)"
 ```
 
 ### Step 16: Push & Sync
@@ -373,24 +320,7 @@ Skip if `--skip-push`.
 ### Step 16a: Pipeline Watch
 
 Skip if `--skip-pipeline`. Skip cleanly (non-blocking) if `gh` is missing, not authenticated,
-the remote is not GitHub, or the repo has no push-triggered workflow.
-
-**Why:** Before Step 16a existed, beads got closed the instant `git push` returned success.
-If CI went red minutes later (missing secret, cross-platform break, deploy hook failure),
-the bead was already closed and the broken change was invisible in the beads tracker.
-All orchestrator gates run locally in the worktree — they can't see CI-only failures.
-
-**Registration vs. completion:** The handler's `--timeout` only bounds how long we wait for
-GitHub to **register** the run (create it in `queued` state). Once the run exists,
-`gh run watch` blocks until completion regardless of how long it takes to run — so jobs
-stuck in a queue, on slow self-hosted runners, or simply long builds (Docker, integration)
-are fine. The timeout only fires if GitHub never creates the run at all.
-
-**Registration-fail distinction:** If the repo has a push-triggered workflow in
-`.github/workflows/` but no run registers within the timeout, the handler returns
-`PIPELINE_STATUS=failed` with `PIPELINE_ERROR=no_run_registered`. That's a real
-problem — runner offline, webhook down, Actions disabled on the repo, or branch
-protection override. It is NOT treated as "no workflow". Beads stay `in_progress`.
+the remote is not GitHub, or the repo has no push-triggered workflow. See `pipeline-watch.sh` header for the rationale and registration/completion semantics.
 
 **Run the handler:**
 ```bash
@@ -413,41 +343,14 @@ PIPELINE_RUN_URL=<url>    # only on passed/failed
 
 **Decision tree:**
 
-| Status | PIPELINE_ERROR | Handler exit | Action |
-|--------|----------------|--------------|--------|
-| `passed` | — | 0 | Continue to Step 16b. Record `PIPELINE_STATUS=passed run=<url>` for Step 17. |
-| `failed` | unset | 1 | CI ran and failed. **Abort Phase B.** Do NOT run Step 16b or 16c. Report the run URL. |
-| `failed` | `no_run_registered` | 1 | Push-triggered workflow exists but no run was registered within the timeout. Runner offline, webhook broken, Actions disabled, or branch-protection override. **Abort Phase B** — beads stay `in_progress` for investigation. |
-| `skipped_no_gh` / `skipped_not_authed` / `skipped_no_workflow` | — | 0 | Log the reason, continue to Step 16b. Non-blocking fallback — no CI for this repo or no gh tool. |
-| `skipped_dry_run` | — | 0 | Dry-run preview only. Continue. |
-
-**On FAIL — user-facing report:**
-```
-=== PIPELINE FAILED ===
-Commit: <PUSH_SHA>
-Run:    <PIPELINE_RUN_URL>   (omit if PIPELINE_ERROR=no_run_registered)
-Reason: CI ran and failed    |  no_run_registered — workflow exists but GitHub never
-                                started the run within the timeout. Check runner
-                                health, webhook delivery, or whether Actions are
-                                disabled on this repo.
-
-Session-close aborted before Step 16b. Beads remain in_progress so the broken
-change is still visible in the tracker. Investigate the pipeline, push a fix,
-then re-run `session-close --ship-only --skip-learnings --skip-debrief --skip-summary`.
-```
-
-**`--skip-pipeline`**: Skips Step 16a entirely and proceeds straight to Step 16b.
-Use only when you know the repo has no CI or you want to close despite a red build
-(emergency bypass). Recorded as `PIPELINE_STATUS=skipped_flag` in Step 17.
+| Status | Action |
+|--------|--------|
+| `passed` | Continue to Step 16b. |
+| `failed` (exit 1) | Abort Phase B. Report run URL. Beads stay `in_progress`. See Error Handling. |
+| `failed` + `PIPELINE_ERROR=no_run_registered` | Abort Phase B. Workflow exists but no run registered — runner offline, webhook broken, Actions disabled. See Error Handling. |
+| `skipped_*` (exit 0) | Log reason, continue to Step 16b. |
 
 ### Step 16b: Close Beads
-
-**Prerequisite:** Step 16a returned `passed`, a `skipped_*` state, or `--skip-pipeline` was set.
-Never run 16b after `PIPELINE_STATUS=failed`.
-
-**CRITICAL:** This is the ONLY place where beads get closed. The bead-orchestrator
-intentionally leaves beads `in_progress` — they are closed here after everything is
-merged, tagged, pushed, and the CI pipeline has passed.
 
 1. Find in-progress beads for this session:
    ```bash
@@ -475,24 +378,16 @@ merged, tagged, pushed, and the CI pipeline has passed.
    ```
    Capture: bead ID, type (`feat`/`fix`/`chore`/`refactor`/`task`), title, and close reason.
 
-5. **Ingest ccusage + Codex metrics** for each closed bead (non-blocking). This
-   replaces the orchestrator's former Phase 3.6 inline token capture — tokens and
-   USD cost now come from the authoritative JSONL logs ccusage reads.
-
+5. **Ingest ccusage + Codex metrics** for each closed bead (non-blocking):
    ```bash
    PLUGIN_LIB="${CLAUDE_PLUGIN_ROOT:-$HOME/code/claude-code-plugins/beads-workflow}/lib/orchestrator"
    SINCE=$(date -v-7d +%Y%m%d 2>/dev/null || date -d '-7 days' +%Y%m%d)
    for id in $CLOSED_IDS; do
-     # Claude Code tokens (attribution via cwd/worktree path in sessionId)
      python3 "$PLUGIN_LIB/ingest_ccusage.py" --bead "$id" --since "$SINCE" || true
-     # Codex tokens (requires explicit --bead + time window; no cwd available)
-     python3 "$PLUGIN_LIB/ingest_codex.py" --bead "$id" --since "$SINCE" || true
+     python3 "$PLUGIN_LIB/ingest_codex.py"   --bead "$id" --since "$SINCE" || true
    done
    ```
-
-   Both handlers exit 0 even on failure (missing binaries, CLI errors). Failures
-   print warnings to stderr; capture them for Step 17 summary. Skipping is fine —
-   the grading-row was already written in Phase 3.6.
+   Both handlers exit 0 on failure; capture stderr warnings for Step 17.
 
 6. Sync:
    ```bash
@@ -511,24 +406,14 @@ If no in-progress beads found for this session: skip silently.
 
 After push succeeds, sync the local plugin cache if the repo is `claude-code-plugins` or `open-brain`.
 
-Run the handler for each repo committed in this session:
+Run the handler for each repo committed in this session (and for any secondary `claude-code-plugins` / `open-brain` repos in multi-repo sessions):
 
 ```bash
 bash "$HANDLERS_DIR/sync-plugin-cache.sh" "$REPO_ROOT"
+# Multi-repo: also run for any other claude-code-plugins / open-brain repo committed
 ```
 
-For multi-repo sessions, also run for any secondary repo that is `claude-code-plugins` or `open-brain`:
-
-```bash
-# Example: if ~/code/claude-code-plugins was also committed
-bash "$HANDLERS_DIR/sync-plugin-cache.sh" ~/code/claude-code-plugins
-```
-
-The handler:
-- Detects changed plugin dirs from `git diff HEAD~1 HEAD`
-- Runs `claude plugins update <plugin>@<marketplace>` only for changed plugins
-- Skips silently if no plugin dirs changed or repo is not recognized
-- Is **non-blocking** — errors are logged but do not stop the session close
+The handler is **non-blocking**: detects changed plugin dirs, runs `claude plugins update`, skips silently if nothing matches.
 
 ### Step 17: Summary
 
@@ -577,33 +462,34 @@ If no meaningful signals found: omit the What's New section entirely (do not pri
 
 #### Technical Summary
 
-Print the technical details after the What's New section:
-- Commit hash + message
-- Version tag
-- Changelog updated (Y/N)
-- Doc gaps found
-- Learnings extracted (Y/N)
-- Session summary saved (Y/N)
-- Worktree turn-log: uploaded+deleted / empty+deleted / skipped (no file) / ERROR: kept (with reason)
-- First merge from main: result
-- Second merge from main: result
-- Worktree merged (Y/N/N/A)
-- Push status
-- Pipeline status: `passed` / `failed` (+ run URL) / `skipped_no_gh` / `skipped_not_authed` / `skipped_no_workflow` / `skipped_flag` / `skipped_dry_run`
+Assemble the session state as JSON and render it via the handler:
+
+```bash
+# Build state JSON from variables collected across the steps above, e.g.:
+STATE_JSON=$(python3 -c "import json, sys; print(json.dumps({
+  'commit_sha':             '$COMMIT_SHA',
+  'commit_msg':             '$COMMIT_MSG',
+  'version_tag':            '$VERSION_TAG',
+  'changelog_updated':      ${CHANGELOG_UPDATED:-false},
+  'doc_gaps':               [],
+  'learnings_extracted':    ${LEARNINGS_EXTRACTED:-false},
+  'session_summary_saved':  ${SESSION_SUMMARY_SAVED:-false},
+  'turn_log_status':        '${TURN_LOG_STATUS:-skipped_no_file}',
+  'merge_from_main_first':  '${MERGE_FROM_MAIN_FIRST_STATUS:-skipped}',
+  'merge_from_main_second': '${MERGE_FROM_MAIN_SECOND_STATUS:-skipped}',
+  'worktree_merged':        ${WORKTREE_MERGED:-false},
+  'push_status':            '${PUSH_STATUS:-skipped}',
+  'pipeline_status':        '${PIPELINE_STATUS:-skipped_dry_run}',
+  'pipeline_run_url':       '${PIPELINE_RUN_URL:-}'
+}))")
+echo "$STATE_JSON" | python3 "$HANDLERS_DIR/render-summary.py"
+```
 
 After summary, the session is done. If in a worktree, Claude Code handles cleanup on exit.
 
 ## Multi-Repo Awareness
 
-Check ALL repositories modified during the session — not just the primary working directory.
-Common cases:
-- Global config repo (`~/code/claude/`) when skills/standards changed
-- Any repo touched via `cd`
-
-For each repo with changes:
-1. Stage only files WE changed (never `git add -A`)
-2. Create a conventional commit
-3. Push after safety check
+Check ALL repos modified during the session (e.g. `~/code/claude/` for skills/standards changes). For each: stage specific files, conventional commit, push after safety check.
 
 ## Error Handling
 
@@ -626,16 +512,10 @@ For each repo with changes:
 
 ## Do NOT
 
-- Do NOT push without screen lock check
-- Do NOT create tags without a commit
-- Do NOT skip the interactive commit message
-- Do NOT run changelog generation before the commit
 - Do NOT use `git rebase` — always `git merge`
-- ALWAYS use `bd dolt pull && bd dolt push --force` (Dolt bug dolthub/dolt#10807)
 - Do NOT use `git push --force`
 - Do NOT use `git add -A` or `git add .` — always stage specific files
-- Do NOT close beads before Step 16b — beads stay in_progress until merge+push+pipeline-pass are complete
-- Do NOT run Step 16b when Step 16a returned `PIPELINE_STATUS=failed` — red pipelines must leave beads visible in the tracker
+- ALWAYS use `bd dolt pull && bd dolt push --force` (Dolt bug dolthub/dolt#10807)
 
 ## Flags Reference
 
