@@ -1,10 +1,10 @@
 ---
 name: wave-reviewer
 description: >-
-  Review a wave or epic subtree before dispatch. Finds cross-bead defects
-  single-bead review misses: dependency ordering, ownership collisions,
-  lifecycle contradictions, and validation gaps. Triggers on wave review,
-  review wave, pre-wave review, bead tree review.
+  Review a wave or epic subtree before dispatch. Finds defects single-bead
+  review misses: dependency ordering, ownership collisions, lifecycle
+  contradictions, validation gaps. Triggers on wave review, review wave,
+  pre-wave review, bead tree review.
 ---
 
 # /wave-reviewer
@@ -16,7 +16,7 @@ Cross-bead structural review for a wave or epic subtree.
 Use this after filing multiple beads and before dispatching a wave, validation run,
 cleanup wave, or deletion wave.
 
-This skill is deliberately different from single-bead review:
+Contrast with single-bead review:
 - Single-bead review asks "is this bead locally reasonable?"
 - `/wave-reviewer` asks "does this bead set work as one machine?"
 
@@ -47,9 +47,7 @@ If the input is ambiguous, ask the user whether to review:
 - the full epic subtree, or
 - only the next dispatch wave
 
-## Main Content
-
-### Core Principle
+## Core Principle
 
 Do not trust bead prose alone.
 
@@ -62,9 +60,9 @@ Every finding should be grounded in at least one of:
 If a bead references a file, table, agent, mode, wrapper, schema, or hook, verify it in
 the codebase before calling it a defect.
 
-### Workflow
+## Workflow
 
-#### Phase 1: Load the bead set
+### Phase 1: Load the bead set
 
 1. Resolve the review set:
    - Epic mode: load the parent bead and all children
@@ -83,7 +81,7 @@ the codebase before calling it a defect.
 |---|---|---|---|---|
 ```
 
-#### Phase 2: Extract the real contracts
+### Phase 2: Extract the real contracts
 
 For the loaded bead set, extract all references to real implementation contracts:
 - file paths
@@ -102,13 +100,13 @@ Examples:
 - If a bead says validation compares two runs, verify the metrics identity model can distinguish them.
 - If a bead says cleanup happens after validation, verify dependency order actually enforces that.
 
-#### Phase 3: Run the structural checklist
+### Phase 3: Run the structural checklist
 
 Use the checklist in `references/checklist.md`.
 
 Do not stop at the first defect. Review the whole wave.
 
-#### Phase 4: Trinity pass
+### Phase 4: Trinity pass
 
 When beads touch architectural contracts, use the Architecture Trinity vocabulary precisely:
 - ADR
@@ -124,7 +122,7 @@ Check whether the bead set is coherent at the contract layer:
 
 Do not force Trinity language onto beads that are not contract-related.
 
-#### Phase 5: Decide whether the wave is structurally ready
+### Phase 5: Decide whether the wave is structurally ready
 
 Possible outcomes:
 - `Structurally ready`
@@ -133,7 +131,7 @@ Possible outcomes:
 
 This is not a code-quality verdict. It is a wave-structure verdict.
 
-### Output
+## Output
 
 Findings first, ordered by severity.
 
@@ -161,7 +159,7 @@ Rules:
 - Prefer the smallest fix that removes the contradiction
 - Do not pad the output with summaries before findings
 
-### Finding Calibration
+## Finding Calibration
 
 Good:
 - "Cleanup bead deletes the old control arm before validation bead can run the comparison."
@@ -173,7 +171,7 @@ Weak:
 - "Maybe add more tests."
 - "The wording could be clearer."
 
-### Example
+## Example
 
 ```text
 /wave-reviewer CCP-2vo
@@ -192,7 +190,7 @@ Possible result:
 Ready after minor edits
 ```
 
-### Follow-Up Beads
+## Follow-Up Beads
 
 If the same class of defects appears across multiple newly created beads, suggest a follow-up
 against the bead-generation workflow rather than patching each bead forever.
