@@ -200,9 +200,9 @@ Warning: Conflict risk — 0al, doq both modify pvs-router.ts
 Quick-fix beads typically complete faster (no plan gate, no UAT, 2 review iterations max).
 This is visible in monitoring — quick-fix surfaces show `<id>-qf` labels.
 
-**Pane budget:** Quick-fix beads use 1 pane each (Codex review runs inline, no separate
-review pane). Full beads use 2 panes (impl + review via `cld -br`). Factor this into
-`max-parallel` calculations: a wave of 2 full + 2 quick needs 6 panes, not 8.
+**Pane budget:** All beads use 1 pane each. After CCP-2vo.4, full beads run their Codex
+review inline (no separate review pane, no `cld -br`). Quick-fix beads were already 1-pane.
+Factor this into `max-parallel` calculations: a wave of 2 full + 2 quick needs 4 panes.
 
 Wait for user confirmation before proceeding. If `--dry-run`, stop here.
 
@@ -709,6 +709,34 @@ After each check, present the JSON output as a readable table to the user:
 Follow-up beads detected: mira-fix-x3r
 ```
 
+### Stall Detection
+
+A bead is **stalled** when:
+- Its surface is idle (shows a bare shell prompt)
+- `bd show <id>` reports `in_progress` (bead not closed)
+- Elapsed time since dispatch exceeds **15 minutes**
+
+When `wave-completion.sh` detects a stall, it:
+1. Logs a clear alert in the JSON output: `stalls` array with bead ID and timestamp
+2. Writes a diagnostic note to the bead:
+   `STALL-DETECTED: wave-orchestrator observed surface idle + bd in_progress at <timestamp>. Manual investigation required.`
+3. **Does NOT trigger session-close or spawn fix agents**
+4. **Continues monitoring** remaining beads
+
+The wave orchestrator then surfaces the stall to the user in the status table and the Phase 7 Learnings Report.
+
+**False-positive guard:** Long Codex adversarial runs (Opus reasoning, 15+ min) can sit
+silent mid-execution. Before emitting a stall, `wave-completion.sh` applies a guard:
+1. Query `agent_calls` for recent activity: if any row for this bead has `recorded_at` within
+   the last 5 minutes, the run is actively logging → **NOT stalled, skip alert**.
+2. Scrollback fallback (if `agent_calls` query fails or returns 0): check the surface
+   scrollback for tool-use markers (Bash, Read, Write, Edit, Grep, etc.) in the last 30
+   lines. If present, the run recently executed tools → **NOT stalled, skip alert**.
+
+The mock scenario used in acceptance: a bead with surface-idle + bd in_progress + elapsed
+> 15 min produces a STALL alert. A second bead with surface-idle + bd in_progress but
+recent tool-use markers in scrollback does NOT trigger a stall alert.
+
 ### When wave-status.sh Returns `unknown`
 
 If a bead shows `unknown` status, fall back to manual inspection:
@@ -755,9 +783,9 @@ use in a loop or conditional.
 
 **The wave orchestrator must NEVER trigger `session close` or send `cmux send "session close"`.**
 
-The bead-orchestrator handles the full lifecycle autonomously:
-1. Implementation → Review (spawns `cld -br` in its own pane)
-2. cmux-reviewer reviews, injects fixes, triggers `session close`
+The bead-orchestrator handles the full lifecycle autonomously (single-pane mode):
+1. Implementation → Codex adversarial review (inline, no separate pane)
+2. Opus fix loop (up to 2 iterations) → verification gate → session close
 3. Session-close agent merges, tags, pushes, and closes the bead
 
 The wave orchestrator **only observes** and waits until the pane is fully idle.
@@ -1058,5 +1086,4 @@ For all error scenarios, read `references/error-recovery.md`. It covers:
 - **max 4-5 panes**: Beyond 5, layout overhead and resource contention become issues.
 - **Pull between waves**: Always `git pull --no-rebase` + `bd dolt pull` between waves.
 - **Stay cache-warm**: Poll every 270s (not 300s+, not <60s). First check at T+4.5min. 270s keeps the prompt cache alive across the full wave; gaps ≥300s force a full-context re-read.
-- **Expect extra panes**: bead-orchestrators spawn their own review panes via `cld -br` — this is normal, don't intervene.
-- **Reviewer intervention only on disconnect**: Only intervene when cmux communication between impl and reviewer demonstrably failed. Otherwise stay out.
+- **Don't intervene in bead surfaces**: Bead-orchestrators run single-pane (no `cld -br`, no separate reviewer). Only intervene when the bead surface appears dead and bd status is still in_progress (stall scenario — see stall detection).
