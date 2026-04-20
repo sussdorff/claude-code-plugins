@@ -1,3 +1,22 @@
+## [2026.04.49] - 2026-04-20
+
+### Features
+
+- *(CCP-2vo.2)* Add run_id identity column, agent_calls table, and Python insert API to metrics.db — stable contract for orchestrator instrumentation
+- *(metrics)* backfill_codex.py retroactive Codex attribution tool
+
+### Bug Fixes
+
+- *(CCP-2vo.2)* Thread run_id through insert_bead_run, upsert_ccusage_row, update_phase2_metrics — fixes regression from run_id schema addition
+
+### Miscellaneous Tasks
+
+- *(beads)* Untrack .beads/issues.jsonl — Dolt is canonical
+
+### Documentation
+
+- *(codex-skills)* Align rollout plan with machine-state and refined wave
+
 ## [2026.04.47] - 2026-04-20
 
 ### Features
