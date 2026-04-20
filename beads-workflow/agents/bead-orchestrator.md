@@ -379,7 +379,38 @@ Before spawning subagent, gather:
    If non-empty: include in the subagent prompt under `### Bead Architecture Notes`.
    If empty: omit the block entirely.
 
-→ **Record phase_summary**: key files identified, relevant standards, external API status, arch design doc (if present), project context source (project-context.md or CLAUDE.md), bead design field (present/absent).
+9. **Provenance gathering (MANDATORY — for verification-agent):**
+   Collect the following before Phase 4. Store as text in your context to inject into the
+   verification-agent invocation prompt:
+
+   ```bash
+   # a) Standards applied — all standard paths loaded in Phase 2
+   # Record: the paths you actually cat'd from global + project index.yml
+   # Example:
+   # - ~/.claude/standards/python/style.md
+   # - ~/.claude/standards/python/python314-patterns.md
+
+   # b) Skills referenced — scan bead description for /skill-name patterns or "skill" mentions
+   bd show <bead-id> | grep -oE '/[a-z][a-z0-9-]+' | sort -u
+   # Also check for explicit "skill" mentions in the description prose
+
+   # c) ADRs in scope — discover ADR files in the project
+   find docs/adr/ -name "*.md" 2>/dev/null || find . -maxdepth 4 -path "*/docs/adr/*.md" 2>/dev/null
+   # Select those relevant to the bead's domain (by filename/content keywords)
+
+   # d) Docs required — check doc-config for this bead type
+   cat .claude/doc-config.yml 2>/dev/null
+   # Look for entries matching the bead type (e.g. "type: task", "type: feature")
+   ```
+
+   **Falsy → "none"**: If a field cannot be determined (no ADRs found, no doc-config), set it to "none".
+
+   **Log to bead notes:**
+   ```bash
+   bd update <bead-id> --append-notes="Provenance logged: standards=[<path1>, <path2>] skills=[<list>] adrs=[<list or none>] docs=[<list or none>]"
+   ```
+
+→ **Record phase_summary**: key files identified, relevant standards, external API status, arch design doc (if present), project context source (project-context.md or CLAUDE.md), bead design field (present/absent), provenance fields collected.
 
 ### Phase 2.5: Break Analysis (Pre-Mortem)
 
@@ -796,7 +827,8 @@ tokens directly.
 **What the orchestrator still does here:**
 
 1. **Write grading fields** that ccusage cannot know (quality, TDD, wave, model assignment).
-   Use the `insert_bead_run` helper with zeroed token fields — tokens are filled in later:
+   Use the `insert_bead_run` helper with zeroed token fields — tokens are filled in later by
+   `update_verification_tokens()` (after Phase 4) and ccusage ingestion (after session-close).
    ```bash
    uv run python -c "
    import sys; from pathlib import Path
@@ -842,8 +874,44 @@ Agent(subagent_type="beads-workflow:verification-agent", prompt="""
   <Completion Report returned by the implementation subagent>
 - test_commands: auto-detect
 - working_directory: <cwd>
+
+### Caller Provenance (populated by bead-orchestrator)
+- standards_applied: |
+  <STANDARDS_APPLIED from Phase 2 provenance gathering, or "none">
+- skills_referenced: |
+  <SKILLS_REFERENCED from Phase 2 provenance gathering, or "none">
+- adrs_in_scope: |
+  <ADRS_IN_SCOPE from Phase 2 provenance gathering, or "none">
+- docs_required: |
+  <DOCS_REQUIRED from Phase 2 provenance gathering, or "none">
 """)
 ```
+
+**Token capture**: After the verification-agent returns, call `update_verification_tokens()`.
+Write the response to a temp file first to avoid shell quoting / triple-quote injection issues:
+
+```bash
+# 1. Write the verification-agent response to a temp file (safe: no shell embedding)
+cat > /tmp/verify-response-{BEAD_ID}.txt << 'VERIFY_EOF'
+<PASTE_VERIFICATION_AGENT_RESPONSE_HERE>
+VERIFY_EOF
+
+# 2. Parse and update tokens
+uv run python -c "
+import sys; from pathlib import Path
+sys.path.insert(0, str(Path('$CLAUDE_PLUGIN_ROOT')/'beads-workflow/lib'))
+from orchestrator.metrics import parse_usage, update_verification_tokens
+response = Path('/tmp/verify-response-{BEAD_ID}.txt').read_text()
+tokens = parse_usage(response)['total_tokens']
+update_verification_tokens('{BEAD_ID}', tokens)
+print(f'verification_tokens: {tokens}')
+"
+
+# 3. Clean up
+rm -f /tmp/verify-response-{BEAD_ID}.txt
+```
+This is the **canonical path** — `update_verification_tokens()` always runs after Phase 4, unconditionally.
+The temp-file pattern prevents `'''` sequences or shell metacharacters in the response from causing early termination or injection.
 
 **Processing Verification Report:**
 

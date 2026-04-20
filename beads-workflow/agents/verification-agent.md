@@ -43,6 +43,23 @@ The caller supplies:
 - working_directory: <path to repo/worktree>
 ```
 
+### Caller Provenance (populated by bead-orchestrator before invocation)
+
+These fields are logged by the caller for audit purposes. In this bead (CCP-2vo.1),
+the verification-agent treats them as **read-only context** — no new CHECK logic yet
+(that is CCP-2vo.9's scope). Future versions may verify compliance against these fields.
+
+```
+- standards_applied: |
+  <list of standard paths loaded via /inject-standards for this bead, one per line, or "none">
+- skills_referenced: |
+  <skills mentioned in bead description or invoked during implementation, or "none">
+- adrs_in_scope: |
+  <ADR file paths relevant to this bead (e.g. docs/adr/0001-*.md), or "none">
+- docs_required: |
+  <feature-doc paths that project doc-config requires exist for this bead type, or "none">
+```
+
 ## Verification Protocol
 
 For each item in the Completion Report marked as `[x]` (completed):
@@ -228,6 +245,7 @@ Delta:    <+/- difference>
 | Access implementation chat | Independent from implementer context |
 | Trust Completion Report claims | Must verify independently |
 | Skip test execution | Tests are the primary evidence source |
+| Provenance fields | Read-only reference — do not assert CHECK logic against them (reserved for CCP-2vo.9) |
 
 ## Anti-Patterns
 
