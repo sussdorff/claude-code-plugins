@@ -1,0 +1,4 @@
+interface:
+  display_name: "Project Context"
+  short_description: "Generate docs/project-context.md (Constitution Pattern) from an existing codebase."
+  default_prompt: "Use the project-context skill to analyze this codebase and generate docs/project-context.md covering tech stack, architecture principles, module map, established patterns, and critical invariants."

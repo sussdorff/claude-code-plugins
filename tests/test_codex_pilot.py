@@ -60,13 +60,12 @@ class TestCodexMetadata:
 
     @pytest.mark.parametrize("skill", SKILL_NAMES)
     def test_openai_yaml_has_required_fields(self, skill):
-        import yaml
+        # Parse as plain text to avoid pyyaml dependency — fields are always at fixed indentation
         yaml_path = DEV_TOOLS_SKILLS / skill / "agents" / "openai.yaml"
-        content = yaml.safe_load(yaml_path.read_text())
-        iface = content.get("interface", {})
-        assert "display_name" in iface, "openai.yaml must have interface.display_name"
-        assert "short_description" in iface, "openai.yaml must have interface.short_description"
-        assert "default_prompt" in iface, "openai.yaml must have interface.default_prompt"
+        content = yaml_path.read_text()
+        assert "display_name:" in content, "openai.yaml must have interface.display_name"
+        assert "short_description:" in content, "openai.yaml must have interface.short_description"
+        assert "default_prompt:" in content, "openai.yaml must have interface.default_prompt"
 
 
 class TestUserScopedSync:

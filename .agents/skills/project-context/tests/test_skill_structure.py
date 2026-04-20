@@ -8,7 +8,7 @@ from pathlib import Path
 
 # Required sections in SKILL.md
 REQUIRED_SKILL_SECTIONS = [
-    "# /project-context",
+    "# Project Context",
     "## When to Use",
     "## Arguments",
     "## Workflow",
@@ -63,9 +63,12 @@ def test_skill_handles_overwrite_scenario():
     assert "exist" in content.lower() and ("overwrite" in content.lower() or "--force" in content.lower()),         "SKILL.md must describe overwrite handling"
 
 def test_skill_has_argument_hint():
-    skill_path = Path(__file__).parent.parent / "SKILL.md"
-    content = skill_path.read_text()
-    assert "argument-hint" in content, "frontmatter must have argument-hint"
+    # argument-hint is Claude-harness-specific; after the portability split it lives
+    # in SKILL.claude-adapter.md, not in the portable SKILL.md core.
+    adapter_path = Path(__file__).parent.parent / "SKILL.claude-adapter.md"
+    assert adapter_path.exists(), "SKILL.claude-adapter.md must exist (Claude harness adapter)"
+    content = adapter_path.read_text()
+    assert "argument-hint" in content, "Claude adapter must have argument-hint frontmatter"
 
 if __name__ == "__main__":
     import traceback
