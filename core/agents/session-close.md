@@ -29,10 +29,8 @@ You do NOT implement code — you close sessions.
 ## Input
 
 Received as the invocation prompt:
-- Optional flags: `--dry-run`, `--skip-audit`, `--skip-simplify`,
-  `--skip-learnings`, `--skip-debrief`, `--skip-summary`, `--skip-push`,
-  `--skip-pipeline`
-- Mode flags: `--debrief-only`, `--ship-only`
+- Mode flags: `--debrief-only`, `--ship-only` (mutually exclusive)
+- Optional `--skip-*` and `--dry-run` flags — see the Flags Reference table at the end for the full set and semantics
 - Optional: repo paths for multi-repo awareness
 
 Parse flags from the prompt. Check for mutual exclusivity of `--debrief-only` and `--ship-only`. Default: full mode, all steps enabled, no dry-run.
@@ -94,9 +92,6 @@ HANDLERS_DIR="$HOME/.claude/plugins/cache/sussdorff-plugins/core/agents/session-
 
 ## Phase B: Ship-Close (Steps 1-7, 9, 13-17)
 
-**Step order within Phase B:** 1 → 2 → 3 → 4 → 5 → 6 → 7 → 9 → 13 → 14 → 15 → 15b → 16 → 16a → 16b → 16c → 17.
-Step 16a (pipeline watch) is a **blocking gate**: on `PIPELINE_STATUS=failed`, abort before 16b so beads stay `in_progress`.
-
 ### Step 1: Setup & First Merge
 
 1. **Detect environment:**
@@ -107,22 +102,20 @@ Step 16a (pipeline watch) is a **blocking gate**: on `PIPELINE_STATUS=failed`, a
    ```
    Determine if we're in a worktree (`REPO_ROOT != MAIN_REPO`).
 
-2. **First merge from main** (brings in latest main context):
+2. **First merge from main** (brings in latest main context) via handler:
    ```bash
-   git fetch origin main
-   git merge origin/main --no-edit
+   bash "$HANDLERS_DIR/merge-from-main.sh" ${DRY_RUN:+--dry-run} --label "first"
    ```
-   - If merge conflicts: STOP, report to user, do NOT force.
-   - If `--dry-run`: print what would happen, skip merge.
-   - If on main branch directly (no worktree): skip this step.
+   Handler exits: 0 = success / skipped cleanly, 1 = transient error (warn+continue),
+   2 = merge conflict (**STOP** — report to user, do NOT force).
 
-3. Print session header:
+3. Print session header using `MERGE_FROM_MAIN_STATUS` from the handler output:
    ```
    === SESSION CLOSE PROTOCOL v3 (Agent) ===
    Branch: <branch>
    Repository: <repo_root>
    Worktree: yes/no
-   First merge from main: success/skipped/conflict
+   First merge from main: <status>
    ```
 
 ### Step 2: Plan Cleanup
@@ -242,105 +235,42 @@ After saving, identify significant decisions and save each separately.
 
 ### Step 12c: Worktree Turn-Log Upload
 
-Only runs when in a worktree (`REPO_ROOT != MAIN_REPO`). Skip silently in main-repo sessions — no error, no warning.
+Only runs when in a worktree (`REPO_ROOT != MAIN_REPO`). Skip silently in main-repo
+sessions — no error, no warning. **Non-blocking**: any failure keeps the file for a
+later session-close to retry and does NOT abort session-close.
 
-**`--dry-run` mode:** This step is preview-only under `--dry-run`. Report what would happen (file present/absent, entry count, would POST) without executing the upload or deleting the file.
+**`--dry-run` mode:** Preview-only. Report that the file exists and would be uploaded,
+without running the handler or deleting the file.
 
-1. **Check for JSONL file:**
+1. **Check for the JSONL file:**
    ```bash
    TURN_LOG="$REPO_ROOT/.worktree-turns.jsonl"
    ```
-   - File does not exist → silent skip (normal for main-repo sessions).
-   - File exists but empty (0 bytes) → delete it (or note deletion in dry-run), continue.
+   If the file does not exist → silent skip.
 
-2. **Parse and POST (skipped in `--dry-run`):**
-   Read all lines from `$TURN_LOG`. Parse each as a JSON object to build `turns[]`.
-
-   **Fail-closed on malformed input:** If ANY line fails to parse as valid JSON,
-   abort the upload immediately — keep the file, record a warning, continue session-close.
-   Do NOT upload a partial turns list that silently omits corrupt entries.
-
-   Derive values for the payload:
-   - `worktree`: path of `$REPO_ROOT` relative to `$MAIN_REPO` (use `realpath --relative-to`)
-   - `bead_id`: extract from the worktree directory name if it matches the pattern
-     `bead-<id>` (e.g. `bead-CCP-3oy` → `CCP-3oy`). Use empty string if no match.
-   - `project`: repo name (same logic as Step 11 debrief — git remote or basename)
-
-   POST to the worktree session summary endpoint:
+2. **Set env vars and call the handler:**
    ```bash
-   OPEN_BRAIN_URL="${OPEN_BRAIN_URL:-https://open-brain.sussdorff.org}"
-   OPEN_BRAIN_API_KEY="${OPEN_BRAIN_API_KEY:-}"
+   export TURN_LOG
+   export WORKTREE_REL=$(python3 -c "import os; print(os.path.relpath('$REPO_ROOT', '$MAIN_REPO'))" 2>/dev/null || echo "")
+   _WT_BASENAME=$(basename "$REPO_ROOT")
+   export BEAD_ID_FROM_PATH=$(echo "$_WT_BASENAME" | sed -n 's/^bead-\(.*\)/\1/p')
+   export PROJECT_NAME=$(git -C "$REPO_ROOT" remote get-url origin 2>/dev/null | sed 's|.*/||;s|\.git$||' || basename "$REPO_ROOT")
+   # OPEN_BRAIN_URL / OPEN_BRAIN_API_KEY are read from the ambient environment
+   # (defaults: https://open-brain.sussdorff.org and empty respectively).
 
-   python3 - <<'PYEOF'
-   import json, os, sys, urllib.request
-   from pathlib import Path
-
-   turn_log = Path(os.environ["TURN_LOG"])
-   lines = [l.strip() for l in turn_log.read_text().splitlines() if l.strip()]
-   if not lines:
-       turn_log.unlink()
-       print("TURN_LOG_STATUS=empty_deleted")
-       sys.exit(0)
-
-   # Fail closed: abort if any line is not valid JSON — keep file intact
-   turns = []
-   for i, line in enumerate(lines, 1):
-       try:
-           turns.append(json.loads(line))
-       except json.JSONDecodeError as exc:
-           print(f"TURN_LOG_STATUS=error_kept parse_error=line_{i}:{exc}")
-           sys.exit(1)
-
-   worktree = os.environ.get("WORKTREE_REL", "")
-   bead_id = os.environ.get("BEAD_ID_FROM_PATH", "")
-   project = os.environ.get("PROJECT_NAME", "unknown")
-   base_url = os.environ.get("OPEN_BRAIN_URL", "https://open-brain.sussdorff.org").rstrip("/")
-   api_key = os.environ.get("OPEN_BRAIN_API_KEY", "")
-
-   payload = json.dumps({
-       "worktree": worktree,
-       "bead_id": bead_id,
-       "project": project,
-       "turns": turns,
-   }).encode("utf-8")
-
-   req = urllib.request.Request(
-       f"{base_url}/api/worktree-session-summary",
-       data=payload,
-       headers={"Content-Type": "application/json", "X-API-Key": api_key},
-       method="POST",
-   )
-   try:
-       resp = urllib.request.urlopen(req, timeout=15)
-       if resp.status == 202:
-           turn_log.unlink()
-           print("TURN_LOG_STATUS=uploaded_deleted")
-       else:
-           print(f"TURN_LOG_STATUS=error_kept status={resp.status}")
-           sys.exit(1)
-   except Exception as exc:
-       print(f"TURN_LOG_STATUS=error_kept exc={exc}")
-       sys.exit(1)
-   PYEOF
+   if [[ -n "${DRY_RUN:-}" ]]; then
+     echo "TURN_LOG_STATUS=skipped_dry_run"
+   else
+     python3 "$HANDLERS_DIR/turn-log-upload.py"
+   fi
    ```
 
-3. **On success (202):** `.worktree-turns.jsonl` is deleted by the script.
-4. **On any error (non-202, network failure, parse error):** keep the file, record a
-   warning in the final report (Step 17), but **do NOT abort session-close**.
-
-The environment variables used:
-- `OPEN_BRAIN_URL` — base URL (default: `https://open-brain.sussdorff.org`)
-- `OPEN_BRAIN_API_KEY` — API key (empty string if unset → server decides whether to accept)
-
-Set the helper env vars before running the Python inline script:
-```bash
-export TURN_LOG="$REPO_ROOT/.worktree-turns.jsonl"
-export WORKTREE_REL=$(python3 -c "import os; print(os.path.relpath('$REPO_ROOT', '$MAIN_REPO'))" 2>/dev/null || echo "")
-# Extract bead ID from worktree dirname if pattern matches bead-<id>
-_WT_BASENAME=$(basename "$REPO_ROOT")
-export BEAD_ID_FROM_PATH=$(echo "$_WT_BASENAME" | sed -n 's/^bead-\(.*\)/\1/p')
-export PROJECT_NAME=$(git -C "$REPO_ROOT" remote get-url origin 2>/dev/null | sed 's|.*/||;s|\.git$||' || basename "$REPO_ROOT")
-```
+3. Parse `TURN_LOG_STATUS` from handler output for Step 17 summary:
+   - `uploaded_deleted` — success, file is gone
+   - `empty_deleted` — file was empty, deleted, no upload attempted
+   - `error_kept parse_error=...` / `error_kept status=...` / `error_kept exc=...` —
+     file preserved, record warning, continue session-close
+   - `skipped_dry_run` — dry-run preview only
 
 ### Step 13: Kill Worktree Dev Processes
 
@@ -358,28 +288,32 @@ Skip silently if not in a worktree.
 
 ### Step 14: Second Merge from Main
 
-Catch up with any changes that landed on main while we were doing steps 2-13:
+Catch up with any changes that landed on main while we were doing Steps 2–13:
 
 ```bash
-git fetch origin main
-git merge origin/main --no-edit
+bash "$HANDLERS_DIR/merge-from-main.sh" ${DRY_RUN:+--dry-run} --label "second"
 ```
 
-- If merge conflicts: STOP, report to user. All previous work (commit, changelog, tag) is
-  preserved on the feature branch. The user can resolve and re-run `--skip-learnings`.
-- If on main directly (no worktree): skip.
+Handler exit: 0 = success / skipped cleanly, 2 = merge conflict. On conflict:
+**STOP**, report to user — all previous work (commit, changelog, tag) is preserved
+on the feature branch. User can resolve and re-run `--ship-only`.
 
 ### Step 15: Merge Feature into Main
 
-Only if in a worktree:
+Only runs in a worktree. Skip if `BRANCH == main`.
 
 ```bash
-git -C "$MAIN_REPO" merge --no-ff "$BRANCH" -m "merge: $BRANCH"
+bash "$HANDLERS_DIR/merge-feature.sh" \
+  --main-repo "$MAIN_REPO" \
+  --branch "$BRANCH" \
+  ${DRY_RUN:+--dry-run}
 ```
 
-- If merge conflicts: STOP, report to user, do NOT force or delete.
-- This happens immediately after step 14 to minimize the race window.
-- Skip if not in a worktree.
+Handler exit: 0 = success / dry-run, 2 = merge conflict. On conflict: **STOP**, report
+to user, do NOT force or delete.
+
+This happens immediately after Step 14 to minimize the race window where another
+session-close could push between our second merge and our own push.
 
 ### Step 15b: Version Tag (auto-detects SemVer vs CalVer)
 
