@@ -1,0 +1,204 @@
+#!/usr/bin/env bash
+# sync-codex-skills — sync pilot skills from plugin-scoped source into
+# repo-scoped .agents/skills/ and optionally into a user-scoped Codex directory.
+#
+# USAGE
+#   sync-codex-skills [OPTIONS]
+#
+# OPTIONS
+#   --user            Also sync to the resolved user-scoped skills directory.
+#   --check           Diff source vs target(s), exit 1 if any file differs.
+#                     Suitable for pre-commit hooks and CI. No files are written.
+#   --dry-run         Print what would be copied without doing it.
+#   --skills LIST     Comma-separated skill names to sync (default: all pilots).
+#                     Example: --skills project-context,bug-triage
+#   -h, --help        Show this help and exit.
+#
+# SCOPES
+#   repo-scoped   .agents/skills/<name>/   (always written unless --check)
+#   user-scoped   Resolved via Phase 0 discovery (see below). Only written
+#                 when --user is passed or --check is used with --user.
+#
+# PHASE 0 DISCOVERY (user-scoped target)
+#   The script auto-detects the user Codex skills directory in this order:
+#     1. ~/.codex/skills/
+#     2. ~/.agents/skills/
+#   If neither exists, user-scoped sync is skipped with a warning (no failure).
+#
+# EXIT CODES
+#   0   All targets are in sync (or sync completed without errors).
+#   1   --check: one or more files are out of sync.
+#   2   Usage / argument error.
+
+set -euo pipefail
+
+# ---------------------------------------------------------------------------
+# Configuration
+# ---------------------------------------------------------------------------
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+
+DEFAULT_SKILLS="project-context,spec-developer,bug-triage"
+PLUGIN_BASE="$REPO_ROOT/dev-tools/skills"
+REPO_TARGET="$REPO_ROOT/.agents/skills"
+
+# ---------------------------------------------------------------------------
+# Argument parsing
+# ---------------------------------------------------------------------------
+
+OPT_USER=false
+OPT_CHECK=false
+OPT_DRY_RUN=false
+OPT_SKILLS="$DEFAULT_SKILLS"
+
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --user)      OPT_USER=true; shift ;;
+    --check)     OPT_CHECK=true; shift ;;
+    --dry-run)   OPT_DRY_RUN=true; shift ;;
+    --skills)
+      if [[ -z "${2-}" ]]; then
+        echo "ERROR: --skills requires a value" >&2
+        exit 2
+      fi
+      OPT_SKILLS="$2"; shift 2 ;;
+    --skills=*)  OPT_SKILLS="${1#--skills=}"; shift ;;
+    -h|--help)
+      sed -n '2,/^set -/{ /^#/{ s/^# \?//; p }; /^set -/q }' "${BASH_SOURCE[0]}"
+      exit 0 ;;
+    *)
+      echo "ERROR: unknown option: $1" >&2
+      exit 2 ;;
+  esac
+done
+
+# ---------------------------------------------------------------------------
+# Phase 0: resolve user-scoped target
+# ---------------------------------------------------------------------------
+
+USER_TARGET=""
+if $OPT_USER; then
+  if [[ -d "$HOME/.codex/skills" ]]; then
+    USER_TARGET="$HOME/.codex/skills"
+  elif [[ -d "$HOME/.agents/skills" ]]; then
+    USER_TARGET="$HOME/.agents/skills"
+  else
+    echo "WARNING: --user requested but no user-scoped skills directory found." >&2
+    echo "         Checked: ~/.codex/skills, ~/.agents/skills" >&2
+    echo "         Skipping user-scoped sync." >&2
+  fi
+fi
+
+# ---------------------------------------------------------------------------
+# Helpers
+# ---------------------------------------------------------------------------
+
+# pick rsync if available, otherwise fall back to cp -a
+copy_tree() {
+  local src="$1" dst="$2"
+  if command -v rsync &>/dev/null; then
+    rsync -a --delete "$src/" "$dst/"
+  else
+    rm -rf "$dst"
+    cp -a "$src" "$dst"
+  fi
+}
+
+# returns 0 if src and dst are identical, 1 otherwise
+dirs_in_sync() {
+  local src="$1" dst="$2"
+  if [[ ! -d "$dst" ]]; then
+    return 1
+  fi
+  if command -v rsync &>/dev/null; then
+    # --checksum avoids timestamp-only false positives
+    local out
+    out=$(rsync -rcn --checksum --out-format="%n" "$src/" "$dst/" 2>&1)
+    [[ -z "$out" ]]
+  else
+    diff -rq "$src" "$dst" &>/dev/null
+  fi
+}
+
+# ---------------------------------------------------------------------------
+# Main sync loop
+# ---------------------------------------------------------------------------
+
+IFS=',' read -ra SKILLS <<< "$OPT_SKILLS"
+OUT_OF_SYNC=()
+
+for skill in "${SKILLS[@]}"; do
+  skill="${skill// /}"  # trim whitespace
+  src="$PLUGIN_BASE/$skill"
+
+  if [[ ! -d "$src" ]]; then
+    echo "WARNING: source skill not found, skipping: $src" >&2
+    continue
+  fi
+
+  # ---- repo-scoped --------------------------------------------------------
+  repo_dst="$REPO_TARGET/$skill"
+
+  if $OPT_CHECK; then
+    if dirs_in_sync "$src" "$repo_dst"; then
+      echo "  [ok]   repo-scoped: $skill"
+    else
+      echo "  [DIFF] repo-scoped: $skill  (run sync-codex-skills to update)"
+      OUT_OF_SYNC+=("repo:$skill")
+    fi
+  elif $OPT_DRY_RUN; then
+    echo "  [dry]  would sync $src -> $repo_dst"
+  else
+    mkdir -p "$repo_dst"
+    copy_tree "$src" "$repo_dst"
+    echo "  [sync] repo-scoped: $skill -> $repo_dst"
+  fi
+
+  # ---- user-scoped --------------------------------------------------------
+  if [[ -n "$USER_TARGET" ]]; then
+    user_dst="$USER_TARGET/$skill"
+
+    if $OPT_CHECK; then
+      if dirs_in_sync "$src" "$user_dst"; then
+        echo "  [ok]   user-scoped ($USER_TARGET): $skill"
+      else
+        echo "  [DIFF] user-scoped ($USER_TARGET): $skill  (run sync-codex-skills --user to update)"
+        OUT_OF_SYNC+=("user:$skill")
+      fi
+    elif $OPT_DRY_RUN; then
+      echo "  [dry]  would sync $src -> $user_dst"
+    else
+      mkdir -p "$user_dst"
+      copy_tree "$src" "$user_dst"
+      echo "  [sync] user-scoped: $skill -> $user_dst"
+    fi
+  fi
+done
+
+# ---------------------------------------------------------------------------
+# Summary / exit
+# ---------------------------------------------------------------------------
+
+if $OPT_CHECK; then
+  echo ""
+  if [[ ${#OUT_OF_SYNC[@]} -eq 0 ]]; then
+    echo "All targets in sync."
+    exit 0
+  else
+    echo "Out of sync (${#OUT_OF_SYNC[@]} target(s)):"
+    for item in "${OUT_OF_SYNC[@]}"; do
+      echo "  - $item"
+    done
+    exit 1
+  fi
+elif $OPT_DRY_RUN; then
+  echo ""
+  echo "Dry-run complete. No files were written."
+else
+  echo ""
+  echo "Sync complete."
+  if [[ -n "$USER_TARGET" ]]; then
+    echo "User-scoped target: $USER_TARGET"
+  fi
+fi
