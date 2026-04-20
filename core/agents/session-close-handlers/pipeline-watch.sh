@@ -10,13 +10,16 @@
 #
 # Outputs (stdout, KV lines):
 #   PIPELINE_STATUS=passed|failed|skipped_no_gh|skipped_not_authed|skipped_no_workflow|skipped_dry_run
-#   PIPELINE_RUN_ID=<id>       (on passed/failed)
+#   PIPELINE_RUN_ID=<id>       (on passed/failed, when a run existed)
 #   PIPELINE_RUN_URL=<url>     (on passed/failed, if resolvable)
-#   PIPELINE_ERROR=<msg>       (optional, on unexpected issues)
+#   PIPELINE_ERROR=<msg>       (on failed/skipped when the reason is non-obvious, e.g. no_run_registered)
 #
 # Exit codes:
 #   0 - passed or any "skipped_*" state (non-blocking for the caller)
-#   1 - failed (caller MUST NOT close beads)
+#   1 - failed (caller MUST NOT close beads). Includes:
+#       - CI ran and failed                            → PIPELINE_ERROR unset (normal failure)
+#       - push-triggered workflow exists but no run
+#         registered within --timeout                  → PIPELINE_ERROR=no_run_registered
 
 set -uo pipefail
 
@@ -85,6 +88,50 @@ if [[ -z "$SHA" ]]; then
   exit 0
 fi
 
+# Detect whether this repo has any push-triggered GitHub Actions workflow.
+# Used to distinguish "no workflow (fine, skip)" from "workflow expected but no
+# run registered (blocking — runner offline, webhook broken, Actions disabled)".
+#
+# Matches the three YAML forms:
+#   on: push
+#   on: [push, pull_request]
+#   on:\n  push:\n    branches: [main]
+#
+# False-positive tolerance: if "push" appears in a non-trigger context (e.g. a
+# job step referencing a push action), we may falsely think a workflow is
+# push-triggered. That pushes us toward over-reporting FAIL, which is the safe
+# direction — a false FAIL just keeps a bead open for manual inspection.
+has_push_triggered_workflow() {
+  local dir="$1/.github/workflows"
+  [[ -d "$dir" ]] || return 1
+
+  local wf
+  for wf in "$dir"/*.yml "$dir"/*.yaml; do
+    [[ -f "$wf" ]] || continue
+
+    # Form 1: "on: push" (scalar trigger)
+    if grep -qE '^on:[[:space:]]+push([[:space:]]|$)' "$wf" 2>/dev/null; then
+      return 0
+    fi
+    # Form 2: "on: [push, ...]" or "on: [..., push, ...]" (sequence)
+    if grep -qE '^on:[[:space:]]*\[[^]]*\bpush\b[^]]*\]' "$wf" 2>/dev/null; then
+      return 0
+    fi
+    # Form 3: multi-line "on:" mapping with "push:" key
+    # awk: print lines between "on:" (a line with no indent) and the next
+    # non-indented top-level key. Then grep for indented "push:".
+    if awk '
+      /^on:[[:space:]]*$/ { in_on=1; next }
+      in_on && /^[^[:space:]#]/ { in_on=0 }
+      in_on { print }
+    ' "$wf" 2>/dev/null | grep -qE '^[[:space:]]+push:'; then
+      return 0
+    fi
+  done
+
+  return 1
+}
+
 # Poll for a run to register on GitHub after the push (it can take a few seconds)
 RUN_ID=""
 END_TS=$(( $(date +%s) + TIMEOUT ))
@@ -97,7 +144,17 @@ while (( $(date +%s) < END_TS )); do
 done
 
 if [[ -z "$RUN_ID" ]]; then
-  # No workflow file, or run simply never registered — treat as non-blocking skip
+  # Distinguish two very different cases:
+  #   (a) this repo has NO push-triggered workflow → genuinely no CI → skip
+  #   (b) a push-triggered workflow exists but NO run registered within timeout
+  #       → something is broken (self-hosted runner offline, webhook down,
+  #         Actions disabled on the repo, branch protection override, etc.)
+  #       → fail-closed so beads stay in_progress until someone investigates
+  if has_push_triggered_workflow "$REPO_DIR"; then
+    echo "PIPELINE_STATUS=failed"
+    echo "PIPELINE_ERROR=no_run_registered"
+    exit 1
+  fi
   echo "PIPELINE_STATUS=skipped_no_workflow"
   exit 0
 fi

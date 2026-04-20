@@ -439,12 +439,24 @@ Skip if `--skip-push`.
 ### Step 16a: Pipeline Watch
 
 Skip if `--skip-pipeline`. Skip cleanly (non-blocking) if `gh` is missing, not authenticated,
-the remote is not GitHub, or no workflow run registers for the push commit.
+the remote is not GitHub, or the repo has no push-triggered workflow.
 
 **Why:** Before Step 16a existed, beads got closed the instant `git push` returned success.
 If CI went red minutes later (missing secret, cross-platform break, deploy hook failure),
 the bead was already closed and the broken change was invisible in the beads tracker.
 All orchestrator gates run locally in the worktree — they can't see CI-only failures.
+
+**Registration vs. completion:** The handler's `--timeout` only bounds how long we wait for
+GitHub to **register** the run (create it in `queued` state). Once the run exists,
+`gh run watch` blocks until completion regardless of how long it takes to run — so jobs
+stuck in a queue, on slow self-hosted runners, or simply long builds (Docker, integration)
+are fine. The timeout only fires if GitHub never creates the run at all.
+
+**Registration-fail distinction:** If the repo has a push-triggered workflow in
+`.github/workflows/` but no run registers within the timeout, the handler returns
+`PIPELINE_STATUS=failed` with `PIPELINE_ERROR=no_run_registered`. That's a real
+problem — runner offline, webhook down, Actions disabled on the repo, or branch
+protection override. It is NOT treated as "no workflow". Beads stay `in_progress`.
 
 **Run the handler:**
 ```bash
@@ -467,18 +479,23 @@ PIPELINE_RUN_URL=<url>    # only on passed/failed
 
 **Decision tree:**
 
-| Status | Handler exit | Action |
-|--------|--------------|--------|
-| `passed` | 0 | Continue to Step 16b. Record `PIPELINE_STATUS=passed run=<url>` for Step 17. |
-| `failed` | 1 | **Abort Phase B.** Do NOT run Step 16b (beads stay `in_progress`). Do NOT run Step 16c. Report the run URL to the user. Jump to Step 17 and include `PIPELINE_STATUS=failed run=<url>`. |
-| `skipped_no_gh` / `skipped_not_authed` / `skipped_no_workflow` | 0 | Log the reason, continue to Step 16b. Non-blocking fallback — `gh` missing or no workflow is not a reason to leave beads open. |
-| `skipped_dry_run` | 0 | Dry-run preview only. Continue. |
+| Status | PIPELINE_ERROR | Handler exit | Action |
+|--------|----------------|--------------|--------|
+| `passed` | — | 0 | Continue to Step 16b. Record `PIPELINE_STATUS=passed run=<url>` for Step 17. |
+| `failed` | unset | 1 | CI ran and failed. **Abort Phase B.** Do NOT run Step 16b or 16c. Report the run URL. |
+| `failed` | `no_run_registered` | 1 | Push-triggered workflow exists but no run was registered within the timeout. Runner offline, webhook broken, Actions disabled, or branch-protection override. **Abort Phase B** — beads stay `in_progress` for investigation. |
+| `skipped_no_gh` / `skipped_not_authed` / `skipped_no_workflow` | — | 0 | Log the reason, continue to Step 16b. Non-blocking fallback — no CI for this repo or no gh tool. |
+| `skipped_dry_run` | — | 0 | Dry-run preview only. Continue. |
 
 **On FAIL — user-facing report:**
 ```
 === PIPELINE FAILED ===
 Commit: <PUSH_SHA>
-Run:    <PIPELINE_RUN_URL>
+Run:    <PIPELINE_RUN_URL>   (omit if PIPELINE_ERROR=no_run_registered)
+Reason: CI ran and failed    |  no_run_registered — workflow exists but GitHub never
+                                started the run within the timeout. Check runner
+                                health, webhook delivery, or whether Actions are
+                                disabled on this repo.
 
 Session-close aborted before Step 16b. Beads remain in_progress so the broken
 change is still visible in the tracker. Investigate the pipeline, push a fix,
@@ -647,7 +664,8 @@ For each repo with changes:
 | bd command missing | Warn, skip beads steps |
 | git-cliff missing | Warn, skip changelog |
 | Dolt push fails | Warn, continue (non-blocking) |
-| Pipeline watch: `failed` | STOP. Skip Step 16b and 16c. Beads stay `in_progress`. Report run URL. |
+| Pipeline watch: `failed` (CI ran and failed) | STOP. Skip Step 16b and 16c. Beads stay `in_progress`. Report run URL. |
+| Pipeline watch: `failed` + `PIPELINE_ERROR=no_run_registered` | STOP. Workflow exists but GitHub never started the run — runner offline, webhook down, Actions disabled, or branch protection. Beads stay `in_progress`. |
 | Pipeline watch: `skipped_*` | Warn with reason, continue to Step 16b (non-blocking fallback) |
 
 ## References
