@@ -256,6 +256,36 @@ def upsert_ccusage_row(
         conn.close()
 
 
+def update_verification_tokens(
+    bead_id: str,
+    tokens: int,
+    db_path: Path = DB_PATH,
+) -> None:
+    """Update verification_tokens on the most recent row for a bead.
+
+    Called by the orchestrator after Phase 4 completes, to persist
+    the verification-agent's token cost. Uses <usage> block parsing
+    rather than ccusage (which only gives session-level totals).
+    """
+    if not db_path.exists():
+        return
+    conn = sqlite3.connect(str(db_path))
+    try:
+        conn.execute(
+            """
+            UPDATE bead_runs
+            SET verification_tokens = ?
+            WHERE id = (
+                SELECT id FROM bead_runs WHERE bead_id = ? ORDER BY id DESC LIMIT 1
+            )
+            """,
+            (tokens, bead_id),
+        )
+        conn.commit()
+    finally:
+        conn.close()
+
+
 def update_phase2_metrics(
     bead_id: str,
     triggered: bool,

@@ -379,7 +379,35 @@ Before spawning subagent, gather:
    If non-empty: include in the subagent prompt under `### Bead Architecture Notes`.
    If empty: omit the block entirely.
 
-→ **Record phase_summary**: key files identified, relevant standards, external API status, arch design doc (if present), project context source (project-context.md or CLAUDE.md), bead design field (present/absent).
+9. **Provenance gathering (MANDATORY — for verification-agent):**
+   Collect the following before Phase 4. Store as text in your context to inject into the
+   verification-agent invocation prompt:
+
+   ```bash
+   # a) Standards applied — all standard paths loaded in Phase 2
+   # Record: the paths you actually cat'd from global + project index.yml
+
+   # b) Skills referenced — scan bead description for /skill-name patterns or "skill" mentions
+   BEAD_DESC=$(bd show <bead-id>)
+   # Look for patterns like /inject-standards, /beads, skill names in description
+
+   # c) ADRs in scope — discover ADR files in the project
+   find docs/adr/ -name "*.md" 2>/dev/null || find . -maxdepth 4 -path "*/docs/adr/*.md" 2>/dev/null
+   # Select those relevant to the bead's domain (by filename/content keywords)
+
+   # d) Docs required — check doc-config for this bead type
+   cat .claude/doc-config.yml 2>/dev/null | grep -A5 "<bead-type>"
+   ```
+
+   **Falsy → "none"**: If a field cannot be determined (no ADRs found, no doc-config), set it to "none".
+   Each field has truthy/falsy flags — record: discovered (truthy) or "none" (falsy).
+
+   **Log to bead notes:**
+   ```bash
+   bd update <bead-id> --append-notes="Provenance logged: standards=<N paths> skills=<list> adrs=<list or none> docs=<list or none>"
+   ```
+
+→ **Record phase_summary**: key files identified, relevant standards, external API status, arch design doc (if present), project context source (project-context.md or CLAUDE.md), bead design field (present/absent), provenance fields collected.
 
 ### Phase 2.5: Break Analysis (Pre-Mortem)
 
@@ -796,12 +824,17 @@ tokens directly.
 **What the orchestrator still does here:**
 
 1. **Write grading fields** that ccusage cannot know (quality, TDD, wave, model assignment).
-   Use the `insert_bead_run` helper with zeroed token fields — tokens are filled in later:
+   Use the `insert_bead_run` helper with zeroed token fields — tokens are filled in later.
+   **Exception: `verification_tokens` is captured directly from the verification-agent's `<usage>` block**,
+   because ccusage ingestion gives only session-level totals — per-phase attribution for verification
+   requires the orchestrator to parse it. After the verification-agent returns (Phase 4), extract:
+   `parse_usage(response)["total_tokens"]` and store as `VERIFICATION_TOKENS`. If no `<usage>` is
+   present, use 0.
    ```bash
    uv run python -c "
    import sys; from pathlib import Path
    sys.path.insert(0, str(Path('$CLAUDE_PLUGIN_ROOT')/'beads-workflow/lib'))
-   from orchestrator.metrics import init_db, insert_bead_run, BeadRun
+   from orchestrator.metrics import init_db, insert_bead_run, BeadRun, parse_usage
    from datetime import date
    conn = init_db()
    insert_bead_run(conn, BeadRun(
@@ -810,6 +843,7 @@ tokens directly.
        ak_count={AK_COUNT}, wave_id='{WAVE_ID}',
        model_impl='{MODEL_IMPL}', model_review='{MODEL_REVIEW}',
        review_iterations={REVIEW_ITERATIONS},
+       verification_tokens={VERIFICATION_TOKENS},  # parsed from verification-agent <usage>
    ))
    "
    ```
@@ -842,8 +876,26 @@ Agent(subagent_type="beads-workflow:verification-agent", prompt="""
   <Completion Report returned by the implementation subagent>
 - test_commands: auto-detect
 - working_directory: <cwd>
+
+### Caller Provenance (populated by bead-orchestrator)
+- standards_applied: |
+  <STANDARDS_APPLIED from Phase 2 provenance gathering, or "none">
+- skills_referenced: |
+  <SKILLS_REFERENCED from Phase 2 provenance gathering, or "none">
+- adrs_in_scope: |
+  <ADRS_IN_SCOPE from Phase 2 provenance gathering, or "none">
+- docs_required: |
+  <DOCS_REQUIRED from Phase 2 provenance gathering, or "none">
 """)
 ```
+
+**Token capture**: After the verification-agent returns, extract its token cost:
+```bash
+# Parse <usage> from the verification-agent response
+# Store as VERIFICATION_TOKENS for Phase 3.6 insert
+```
+Use `parse_usage(response)["total_tokens"]` — see Phase 3.6 for import.
+If the orchestrator runs Phase 3.6 before Phase 4 (ordering issue), use `update_verification_tokens()` instead.
 
 **Processing Verification Report:**
 
