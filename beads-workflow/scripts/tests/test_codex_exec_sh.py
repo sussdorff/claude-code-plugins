@@ -112,8 +112,9 @@ def test_shell_script_writes_db(tmp_path: Path) -> None:
     )
 
     mock_dir = _make_mock_codex(tmp_path / "mock_bin")
-    # Use model="codex" so rollup_run's filter (model LIKE '%codex%') matches
-    codex_config = _make_mock_config(tmp_path / "codex_cfg", model="codex")
+    # Use model="gpt-5.4" to exercise the normalization path: the script must
+    # prefix it to "codex/gpt-5.4" so rollup_run's filter (model LIKE '%codex%') matches.
+    codex_config = _make_mock_config(tmp_path / "codex_cfg", model="gpt-5.4")
     env = _env_for_script(run_id=run_id, db=db, mock_bin_dir=mock_dir, codex_config=codex_config)
 
     result = subprocess.run(
@@ -212,6 +213,55 @@ def test_missing_phase_label_exits_nonzero(tmp_path: Path) -> None:
     )
     assert "PHASE_LABEL" in result.stderr, (
         f"Expected 'PHASE_LABEL' in stderr, got: {result.stderr!r}"
+    )
+
+
+# ---------------------------------------------------------------------------
+# Error case: Python metrics recording failure → non-zero exit
+# ---------------------------------------------------------------------------
+
+def test_python_metrics_failure_exits_nonzero(tmp_path: Path) -> None:
+    """
+    When the Python heredoc fails (e.g. run_id not registered in bead_runs),
+    codex-exec.sh must exit non-zero and print an error to stderr.
+
+    We pass a RUN_ID that was never start_run()'d so insert_agent_call() raises
+    ValueError, which causes Python to exit non-zero, which the shell captures
+    and re-raises via the PYTHON_EXIT guard.
+    """
+    import uuid
+
+    db = tmp_path / "metrics.db"
+    # Initialise the DB (creates tables) but do NOT call start_run — run_id unknown.
+    # We do this by importing init_db directly.
+    from metrics import init_db  # noqa: PLC0415
+
+    conn = init_db(db)
+    conn.close()
+
+    unknown_run_id = str(uuid.uuid4())
+    mock_dir = _make_mock_codex(tmp_path / "mock_bin")
+    codex_config = _make_mock_config(tmp_path / "codex_cfg", model="gpt-5.4")
+    env = _env_for_script(
+        run_id=unknown_run_id,
+        db=db,
+        mock_bin_dir=mock_dir,
+        codex_config=codex_config,
+    )
+    env["METRICS_DIR_OVERRIDE"] = _METRICS_DIR
+
+    result = subprocess.run(
+        ["bash", str(_CODEX_EXEC)],
+        env=env,
+        capture_output=True,
+        text=True,
+    )
+    assert result.returncode != 0, (
+        f"Expected non-zero exit when metrics recording fails, got 0\n"
+        f"stdout={result.stdout!r}\nstderr={result.stderr!r}"
+    )
+    assert "ERROR" in result.stderr, (
+        f"Expected 'ERROR' in stderr, got: {result.stderr!r}"
     )
 
 

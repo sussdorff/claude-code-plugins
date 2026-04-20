@@ -62,6 +62,12 @@ if [[ -f "$CODEX_CONFIG" ]]; then
         MODEL=$(echo "$_model_line" | sed 's/^model = "\(.*\)"/\1/')
     fi
 fi
+# Normalize model name so rollup_run's SQL filter (model LIKE '%codex%' OR model LIKE
+# '%o1%' OR model LIKE '%o3%') matches.  If the extracted model matches none of those
+# patterns (e.g. "gpt-5.4"), prefix it with "codex/" so it matches '%codex%'.
+if [[ "$MODEL" != *codex* && "$MODEL" != *o1* && "$MODEL" != *o3* ]]; then
+    MODEL="codex/${MODEL}"
+fi
 
 # ---------------------------------------------------------------------------
 # Temp file for capturing codex output (cleaned up on exit)
@@ -87,7 +93,8 @@ DURATION_MS=$(( END_MS - START_MS ))
 # ---------------------------------------------------------------------------
 # Parse ALL turn.completed events from temp file, sum usage fields
 # ---------------------------------------------------------------------------
-python3 - <<PYEOF
+PYTHON_EXIT=0
+python3 - <<PYEOF || PYTHON_EXIT=$?
 import sys
 import json
 import os
@@ -156,6 +163,11 @@ insert_agent_call(
     db_path=db_path,
 )
 PYEOF
+
+if [[ $PYTHON_EXIT -ne 0 ]]; then
+    echo "codex-exec.sh: ERROR: metrics recording failed (python exit $PYTHON_EXIT)" >&2
+    exit $PYTHON_EXIT
+fi
 
 # ---------------------------------------------------------------------------
 # Propagate codex's exact exit code
