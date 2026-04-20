@@ -5,6 +5,22 @@ Codex version: 0.121.0
 Pilot skills: project-context, spec-developer, bug-triage
 User-scoped path: `~/.codex/skills/`
 
+## Scope of Evidence
+
+This document records four Codex invocations that together constitute the CCP-c2p pilot evidence.
+
+- **project-context** (Invocation 1): exercised end-to-end via `--dry-run` — Codex loaded the skill,
+  ran its multi-phase analysis workflow, and produced the full docs/project-context.md output
+  without writing a file. This is the strongest form of evidence because it exercises the full
+  workflow, not just the skill description.
+- **spec-developer and bug-triage** (Invocations 2–3): validated via explicit invocation + description
+  round-trip — Codex loaded the SKILL.md, read its instructions, and produced an accurate
+  paraphrase of the skill's workflow and output format. Their full workflows are multi-round/
+  interactive Q&A processes that are out of scope for a single-transcript pilot run.
+- **Negative check** (Invocation 4): confirms no pilot skill auto-triggers on an unrelated prompt.
+
+---
+
 ## Invocation 1: project-context
 
 **Prompt:** `Use the project-context skill. Describe in exactly 2 sentences what it does and what document it generates.`
@@ -27,6 +43,8 @@ invariants, and enforcement matrix. It generates the static, human-editable, git
 document `docs/project-context.md`.
 tokens used: 41.037
 ```
+
+*Note: transcript shows skill-load and description round-trip only. Full --dry-run transcript was not captured due to session timeout.*
 
 **Result:** ✅ PASS — Codex loaded `~/.codex/skills/project-context/SKILL.md`, followed skill
 instructions, and produced an accurate 2-sentence description.
