@@ -1,3 +1,14 @@
+## [2026.04.47] - 2026-04-20
+
+### Features
+
+- *(CCP-5ze)* Add Step 16a pipeline watch to session-close: gh run watch + workflow detection decision tree, --skip-pipeline flag, Step 17 reports pipeline status
+- *(CCP-d7b)* Replace Phase 3.6 inline-Python token capture with ccusage + @ccusage/codex ingestion handlers; add cache_read/cache_creation/reasoning/cost_usd columns to metrics.db; 91 historic beads backfilled with $328.72 cost history
+
+### Refactor
+
+- *(CCP-ds0)* Extract turn-log-upload.py, merge-from-main.sh, merge-feature.sh handlers from session-close; dedupe Input/Phase-B-order prose; 700 -> 634 lines
+
 ## [2026.04.45] - 2026-04-19
 
 ### Wave Orchestration
