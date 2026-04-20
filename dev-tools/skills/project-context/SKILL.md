@@ -5,14 +5,13 @@ description: >-
   Generate docs/project-context.md (Constitution Pattern) from an existing codebase.
   Analyzes CLAUDE.md, architecture docs, and directory structure to produce a readable,
   editable, git-versioned context document covering Tech Stack, Architecture Principles,
-  Module Map, Established Patterns, and Critical Invariants. Used by bead-orchestrator
-  Phase 2 as project context. Triggers on: project context, generate project context,
+  Module Map, Established Patterns, and Critical Invariants. Triggers on: project context, generate project context,
   project-context, create project-context, constitution document, codebase context.
 argument-hint: "[--force] [--dry-run] [--section=<name>]"
 tags: project, documentation, architecture
 ---
 
-# /project-context
+# Project Context
 
 Generate `docs/project-context.md` — a human-readable, editable Constitution document that
 captures your codebase's tech stack, architecture principles, module map, patterns, and
@@ -21,14 +20,14 @@ critical invariants.
 The output is **intentionally static** — it does not auto-regenerate to avoid drift. Regenerate
 manually when your architecture changes significantly.
 
-Consumed by `bead-orchestrator` Phase 2 as project context for new implementations.
+Consumed by orchestration agents as project context for new implementations.
 
 ## When to Use
 
-- After setting up a new project (`/project-setup` → `/project-context`)
+- After setting up a new project (project setup → project context generation; see Claude adapter for invocation details)
 - When onboarding someone new to the codebase
 - When starting a major refactor and want to document current state first
-- When bead-orchestrator Phase 2 needs `docs/project-context.md` for context injection
+- When your orchestration workflow injects project context into implementation sessions
 
 ## Do NOT
 
@@ -62,7 +61,7 @@ Consumed by `bead-orchestrator` Phase 2 as project context for new implementatio
    - Report: "⚠️  `docs/project-context.md` already exists."
    - Show first 5 lines of the existing file so user knows what version it is
    - Ask: "Overwrite with a fresh analysis? (Use `--force` to skip this prompt)"
-   - If user says no / cancel: abort with "Aborted. Run `/project-context --force` to overwrite."
+   - If user says no / cancel: abort with "Aborted. Run this skill again with `--force` to overwrite."
    - If user says yes: continue
 
 3. Create `docs/` directory if it doesn't exist:
@@ -120,7 +119,7 @@ Minimum 3 invariants.
 ### Phase 3: Generate Output
 
 **If `--dry-run`**: print full generated content to chat, do NOT write any file. End with:
-`[DRY RUN — file not written. Run `/project-context` without --dry-run to write docs/project-context.md]`
+`[DRY RUN — file not written. Run this skill without --dry-run to write docs/project-context.md]`
 
 **If `--section=<name>`**: regenerate only that section in the existing file.
 
@@ -219,10 +218,10 @@ The template covers these required sections:
 ## Integration
 
 **Consumed by:**
-- `bead-orchestrator` Phase 2: reads `docs/project-context.md` for project context injection
-- `session-close`: may append new architecture decisions after significant sessions
+- Orchestration agents: reads `docs/project-context.md` for project context injection
+- Session summary tools: may append new architecture decisions after significant sessions (see Claude adapter for specifics)
 
 **Related skills:**
-- `/project-setup` — sets up new project (run before `/project-context`)
-- `/project-health` — quality assessment (run independently)
-- `/spec-developer` — deep feature specs (uses project-context as input context)
+- Project setup — sets up a new project (see Claude adapter for invocation details)
+- Project health — quality assessment (run independently)
+- Spec developer — deep feature specs (uses project-context as input context; see Claude adapter for invocation details)
