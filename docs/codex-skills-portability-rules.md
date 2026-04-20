@@ -90,4 +90,5 @@ Use this checklist before considering a skill split complete:
 - Every harness-specific step has a fallback in `SKILL.md`
 - Harness details live only in `SKILL.<harness>-adapter.md`
 - No `model:` or `disable-model-invocation:` frontmatter keys in `SKILL.md`
+- No `argument-hint:` frontmatter key in `SKILL.md`
 - No `$ARGUMENTS` template variable in `SKILL.md`

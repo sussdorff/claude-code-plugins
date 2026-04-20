@@ -24,7 +24,7 @@ FORBIDDEN_IN_PORTABLE = [
     r"session-close",
     r"disable-model-invocation",
     r"\$ARGUMENTS",
-    r"^/[a-z][a-z0-9-]+",
+    r"^/[a-z][a-z0-9-]+(?:\s|$)",  # slash-command at start of line, followed by space or EOL
 ]
 
 def test_portable_skill_has_no_harness_specific_content():

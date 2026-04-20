@@ -16,9 +16,9 @@ Load the project's bug history via `malte/hooks/buglog.py`:
 
 ```python
 import sys
-sys.path.insert(0, "malte/hooks")
 # NOTE: "malte/hooks" is a relative path — CWD must be the repo root when running this.
 # Alternative: use Path(__file__).resolve().parent to derive an absolute path.
+sys.path.insert(0, "malte/hooks")
 from buglog import load_buglog, search_buglog
 
 entries = load_buglog(cwd=".")

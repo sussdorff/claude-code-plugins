@@ -14,7 +14,9 @@ This file supplements `SKILL.md` with Claude-specific paths and skill integratio
 After reading `./CLAUDE.md`, also read `~/.claude/CLAUDE.md` (user global profile) for
 user-level conventions and preferences.
 
-## Phase 3 Claude Extension: Save Path
+## Phase 3 Project Convention: Save Path
+
+This is a project-specific path convention, not a Claude harness requirement. Adjust to your project's preferred spec storage path.
 
 On Claude Code projects, save specs to `malte/plans/spec-<feature-name>.md` rather than
 the default `docs/specs/` path, unless the project has a different convention in its `CLAUDE.md`.
