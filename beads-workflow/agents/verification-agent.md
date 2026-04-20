@@ -363,12 +363,32 @@ Delta:    <+/- difference>
 <Any AKs found implemented but not in Completion Report>
 
 ### Provenance Compliance
-PROVENANCE-STANDARDS: <skipped | VERIFIED | N DISPUTED>
-PROVENANCE-ADR: <skipped | VERIFIED | N DISPUTED>
+<Per-violation detailed blocks (one per violation found):>
+PROVENANCE-STANDARDS: "<standard-path>"
+VIOLATION: <what rule was violated>
+RAN: <command>
+SAW: <output snippet>
+VERDICT: DISPUTED
+fixability: auto | human
+
+<Summary lines (one per check):>
+PROVENANCE-STANDARDS: <skipped | VERIFIED | N DISPUTED | UNVERIFIABLE>
+PROVENANCE-ADR: <skipped | VERIFIED | N DISPUTED | UNVERIFIABLE>
 PROVENANCE-DOCS: <skipped | VERIFIED | N DISPUTED>
 
 ### Summary
 <2-3 sentences: overall verification assessment>
+```
+
+```
+<When skills_referenced != "none" — appended after ## Verification Report:>
+## Skill Application Advisory
+
+| Skill | Status | Evidence |
+|-------|--------|----------|
+| <skill-name> | likely-applied | <file:line or pattern matched> |
+| <skill-name> | unclear | Process-oriented skill, no diff artifact |
+| <skill-name> | no-evidence | Expected <artifact> at <path>, not present |
 ```
 
 **Status rules:**

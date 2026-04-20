@@ -270,7 +270,7 @@ class TestAdvisoryCheck:
     def test_advisory_no_bd_update(self):
         """Spec must say agent does NOT call bd update."""
         content = VERIFICATION_AGENT_MD.read_text()
-        assert "Do NOT call" in content or "bd update" in content
+        assert "Do NOT call `bd update`" in content
 
     def test_scenario_skill_no_artifact_unclear(self):
         """Spec must describe: process-oriented skill with no diff artifact → unclear."""
