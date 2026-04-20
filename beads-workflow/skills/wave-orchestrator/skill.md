@@ -977,6 +977,12 @@ For each completed bead, collect:
    Extract: BLOCKING findings (fixed), ADVISORY findings (deferred), Codex findings
 3. **Implementation commits**: `git log --oneline <branch>` — what actually changed
 4. **Follow-up beads created**: beads with `discovered-from: <bead-id>` in the wave
+5. **Auto-decisions**: scan `bd show <id>` bead notes for entries matching the
+   `DECISION: auto-` pattern. Parse: phase name, decision taken, reviewer
+   recommendation (if present), grade impact (if present). Note that
+   `bead_runs.auto_decisions` and `bead_runs.deviations_from_reco` provide aggregate
+   counts if the orchestrator populated them — the bead notes scan is the richer
+   source for per-decision detail.
 
 ### Report Structure
 
@@ -1021,9 +1027,71 @@ These are often the most valuable — they reveal systematic issues.]
 |------|-----------|-------|-------------|
 | <id> | <N> | <A/B/C> | <one-line summary> |
 
+### Auto-Decisions Made (require post-hoc review)
+[Omit this section if no auto-decisions were made in this wave]
+
+| Bead | Phase | Decision | Reviewer Recommendation | Grade Impact |
+|------|-------|----------|------------------------|--------------|
+| <id> | <phase> | auto-accept | <recommendation if present> | <e.g. A→B> |
+
+### Token Usage (wave <wave_id>)
+| Mode | Beads | Total Tokens | Avg/Bead | Codex Tokens | Claude Tokens |
+|------|-------|--------------|----------|--------------|---------------|
+| full-1pane | 3 | ... | ... | ... | ... |
+| quick | 2 | ... | ... | ... | ... |
+
+| Model | Calls | Total Tokens |
+|-------|-------|--------------|
+| claude-opus-4-7 | 12 | ... |
+| claude-sonnet-4-6 | 8 | ... |
+| gpt-5-codex | 9 | ... |
+
 ### CLAUDE.md Updates Made
 [List any project CLAUDE.md changes made during this wave]
 ```
+
+### Data Sources (Token Breakdown)
+
+Use these SQL queries against the beads database to populate the Token Usage tables.
+Replace `<wave_id>` with the current wave identifier.
+
+**Per-mode breakdown** (maps to the Mode table):
+
+```sql
+SELECT
+  br.mode,
+  COUNT(DISTINCT br.bead_id)          AS beads,
+  SUM(br.total_tokens)                AS total_tokens,
+  SUM(br.total_tokens) / COUNT(DISTINCT br.bead_id) AS avg_per_bead,
+  SUM(br.codex_total_tokens)          AS codex_tokens,
+  SUM(br.total_tokens) - SUM(br.codex_total_tokens) AS claude_tokens
+FROM bead_runs br
+WHERE br.wave_id = '<wave_id>'
+GROUP BY br.mode
+ORDER BY beads DESC;
+```
+
+**Per-model breakdown** (maps to the Model table):
+
+```sql
+SELECT
+  ac.model,
+  COUNT(*)               AS calls,
+  SUM(ac.total_tokens)   AS total_tokens
+FROM agent_calls ac
+WHERE ac.wave_id = '<wave_id>'
+GROUP BY ac.model
+ORDER BY total_tokens DESC;
+```
+
+**DB Schema reference:**
+- `bead_runs`: `bead_id`, `wave_id`, `mode` (e.g. `full-1pane`, `quick-fix`),
+  `total_tokens`, `codex_total_tokens`, `auto_decisions`, `deviations_from_reco`
+- `agent_calls`: `run_id`, `bead_id`, `wave_id`, `phase_label`, `agent_label`,
+  `model`, `total_tokens`, `duration_ms`
+
+For mixed waves (quick + full beads), both tables will have rows for each mode used.
+Omit the Token Usage section only if `bead_runs` contains no rows for the wave.
 
 ### Where to Store the Report
 
