@@ -1,3 +1,11 @@
+## [2026.04.45] - 2026-04-19
+
+### Wave Orchestration
+
+- *(wave-1)* Close CCP-2q2 (tense-gate), CCP-9yh (None-mutual-exclusion), CCP-qrg (bd-wrapper PATH-shim)
+- *(wave-2a)* Close CCP-xpr (vision-parser helper) — unblocks CCP-hf1 (/vision-author) for Wave 2b
+- *(arch-council)* Architecture Council reviews for CCP-hf1 (4 HIGH) and CCP-a67 (5 CRITICAL findings) documented pre-implementation
+
 ## [2026.04.44] - 2026-04-19
 
 ### 🚀 Features
