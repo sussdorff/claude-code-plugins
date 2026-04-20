@@ -1,6 +1,6 @@
 {
   "name": "medical",
-  "version": "2026.04.53",
+  "version": "2026.04.57",
   "description": "Healthcare and FHIR \u2014 Mira-specific Aidbox config, billing review, compliance auditing (GDPR/EU AI Act), clinical UX human-factors review",
   "keywords": [
     "medical",

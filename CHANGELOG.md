@@ -1,3 +1,21 @@
+## [2026.04.57] - 2026-04-20
+
+### Miscellaneous Tasks
+
+- *(CCP-2vo.5)* Wave-orchestrator: 1-pane budget, remove review surface spawn, add stall detection with agent_calls false-positive guard and idempotency check
+
+### Bug Fixes
+
+- *(CCP-2vo.5)* Query agent_calls from metrics.db (sqlite3), not bd sql; guard stall notes for idempotency
+- *(CCP-2vo.5)* Fix epoch-second SQLite comparison and temp-file stall idempotency
+
+## [2026.04.56] - 2026-04-20
+
+### Chores
+
+- *(CCP-2vo.6)* Migrate quick-fix agent to codex-exec.sh, fix session-close handoff (CCP-7cn folded in)
+- *(CCP-2vo.6)* Address codex adversarial findings — LAST_SHA, RUN_ID fallback, phase2 metrics
+
 ## [2026.04.49] - 2026-04-20
 
 ### Features

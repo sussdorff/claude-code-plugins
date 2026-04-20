@@ -3,8 +3,10 @@
 #
 # Usage: wave-dispatch.sh <bead-id1> <bead-id2> ... [--workspace <id>] [--base-pane <id>]
 #
-# Creates one pane per bead (horizontal splits), names each surface,
-# dispatches cld -b, and outputs the wave config JSON to stdout.
+# Creates ONE pane per bead (1-pane mode: full and quick-fix beads both use a single
+# pane). Renames each surface, dispatches cld -b or cld -bq, and outputs wave config JSON.
+# NOTE: cld -br (review-only sessions) is NOT used here. After CCP-2vo.4, bead-orchestrator
+# runs all phases (including Codex review) inline in a single pane.
 #
 # The output JSON can be fed directly into wave-status.sh for monitoring.
 
@@ -100,12 +102,13 @@ for i in "${!ALL_IDS[@]}"; do
   SHORT_ID=$(echo "$BEAD_ID" | sed 's/.*-//')
 
   # Determine dispatch mode
+  # Both modes use a single pane — no paired review surface (1-pane mode per CCP-2vo.4)
   if is_quick "$BEAD_ID"; then
     CLD_FLAG="-bq"
     SURFACE_SUFFIX="qf"
   else
     CLD_FLAG="-b"
-    SURFACE_SUFFIX="impl"
+    SURFACE_SUFFIX="impl"  # no paired -impl/-review: Codex review runs inline
   fi
 
   # Always create a new split (never reuse the orchestrator's surface)
