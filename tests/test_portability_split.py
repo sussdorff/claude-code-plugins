@@ -64,3 +64,32 @@ def test_portability_rules_doc_exists():
     assert "portable core" in content.lower() or "portable" in content.lower()
     assert "adapter" in content.lower()
     assert "naming convention" in content.lower() or "naming" in content.lower()
+
+
+def test_project_context_phase1a_mentions_both_conventions_files():
+    """
+    Regression test for CCP-5d0: Phase 1 §1a must load both CLAUDE.md and AGENTS.md
+    when both exist, not just one of them.
+    """
+    skill_file = Path("dev-tools/skills/project-context/SKILL.md")
+    assert skill_file.exists(), f"{skill_file} does not exist"
+    content = skill_file.read_text()
+
+    # Find the §1a block — it starts at "**1a." and ends before "**1b."
+    phase1a_match = re.search(
+        r"\*\*1a\.(.*?)(?=\*\*1b\.)", content, re.DOTALL
+    )
+    assert phase1a_match, "Could not find §1a block in SKILL.md"
+    section_1a = phase1a_match.group(0)
+
+    # Both file names must be mentioned in §1a
+    assert "CLAUDE.md" in section_1a, "§1a does not mention CLAUDE.md"
+    assert "AGENTS.md" in section_1a, "§1a does not mention AGENTS.md"
+
+    # The source-header pattern must be present so agents know how to label each file
+    assert "# From CLAUDE.md" in section_1a, (
+        "§1a missing source header pattern '# From CLAUDE.md'"
+    )
+    assert "# From AGENTS.md" in section_1a, (
+        "§1a missing source header pattern '# From AGENTS.md'"
+    )
