@@ -35,6 +35,7 @@ directly for dispatch, monitoring, and completion checks.
 | `--max-parallel=N` | Limit concurrent panes (default: 4) |
 | `--skip-scenarios` | Don't check/generate scenarios for feature beads |
 | `--skip-review` | Skip architecture review (Phase 1.5b) for all beads. Logged to audit. |
+| `--skip-wave-review` | Skip wave-level structural review (Phase 1.25). Logged per-bead to notes. |
 | `--skip-integration-check` | Skip Phase 6.5 integration-verification (cross-bead invariant check after final wave) |
 
 Examples:
@@ -217,6 +218,269 @@ the limit.
 
 ---
 
+## Phase 1.25: Wave Structural Review
+
+Before scope analysis, run a cross-bead structural review to catch wave-level defects
+(dependency-ordering errors, ownership collisions, lifecycle contradictions, validation
+gaps) that single-bead review cannot see. This phase prevents expensive review
+oscillation AFTER dispatch.
+
+**Initialize at the start of this phase (before any skip-path exits):**
+```bash
+PHASE_125_ARCH_FINDINGS=""
+```
+This ensures the variable is always defined regardless of which exit path fires.
+
+**Skip if `--skip-wave-review` is set.** Log per bead:
+```bash
+for id in <all bead IDs in wave>; do
+  bd update "$id" --append-notes="Wave review skipped (--skip-wave-review flag). User: $(whoami), $(date -u +%Y-%m-%dT%H:%M:%SZ)"
+done
+```
+Then exit Phase 1.25 (return to Phase 1.5 with `$PHASE_125_ARCH_FINDINGS` empty).
+
+**Skip silently if the wave has only 1 bead** (no cross-bead invariants to check).
+Exit Phase 1.25 immediately with `$PHASE_125_ARCH_FINDINGS` empty.
+
+### Spawning the Wave-Reviewer Subagent
+
+Spawn a general-purpose subagent. The subagent must call `codex exec --sandbox read-only`
+directly via Bash (NOT `/codex`, NOT `/codex:rescue`). The subagent returns a structured
+JSON findings report.
+
+```
+Agent(subagent_type="general-purpose", prompt="
+  ## Wave Structural Review
+
+  Review these beads as a wave candidate for cross-bead structural defects.
+
+  ## Bead IDs to review
+  <list of bead IDs>
+
+  ## Instructions
+  1. Run `bd show <id>` for each bead to load its title, description, ACs, deps.
+  2. Check if `codex` is available: `command -v codex`
+     - If YES: run the review via codex (see below).
+     - If NO or codex exits non-zero: perform the review yourself using Sonnet logic
+       (see wave-reviewer SKILL.md for checklist) and set codex_fallback: 'sonnet'.
+
+  ## Using codex exec (when available)
+
+  Run:
+  ```bash
+  codex exec --sandbox read-only --model o3 '<prompt with bead data>'
+  ```
+
+  The prompt must instruct codex to return ONLY valid JSON matching this schema:
+
+  ```json
+  {
+    \"verdict\": \"Structurally ready | Not ready for dispatch\",
+    \"reviewed_at\": \"<ISO-8601 UTC>\",
+    \"reviewed_beads\": [\"<id1>\", \"<id2>\"],
+    \"findings\": [
+      {
+        \"bead_ids\": [\"<id>\"],
+        \"severity\": \"HIGH | MEDIUM | LOW\",
+        \"category\": \"fundamental | lokal | ac_minor | bead_quality | architecture | info\",
+        \"finding\": \"<specific structural defect>\",
+        \"recommendation\": \"<minimal fix>\"
+      }
+    ],
+    \"codex_exit\": 0,
+    \"codex_fallback\": null
+  }
+  ```
+
+  Severity definitions:
+  - HIGH + fundamental: Wave-redesign required (bead-split, dependency loop, lifecycle
+    contradiction) — cannot dispatch without user decision
+  - HIGH + lokal: Locally fixable (missing dep edge, wrong ownership) — fixable via
+    bd update with user confirmation
+  - MEDIUM: AC-minor issues, bead quality < B, small inconsistencies — auto-fixable
+  - LOW / info: Structurally sound, no action required
+
+  If codex exec exits non-zero, capture the exit code and set:
+  - codex_fallback: 'sonnet'
+  - codex_exit: <actual exit code>
+  Then perform the review yourself using Sonnet (load wave-reviewer SKILL.md logic) and
+  produce the same JSON schema.
+
+  ## Output
+  Return ONLY the JSON object (no surrounding prose).
+")
+```
+
+### Findings Triage
+
+After the subagent returns the JSON findings report, parse and triage by severity.
+
+**If `codex_fallback: 'sonnet'` in the JSON**, log to all wave bead notes:
+```bash
+bd update <id> --append-notes="Wave review: codex_fallback=sonnet, codex_exit=<N>"
+```
+
+**Process findings in this order: HIGH-fundamental → HIGH-lokal → MEDIUM → LOW**
+
+#### HIGH-fundamental (stop + user dialog)
+
+For each HIGH-fundamental finding — halt immediately and present to the user:
+
+```
+## Wave Review — BLOCKED: Structural Issue
+
+Finding: <finding text>
+Bead(s): <bead_ids>
+Recommendation: <recommendation>
+
+Options:
+  A) Accept recommendation (split bead / restructure wave)
+  B) Override and continue (logged to bead notes)
+```
+
+**In `--dry-run` mode:** Show the finding and options but do NOT create beads or make any
+bd updates — this applies to BOTH path A (bd create + bd supersede) AND path B
+(bd update --append-notes). No writes of any kind are performed in dry-run.
+
+If user chooses A (accept):
+- For bead-split: create sub-beads and supersede original:
+  ```bash
+  bd create --title="<sub-bead-A>" --type=<type> --priority=<priority>
+  bd create --title="<sub-bead-B>" --type=<type> --priority=<priority>
+  bd dep add <sub-bead-B> <sub-bead-A>  # if B depends on A
+  bd supersede <original-id> --with=<sub-bead-A>
+  ```
+- Re-run Phase 1 with the new bead set
+- Return to Phase 1.25 with updated wave
+
+If user chooses B (override):
+```bash
+bd update <id> --append-notes="Wave review HIGH-fundamental override by user: <finding summary>. $(date -u +%Y-%m-%dT%H:%M:%SZ)"
+```
+Proceed to next finding. (In `--dry-run` mode: do NOT apply the `bd update --append-notes`
+override log either — dry-run suppresses all writes.)
+
+#### HIGH-lokal (user confirmation + apply)
+
+For each HIGH-lokal finding — present the proposed fix and await confirmation:
+
+```
+## Wave Review — HIGH Finding (locally fixable)
+
+Finding: <finding text>
+Bead(s): <bead_ids>
+Proposed fix: <recommendation (e.g. `bd dep add demo-epic-b demo-epic-c`)>
+
+Apply this fix? [Y/N]
+```
+
+If confirmed:
+```bash
+# Apply the recommended fix (e.g. add dependency edge)
+bd dep add <id1> <id2>
+# or
+bd update <id> --append-notes="<fix applied>"
+```
+
+In `--dry-run` mode: Show the finding and proposed fix, do NOT apply.
+
+#### MEDIUM (auto-fix + summary)
+
+For all MEDIUM findings — apply via `bd update` directly:
+
+```bash
+bd update <id> --append-notes="Wave review MEDIUM fix: <finding summary>"
+# For ac_minor: if description improvement is needed, update the description field
+# bd update <id> --description="<improved description>"
+```
+
+After all MEDIUM fixes, show a summary:
+```
+## Applied Wave Review Fixes (MEDIUM)
+- <bead-id>: <what was fixed>
+- <bead-id>: <what was fixed>
+```
+
+In `--dry-run` mode: Show what would be fixed but do NOT apply.
+
+#### LOW / verdict "Structurally ready"
+
+No action required. Proceed to Phase 1.5.
+
+### Re-Review Loop (max 1)
+
+If ANY of the following conditions are true, trigger exactly ONE re-review:
+- HIGH-lokal finding was confirmed and applied
+- MEDIUM finding was auto-applied
+- HIGH-fundamental finding was overridden by the user (path B)
+
+This ensures the re-review safety net always fires after user override decisions, not
+only after programmatic fixes.
+
+Re-spawn the wave-reviewer subagent with the same prompt but updated bead data.
+
+If the second-pass verdict is still `Not ready for dispatch`:
+```
+## Wave Review — Second Pass: Still Not Ready
+
+The following issues remain unresolved after applying fixes:
+<second-pass findings>
+
+Options:
+  A) Continue anyway (logged to notes)
+  B) Abort dispatch
+```
+
+Do NOT trigger a third review. The orchestrator does not loop indefinitely.
+
+### Phase 1.5b Context Handoff
+
+After Phase 1.25 completes (regardless of verdict), extract all findings with
+`category: "architecture"` from the JSON report. Pass these to Phase 1.5b's
+Architecture Council prompt as pre-existing context:
+
+```
+### Phase 1.25 Architecture Findings (do not re-review these)
+<verbatim architecture findings from Phase 1.25 JSON>
+```
+
+This prevents Phase 1.5b from redundantly re-reviewing structural issues already
+surfaced by Phase 1.25. Store the architecture findings in a variable for injection
+into Phase 1.5b.
+
+### JSON Output Schema
+
+The JSON contract that the codex invocation must return (documented for wave-reviewer
+subagent prompt construction):
+
+```json
+{
+  "verdict": "Structurally ready | Not ready for dispatch",
+  "reviewed_at": "<ISO-8601 UTC>",
+  "reviewed_beads": ["<bead-id>", "..."],
+  "findings": [
+    {
+      "bead_ids": ["<bead-id>"],
+      "severity": "HIGH | MEDIUM | LOW",
+      "category": "fundamental | lokal | ac_minor | bead_quality | architecture | info",
+      "finding": "<specific structural defect>",
+      "recommendation": "<minimal fix command or description>"
+    }
+  ],
+  "codex_exit": 0,
+  "codex_fallback": null
+}
+```
+
+Fields:
+- `verdict`: Overall wave readiness assessment
+- `reviewed_beads`: All bead IDs that were reviewed
+- `findings`: Empty array if verdict is "Structurally ready"
+- `codex_exit`: Exit code from `codex exec` (0 = success, non-zero = error)
+- `codex_fallback`: `null` if codex ran successfully, `"sonnet"` if Sonnet fallback was used
+
+---
+
 ## Phase 1.5: Scope Analysis (Compound Bead Detection)
 
 Before dispatching, analyze each bead's scope to detect compound beads that are likely
@@ -301,6 +565,16 @@ architecture review BEFORE implementation — preventing costly review oscillati
 ```bash
 bd update <id> --append-notes="⚠ Architecture review skipped (--skip-review flag). User: $(whoami), $(date -u +%Y-%m-%dT%H:%M:%SZ)"
 ```
+
+### Phase 1.25 Context
+
+If Phase 1.25 found any `architecture`-category findings, they are passed in via
+`$PHASE_125_ARCH_FINDINGS`. Inject these into the Architecture Council prompt under
+`### Phase 1.25 Architecture Findings`. The council should NOT re-review these findings
+but may reference them when assessing the beads.
+
+If `$PHASE_125_ARCH_FINDINGS` is empty (no architecture findings from Phase 1.25),
+omit this section from the council prompt.
 
 ### Signal Detection
 
@@ -1152,6 +1426,9 @@ For all error scenarios, read `references/error-recovery.md`. It covers:
 - **Output language**: Respond in the user's language. The skill instructions are English but output should match the user.
 - **Use the scripts**: Prefer `wave-dispatch.sh`, `wave-status.sh`, and `wave-completion.sh` over manual cmux calls. They're faster, produce structured output, and reduce context usage.
 - **NEVER session close**: The wave orchestrator must never trigger or send `session close`. The bead-orchestrator (or quick-fix) handles this autonomously.
+- **`--skip-wave-review` skips Phase 1.25**: Always log the skip per bead with timestamp and `$(whoami)`.
+- **`--dry-run` runs Phase 1.25 read-only**: Findings are shown but NO bd update edits are applied.
+- **Phase 1.25 max 1 re-review**: Never loop more than once. After second-pass still-not-ready, escalate to user with Continue/Abort.
 - **NEVER reuse surfaces**: Always dispatch to fresh surfaces via `wave-dispatch.sh`.
 - **Integration-verification after epic**: After the final wave closes, always run Phase 6.5 to catch cross-bead gaps. Skip only with `--skip-integration-check` and only when there are no cross-bead invariants to check (e.g. single-bead waves).
 - **Delegate scenarios**: Delegate scenario generation to subagents, not inline.
