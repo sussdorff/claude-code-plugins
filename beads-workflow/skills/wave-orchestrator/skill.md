@@ -225,14 +225,22 @@ Before scope analysis, run a cross-bead structural review to catch wave-level de
 gaps) that single-bead review cannot see. This phase prevents expensive review
 oscillation AFTER dispatch.
 
+**Initialize at the start of this phase (before any skip-path exits):**
+```bash
+PHASE_125_ARCH_FINDINGS=""
+```
+This ensures the variable is always defined regardless of which exit path fires.
+
 **Skip if `--skip-wave-review` is set.** Log per bead:
 ```bash
 for id in <all bead IDs in wave>; do
   bd update "$id" --append-notes="Wave review skipped (--skip-wave-review flag). User: $(whoami), $(date -u +%Y-%m-%dT%H:%M:%SZ)"
 done
 ```
+Then exit Phase 1.25 (return to Phase 1.5 with `$PHASE_125_ARCH_FINDINGS` empty).
 
 **Skip silently if the wave has only 1 bead** (no cross-bead invariants to check).
+Exit Phase 1.25 immediately with `$PHASE_125_ARCH_FINDINGS` empty.
 
 ### Spawning the Wave-Reviewer Subagent
 
@@ -330,6 +338,10 @@ Options:
   B) Override and continue (logged to bead notes)
 ```
 
+**In `--dry-run` mode:** Show the finding and options but do NOT create beads or make any
+bd updates — this applies to BOTH path A (bd create + bd supersede) AND path B
+(bd update --append-notes). No writes of any kind are performed in dry-run.
+
 If user chooses A (accept):
 - For bead-split: create sub-beads and supersede original:
   ```bash
@@ -345,9 +357,8 @@ If user chooses B (override):
 ```bash
 bd update <id> --append-notes="Wave review HIGH-fundamental override by user: <finding summary>. $(date -u +%Y-%m-%dT%H:%M:%SZ)"
 ```
-Proceed to next finding.
-
-**In `--dry-run` mode:** Show the finding and options but do NOT create beads or make any bd updates.
+Proceed to next finding. (In `--dry-run` mode: do NOT apply the `bd update --append-notes`
+override log either — dry-run suppresses all writes.)
 
 #### HIGH-lokal (user confirmation + apply)
 
@@ -398,8 +409,13 @@ No action required. Proceed to Phase 1.5.
 
 ### Re-Review Loop (max 1)
 
-If ANY HIGH or MEDIUM findings were found and fixes were applied (HIGH-lokal confirmed +
-applied, MEDIUM auto-applied), trigger exactly ONE re-review:
+If ANY of the following conditions are true, trigger exactly ONE re-review:
+- HIGH-lokal finding was confirmed and applied
+- MEDIUM finding was auto-applied
+- HIGH-fundamental finding was overridden by the user (path B)
+
+This ensures the re-review safety net always fires after user override decisions, not
+only after programmatic fixes.
 
 Re-spawn the wave-reviewer subagent with the same prompt but updated bead data.
 
