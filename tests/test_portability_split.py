@@ -1,5 +1,6 @@
 """
 Test: CCP-tkd — Portability split for pilot skills.
+Test: CCP-50y — Portability split for 10 candidate skills.
 Verifies that SKILL.md files contain no Claude-specific references,
 and that adapter files exist.
 """
@@ -10,6 +11,17 @@ SKILL_ROOTS = [
     Path("dev-tools/skills/bug-triage"),
     Path("dev-tools/skills/spec-developer"),
     Path("dev-tools/skills/project-context"),
+    # CCP-50y: 10 new candidate skills
+    Path("dev-tools/skills/project-health"),
+    Path("dev-tools/skills/binary-explorer"),
+    Path("meta/skills/entropy-scan"),
+    Path("meta/skills/nbj-audit"),
+    Path("meta/skills/system-prompt-audit"),
+    Path("core/skills/vision"),
+    Path("infra/skills/infra-principles"),
+    Path("meta/skills/skill-auditor"),
+    Path("meta/skills/token-cost"),
+    Path("meta/skills/agent-forge"),
 ]
 
 # Patterns that MUST NOT appear in portable SKILL.md
@@ -56,6 +68,28 @@ def test_claude_adapter_exists_for_each_skill():
         assert adapter_file.exists(), f"Missing adapter: {adapter_file}"
         content = adapter_file.read_text()
         assert "harness: claude" in content, f"Adapter {adapter_file} missing 'harness: claude' frontmatter"
+
+def test_codex_skills_candidates_doc_exists():
+    """CCP-50y AC1/AC2: docs/codex-skills-candidates.md must exist and contain required sections."""
+    doc = Path("docs/codex-skills-candidates.md")
+    assert doc.exists(), "docs/codex-skills-candidates.md does not exist"
+    content = doc.read_text()
+    # AC2: Selection criteria must be documented
+    assert "## Selection Criteria" in content, "Missing '## Selection Criteria' section"
+    # AC1: Candidate list with 10 items
+    assert "## Candidate List" in content, "Missing '## Candidate List' section"
+    # AC4: Deferrals must be documented
+    assert "## Deferrals" in content, "Missing '## Deferrals' section"
+    # Must have at least 10 candidate rows (each row starts with '|' and has a skill name)
+    candidate_rows = [line for line in content.splitlines()
+                      if line.strip().startswith('|') and 'converted' in line.lower() or
+                      line.strip().startswith('|') and 'deferred' in line.lower() or
+                      line.strip().startswith('|') and 'converted' in line or
+                      line.strip().startswith('|') and ('✅' in line or '⏭' in line or 'converted' in line)]
+    assert len(candidate_rows) >= 10, (
+        f"Expected at least 10 skill rows in candidate list, found {len(candidate_rows)}"
+    )
+
 
 def test_portability_rules_doc_exists():
     rules_doc = Path("docs/codex-skills-portability-rules.md")
