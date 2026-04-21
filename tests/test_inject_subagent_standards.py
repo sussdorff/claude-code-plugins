@@ -65,7 +65,7 @@ def run_hook(
     standards_file: Path | None = None,
 ) -> tuple[int, str, str]:
     """
-    Run the hook script as a subprocess.
+    Run the hook script as a subprocess via its shebang (uv run).
 
     Args:
         payload: JSON string to pass via stdin
@@ -90,8 +90,10 @@ def run_hook(
             else:
                 env[k] = v
 
+    # Execute via the script's shebang (uv run) so pyyaml is available.
+    # On macOS, running an executable script uses the shebang directly.
     result = subprocess.run(
-        [sys.executable, str(HOOK_SCRIPT)],
+        [str(HOOK_SCRIPT)],
         input=payload,
         capture_output=True,
         text=True,
@@ -177,7 +179,8 @@ class TestExploreNoEnvFlags:
 
 
 # ---------------------------------------------------------------------------
-# AC 3: core:researcher, no env flags → no injection (empty list match)
+# AC 3: core:researcher matches core/* → injects english-only.md
+# (Note: bare "researcher" maps to empty list, but "core:researcher" matches "core/*")
 # ---------------------------------------------------------------------------
 
 class TestCoreResearcherEmptyList:
@@ -188,16 +191,12 @@ class TestCoreResearcherEmptyList:
         )
         assert code == 0
 
-    def test_no_stdout_output(self, standards_file: Path) -> None:
-        """core/* maps to english-only.md so there should be injection here."""
+    def test_injects_english_only(self, standards_file: Path) -> None:
+        """core:researcher matches core/* pattern → injects english-only.md."""
         code, stdout, stderr = run_hook(
             make_payload("core:researcher"),
             standards_file=standards_file,
         )
-        # core/* maps to ["workflow/english-only.md"], so injection happens
-        # But "researcher" is explicitly mapped to [] — fnmatch: which wins?
-        # The spec says core:researcher matches "core/*" pattern
-        # "researcher" key is for bare label "researcher", not "core:researcher"
         output = json.loads(stdout)
         prompt = output["hookSpecificOutput"]["additionalSystemPrompt"]
         assert "workflow/english-only.md" in prompt
