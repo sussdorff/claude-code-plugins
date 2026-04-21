@@ -1,6 +1,6 @@
 # Model Strategy Configuration
 # Defines which LLM model is used at each workflow stage.
-# Referenced by bead-orchestrator and cmux-reviewer agents.
+# Referenced by bead-orchestrator and quick-fix agents (single-pane model).
 #
 # Valid model values: opus, sonnet, haiku, codex
 # "codex" means delegate to the Codex CLI runtime (OpenAI models).
