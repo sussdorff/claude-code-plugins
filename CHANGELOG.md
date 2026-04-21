@@ -1,5 +1,9 @@
 ## [unreleased]
 
+### Research
+
+- *(CCP-ar0)* **parent-session parking verified** — spike confirmed that when a subagent runs via `Agent()`, the parent session is fully parked (zero token re-reads during child execution). Empirical evidence from session log analysis showing no parent LLM activity during 101-second child runs. Design implication for CCP-aoc: wave-monitor subagent should use `bash sleep 270` between polls (not `ScheduleWakeup`, which creates new sessions and breaks the `Agent()` paradigm). Parent context is NOT re-read during subagent execution — cost savings from the wave-monitor pattern are confirmed.
+
 ### Features
 
 - *(CCP-8tb)* **skill-auditor migrated to dedicated Opus subagent** — `meta/agents/skill-auditor.md` created with `model: opus`, full audit workflow (5 scoring dimensions, tier budgets, grade thresholds), improve-mode, and eval-viewer integration; `meta/skills/skill-auditor/SKILL.md` rewritten as a 26-line trampoline dispatching via `Agent(subagent_type='meta:skill-auditor', prompt=$ARGUMENTS)`; deterministic Opus reasoning on an isolated context window; no fallback to lower models.
