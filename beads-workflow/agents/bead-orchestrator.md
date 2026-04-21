@@ -215,6 +215,11 @@ run_id = start_run('<bead_id>', wave_id='<wave_id_or_None>', mode='full-1pane')
 # Store run_id in your agent context — propagate to every subsequent subagent and codex-exec.sh call
 ```
 
+```bash
+# Export run_id so SubagentStop hook skips ad-hoc metrics for orchestrator-driven spawns
+export CCP_ORCHESTRATOR_RUN_ID=<run_id>
+```
+
 **Claim the bead:**
 ```bash
 bd update <id> --status=in_progress

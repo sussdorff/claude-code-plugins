@@ -811,6 +811,40 @@ def rollup_run(run_id: str, db_path: Path = DB_PATH) -> None:
         conn.close()
 
 
+def query_adhoc_report(db_path: Path = DB_PATH) -> str:
+    """Query agent_calls for phase_label='adhoc', group by agent_label.
+
+    Returns a formatted markdown table of per-agent-type ad-hoc usage,
+    or 'No ad-hoc data yet.' when no data exists.
+    """
+    if not db_path.exists():
+        return "No ad-hoc data yet."
+    conn = sqlite3.connect(str(db_path))
+    conn.row_factory = sqlite3.Row
+    try:
+        rows = conn.execute("""
+            SELECT agent_label, COUNT(*) as calls,
+                   SUM(total_tokens) as total_tokens,
+                   MAX(model) as model
+            FROM agent_calls
+            WHERE phase_label = 'adhoc'
+            GROUP BY agent_label
+            ORDER BY total_tokens DESC
+        """).fetchall()
+    finally:
+        conn.close()
+    if not rows:
+        return "No ad-hoc data yet."
+    lines = [
+        "## Ad-hoc Agent Usage\n",
+        "| Agent | Calls | Tokens | Model |",
+        "|-------|-------|--------|-------|",
+    ]
+    for r in rows:
+        lines.append(f"| {r['agent_label']} | {r['calls']} | {r['total_tokens']:,} | {r['model']} |")
+    return "\n".join(lines)
+
+
 def get_run(run_id: str, db_path: Path = DB_PATH) -> dict:
     """
     Fetch a bead_runs row by run_id. Returns a dict of all columns.
