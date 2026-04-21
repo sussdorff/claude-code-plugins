@@ -4,6 +4,10 @@
 
 - *(CCP-50y)* **Codex Skills Portability** — convert 10 additional skills to agentskills-compatible format with portable core and SKILL.claude-adapter.md harness adapters; add portability compliance tracking in docs/codex-skills-candidates.md with selection criteria and non-portable deferrals with rationale
 
+### Bug Fixes
+
+- *(CCP-2hd.1)* **architecture-scout: normalize `touched_paths` before vision boundary check** — fix Codex iter 3 regression where the iter-2 fix compared bare package names against raw `touched_paths` entries, silently skipping every boundary rule when callers passed package paths (`packages/adapter-common`) or file paths (`packages/adapter-common/src/x.ts`), causing gate mode to return false CONFORM. Step 3 now resolves every input form (empty list, bare name, package path, trailing-slash path, file path, `./` prefix, Windows separators) to a canonical `touched_packages` set; empty input expands to all discovered packages; Step 5 consumes the canonical set for all forbidden-from/forbidden-to intersection checks
+
 ## [2026.04.61] - 2026-04-21
 
 ### Removed
