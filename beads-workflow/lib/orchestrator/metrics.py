@@ -7,6 +7,7 @@ Tables: bead_runs, agent_calls
 from __future__ import annotations
 
 import json
+import logging
 import re
 import sqlite3
 import sys
@@ -14,6 +15,8 @@ import uuid
 from dataclasses import dataclass, field
 from datetime import date, datetime, timezone
 from pathlib import Path
+
+logger = logging.getLogger("metrics")
 
 DB_PATH = Path.home() / ".claude" / "metrics.db"
 
@@ -752,9 +755,43 @@ def rollup_run(run_id: str, db_path: Path = DB_PATH) -> None:
     - fix_agent_invocations = COUNT(*) WHERE phase_label LIKE '%fix%'
     - session_close_tokens = SUM(total_tokens) WHERE phase_label LIKE '%session%close%'
     - session_close_duration_ms = SUM(duration_ms) WHERE phase_label LIKE '%session%close%'
+
+    Raises ValueError if run_id is None or an empty string. Binding None into
+    the WHERE clause would silently match nothing (SQLite treats `run_id = NULL`
+    as always-false) and drop the caller's work invisibly — which violates the
+    CCP-imb acceptance criteria. Callers that may see unattributed work should
+    check `run_id` up front rather than relying on silent best-effort rollup.
     """
+    if not run_id:
+        raise ValueError(
+            "rollup_run() requires a non-empty run_id; received "
+            f"{run_id!r}. Unattributed agent_calls cannot be aggregated "
+            "silently — set run_id on the caller or inspect orphan rows "
+            "directly."
+        )
+
     conn = init_db(db_path)
     try:
+        # Surface orphan agent_calls (run_id IS NULL) so they are not silently
+        # dropped. These can exist on databases upgraded from a pre-CCP-2vo.2
+        # schema where agent_calls.run_id was nullable. We do not attempt to
+        # re-attribute them — just make them visible in the operator's log so
+        # the gap is noticed and can be fixed at the caller site. Out-of-scope
+        # per CCP-imb: modifying the agent_calls schema.
+        orphan_row = conn.execute(
+            "SELECT COUNT(*), COALESCE(SUM(total_tokens), 0) "
+            "FROM agent_calls WHERE run_id IS NULL OR run_id = ''"
+        ).fetchone()
+        orphan_count = orphan_row[0] if orphan_row else 0
+        if orphan_count:
+            logger.warning(
+                "rollup_run: %d orphan agent_calls row(s) with NULL run_id "
+                "detected (total_tokens=%d); excluded from rollup for run_id=%s",
+                orphan_count,
+                orphan_row[1],
+                run_id,
+            )
+
         def agg(query: str, params: tuple) -> int:
             result = conn.execute(query, params).fetchone()
             return result[0] or 0
