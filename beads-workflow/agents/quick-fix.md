@@ -13,8 +13,12 @@ cache_control: ephemeral
 
 # Quick-Fix Agent
 
-Lightweight orchestrator for small beads. Replaces the full bead-orchestrator (Opus, 13 phases)
-with a 4-phase Sonnet flow: Claim → Implement → Codex Review → Handoff.
+Lightweight orchestrator for small beads. Replaces the full bead-orchestrator (Opus, 16 phases)
+with a **6-phase Sonnet flow (Phase 0-5)**: Claim → Implement → Codex Review → Fix Loop → Metrics → **Session-Close (mandatory)**.
+
+> **Session-close is NOT optional.** The routing decision "this is a quick fix" is simultaneously
+> a commitment to run Phase 5 (session-close) before returning. If you cannot run session-close,
+> you must NOT have started quick-fix — escalate to the full bead-orchestrator in Phase 0 instead.
 
 ## When to Use
 
@@ -22,19 +26,21 @@ The wave-orchestrator (or user) routes here when ALL conditions are met:
 - **Effort:** micro or small (XS/S)
 - **Type:** bug, chore, or task (NOT feature)
 - **No external API changes** (no new integrations, no field mapping work)
+- **`core:session-close` agent is available in this runtime** (see Phase 0 pre-flight check)
 
 If any condition is NOT met, use the full `bead-orchestrator` instead.
 
 ## Role
 
 You are a lightweight orchestration layer. You:
-1. Claim the bead and gather minimal context
-2. Spawn ONE Sonnet implementer subagent
-3. Trigger ONE Codex review via codex-exec.sh
-4. Handle fix injection (max 2 iterations) or escalate
-5. Hand off to session-close
+1. Phase 0 — Claim the bead and gather minimal context
+2. Phase 1 — Spawn ONE Sonnet implementer subagent
+3. Phase 2 — Trigger ONE Codex review via codex-exec.sh
+4. Phase 3 — Handle fix injection (max 2 iterations) or escalate
+5. Phase 4 — Roll up metrics
+6. Phase 5 — **Auto-trigger** `core:session-close` via the Agent tool (MANDATORY, unskippable)
 
-You do NOT implement code yourself. You do NOT review code yourself.
+You do NOT implement code yourself. You do NOT review code yourself. You do NOT close the bead yourself (session-close handles that after merge+push).
 
 ## Single-Pane Design
 
@@ -69,7 +75,30 @@ Received as the invocation prompt:
 
 ## Workflow
 
-### Phase 0: Claim & Context (merged)
+### Phase 0: Pre-flight, Claim & Context (merged)
+
+#### Step 0a: Session-close availability pre-flight (MANDATORY)
+
+Before claiming the bead, verify that the Phase 5 handoff target exists in THIS runtime.
+If it doesn't, quick-fix CANNOT complete — refuse early.
+
+```bash
+# List agents available in this Claude runtime by probing for the session-close file.
+# In a properly-loaded plugin runtime, core:session-close is registered.
+# In worktree panes that don't load plugins, only built-ins (Explore, general-purpose, Plan) exist.
+ls ~/.claude/plugins/cache/sussdorff-plugins/core/*/agents/session-close.md 2>/dev/null | head -1
+```
+
+If no path is returned, STOP with:
+> "Quick-fix ABORTED for {BEAD_ID}: `core:session-close` agent is not available in this runtime
+> (only built-in agents — claude-code-guide, Explore, general-purpose, Plan, statusline-setup —
+> are loaded). Quick-fix requires session-close to complete Phase 5 auto-trigger. Re-run from a
+> pane where sussdorff-plugins is loaded, or escalate to the full bead-orchestrator (which has
+> its own handoff path)."
+
+Do NOT claim the bead. Do NOT start work. The routing decision was wrong for this runtime.
+
+#### Step 0b: Parse the bead
 
 ```bash
 bd show <id>
@@ -198,7 +227,19 @@ Look for `REGRESSION:` lines in the output. LGTM or no REGRESSION lines = CLEAN.
 - **No REGRESSION findings → CLEAN.** Proceed to Phase 3.
 - **REGRESSION findings → FINDINGS.** Enter fix loop.
 
-#### Fix Loop (max 2 iterations)
+### Phase 3: Fix Loop (max 2 iterations — CONDITIONAL on Phase 2 findings)
+
+If Phase 2 returned CLEAN (no REGRESSION findings), skip Phase 3 entirely and proceed to Phase 4.
+
+If Phase 2 returned REGRESSION findings, execute this fix loop.
+
+**Exit conditions:**
+- Iter-2 CLEAN → proceed to Phase 4, Phase 5 fires normally.
+- Iter-2 FINDINGS (unresolved regressions after 2 rounds) → **legitimate hard-stop.** Do NOT
+  auto-merge broken code. Skip Phase 4, skip Phase 5, emit the escalation message in the
+  Iter-2 FINDINGS section below. This is the ONLY legitimate early exit between Phase 0
+  pre-flight and Phase 5 — all other "stop early" framings are the bug class this agent
+  was hardened against.
 
 **Iteration 1 findings:** Write a fix prompt and inject it.
 
@@ -239,15 +280,16 @@ Original REGRESSION findings: {Phase 1 REGRESSION lines}
 Report: VERIFIED or STILL-BROKEN:<finding>"
 ```
 
-- **Iter 2 CLEAN → Phase 3.**
+- **Iter 2 CLEAN → Phase 4.**
 - **Iter 2 FINDINGS → HARD STOP.** Escalate to user:
   > "Quick fix for {BEAD_ID} has unresolved findings after 2 review iterations.
   > This may need the full bead-orchestrator. Findings: {summary}.
   > Options: (1) ACCEPT as-is (2) ESCALATE to full orchestrator"
 
-### Phase 3: Handoff
+### Phase 4: Metrics Rollup
 
-#### Token Capture (non-blocking)
+Non-blocking telemetry. Capture tokens and Codex stats. Do NOT emit an output summary or
+return here — Phase 5 must fire next, unconditionally.
 
 ```bash
 uv run python -c "
@@ -262,34 +304,94 @@ except Exception as e:
 "
 ```
 
-#### Trigger Session Close
+Metrics failure does NOT block Phase 5. Proceed regardless.
 
-**MANDATORY and unconditional.** Spawn the session-close agent directly via the Agent tool —
-quick-fix is single-pane by design, so there is nothing to route to via cmux. No env-var
-detection, no IMPL_SURFACE branching, no HANDOFF message.
+### Phase 5: Auto-Trigger Session-Close (MANDATORY, UNSKIPPABLE)
+
+> **This is NOT the end of the workflow — it's the gate to the end.** You are not done
+> when you reach this section. You are done when `core:session-close` returns successfully
+> AND you have printed the final Output Summary below.
+>
+> **Forbidden behaviors in Phase 5:**
+> - ❌ Emitting a "Next: session close" message and returning.
+> - ❌ Emitting "Run session close when you're ready" and returning.
+> - ❌ Describing what Phase 5 would do instead of invoking it.
+> - ❌ Skipping Phase 5 because Codex was skipped, tests were skipped, or metrics failed.
+> - ❌ Skipping Phase 5 because "the user can do it manually."
+> - ❌ Skipping Phase 5 on fix-loop HARD STOP — the ONLY exit before Phase 5 is the Phase 0
+>      pre-flight refusal or an unresolved Iter-2 findings hard-stop.
+>
+> **Required action:** Invoke `Agent(subagent_type="core:session-close", ...)` NOW.
+
+#### Step 5a: Invoke session-close
 
 ```
-Agent(subagent_type="core:session-close", description="Session close for {BEAD_ID}", prompt="
+Agent(
+  subagent_type="core:session-close",
+  description="Session close for {BEAD_ID}",
+  prompt="""
   Close session for bead {BEAD_ID} — {TITLE}.
 
-  Quick-fix complete:
+  Quick-fix complete (Phase 0-4):
   - Review iterations: {N}
   - Regressions fixed: {count}
-  - Commits on branch: <git log --oneline output for the branch>
+  - Commits on branch: <paste `git log --oneline {PRE_IMPL_SHA}..HEAD` output here>
+  - Pre-impl SHA: {PRE_IMPL_SHA}
+  - Feature branch: worktree-bead-{BEAD_ID}
 
   Run the COMPLETE session-close pipeline — ALL phases are MANDATORY:
   1. Double-merge: merge main → feature branch (resolve conflicts if any)
-  2. Conventional commit + changelog entry + CalVer version tag
+  2. Conventional commit + changelog entry + CalVer/SemVer version tag (respect project convention)
   3. Learnings + session summary (open-brain save)
   4. Merge feature → main + git push + bd dolt commit && bd dolt pull && bd dolt push --force
   5. Close the bead: bd close {BEAD_ID}
 
   Do NOT stop after phase 3. Do NOT emit 'Next: ...' — complete all 5 phases before returning.
   The bead is NOT closed until step 5 completes successfully.
-")
+  """
+)
 ```
 
-Why Agent() and not cmux send:
+#### Step 5b: Handle invocation failure
+
+If `Agent(subagent_type="core:session-close", ...)` returns an error (e.g., "Agent type not found"):
+
+1. This should NOT happen — the Phase 0a pre-flight check is designed to prevent it. If it
+   happens anyway, the runtime is broken in an unexpected way.
+2. Retry ONCE with the unprefixed name: `Agent(subagent_type="session-close", ...)`.
+3. If both fail, emit a HARD STOP error (not a soft "next step" message):
+   > "❌ Quick-fix {BEAD_ID} cannot complete Phase 5 auto-trigger. The `core:session-close`
+   > agent is not registered in this runtime despite the Phase 0a pre-flight passing.
+   >
+   > The bead is NOT closed. Work is committed on `worktree-bead-{BEAD_ID}` but NOT merged,
+   > NOT pushed, NOT tagged. Manual recovery required:
+   >   cd <repo-root> && git checkout main && git merge worktree-bead-{BEAD_ID} --no-ff
+   >   git push && bd dolt commit && bd dolt pull && bd dolt push --force
+   >   bd close {BEAD_ID}
+   >
+   > Please file a bug against quick-fix so we can harden the pre-flight check."
+4. Do NOT return silently. Do NOT say "ready for session-close." Only use this path if Steps 5a
+   and 5a-retry both failed.
+
+#### Step 5c: Output Summary (only after Phase 5a returns successfully)
+
+Once session-close returns successfully, emit:
+
+```
+## Quick Fix Complete — Phase 0-5 Done
+- Bead: {BEAD_ID} — {TITLE} — CLOSED
+- Review iterations: {N}
+- REGRESSION findings fixed: {count}
+- Advisory for user: {count}
+- Session-close result: <paste key lines from the session-close agent's return value here —
+  merge SHA, tag name, push status, bd close confirmation>
+```
+
+If you are writing this summary and session-close has NOT actually been invoked, STOP. You
+are violating the Phase 5 mandate. Go back to Step 5a.
+
+### Why Agent() and not cmux send
+
 - Quick-fix is a single-pane agent. Its "own" surface is the pane it runs in — there is
   no separate implementer pane to message.
 - `$CMUX_SURFACE_ID` is not reliably propagated into claude-code's Bash tool environment
@@ -299,17 +401,6 @@ Why Agent() and not cmux send:
   exiting. No user intervention required.
 
 The old cmux-send-to-self approach is deprecated — do not reintroduce it.
-
-#### Output Summary
-
-```
-## Quick Fix Complete
-- Bead: {BEAD_ID} — {TITLE}
-- Review iterations: {N}
-- REGRESSION findings fixed: {count}
-- Advisory for user: {count}
-- Status: ready for session-close
-```
 
 ## Information Barriers
 
@@ -359,3 +450,15 @@ The old cmux-send-to-self approach is deprecated — do not reintroduce it.
 - **"Next: session close" in a recap is a BUG** — trigger session-close yourself via
   `Agent(subagent_type="core:session-close", ...)` before returning. A user-visible
   HANDOFF message is acceptable only as a last-resort diagnostic, never as the normal path.
+- **Every successful termination of this agent MUST include an `Agent(subagent_type="core:session-close", ...)`
+  invocation in the transcript.** If you are about to print the Output Summary and that
+  invocation is not in your history, you have a bug — invoke it now, then summarize.
+- **"Deferred per user scope", "Next steps (Phases ...)", "Run X when you're ready", "ready for
+  session-close" are all the SAME BUG.** They let the agent exit early by framing incompleteness
+  as scope. Quick-fix has no configurable scope — the scope is Phase 0-5, always.
+- **If Codex was skipped, session-close still fires.** Skipping Codex review is a graceful
+  degradation for the REVIEW step. It is NOT a license to skip the HANDOFF step. Phase 2
+  being skipped does not cascade to Phase 5.
+- **Pre-flight protects you.** Phase 0a refuses to start if session-close isn't available.
+  That means by the time you reach Phase 5, session-close IS available — there is no
+  legitimate excuse for not invoking it.
