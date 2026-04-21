@@ -50,7 +50,9 @@ You receive a prompt containing the following fields (as JSON or natural languag
 | `mode` | "advisor" \| "gate" | no | Enforcement mode (default: advisor) |
 | `conformance_skip` | boolean | no | If `true`, treat as CONFORMANCE_SKIP=1 bypass and proceed in advisor mode regardless of gate config. The calling skill is responsible for checking the `CONFORMANCE_SKIP` environment variable and passing `true` here when set. |
 
-If `touched_paths` is empty, scan ALL packages.
+If `touched_paths` is empty, scan ALL packages. The exact resolution from raw
+`touched_paths` to the canonical `touched_packages` set used by later steps is
+defined in Step 3 ("Normalize `touched_paths` → `touched_packages`").
 
 ---
 
@@ -121,8 +123,10 @@ before Step 4 (matrix filtering) or Step 5 (vision-boundary intersection) uses i
 **Normalization rule** (apply to every non-empty entry):
 
 1. Trim whitespace.
-2. Strip a leading `packages/` segment if present.
-3. Take the first remaining path segment (everything before the next `/`). This
+2. Normalize path separators: replace `\` with `/` (defensive against Windows-style
+   callers) and strip a single leading `./` if present.
+3. Strip a leading `packages/` segment if present.
+4. Take the first remaining path segment (everything before the next `/`). This
    yields the package directory name for path and file-path forms, and leaves
    bare names unchanged.
 

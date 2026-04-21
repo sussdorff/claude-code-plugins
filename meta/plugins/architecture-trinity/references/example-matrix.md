@@ -127,7 +127,7 @@ and a test fixture for verifying the scout's output format.
 | Schema Codegen | pvs-charly | ✅ | ❌ | ❌ | ❌ | pre-trinity |
 | Schema Codegen | pvs-x-isynet | ✅ | ✅ | ✅ | ✅ | full-trinity |
 
-_Error Envelope applies only to adapter-common, which is not in touched_paths — n/a rows omitted from display._
+_Error Envelope applies only to adapter-common, which is not in touched_packages — n/a rows omitted from display._
 
 **Evidence:**
 - **ID Taxonomy / pvs-charly** (`docs/adr/0001-id-taxonomy.md`): Helper in `packages/pvs-charly/src/id-taxonomy.ts`, Proactive via root `scripts/gen-id-types.ts`, no Reactive Enforcer (no eslint rule in pvs-charly)
@@ -153,7 +153,7 @@ _Error Envelope applies only to adapter-common, which is not in touched_paths �
 `packages/adapter-common/src/boundary-violation.ts:20` imports from `pvs-charly`.
 According to `vision.md`: layer `platform` must not depend on layer `application`.
 `adapter-common` is classified as `platform`; `pvs-charly` is `application`.
-This violation exists in `adapter-common`, which is NOT in `touched_paths`. The author of this bead does not own this violation. It is surfaced for visibility only — fix it in a separate bead targeting `adapter-common`.
+This violation exists in `adapter-common`, which is NOT in `touched_packages` (the canonical set built in Step 3 from the caller's `touched_paths` input). The author of this bead does not own this violation. It is surfaced for visibility only — fix it in a separate bead targeting `adapter-common`.
 
 ⚠️ **ADVISORY** — Implicit Contract `repeated-event-kind`:
 The pattern `event.kind === 'literal'` appears in 4 source files. This is an undocumented
