@@ -17,6 +17,7 @@ Query `~/.claude/metrics.db` and output a formatted cost report.
 - `--top=N` — Show only top N most expensive beads (default: all)
 - `--bead=<id>` — Show single bead details
 - `--wave=<id>` — Show wave-aggregated report (Phase 2 findings, model attribution)
+- `--adhoc` — Show per-subagent ad-hoc breakdown (phase_label='adhoc', grouped by agent_label)
 
 ## Workflow
 
@@ -24,6 +25,7 @@ Parse arguments from `{ARGS}`:
 - If `--top=N` present, extract N as integer and pass as `top=N`
 - If `--bead=<id>` present, extract id and pass as `bead_id="<id>"`
 - If `--wave=<id>` present, extract id and use `query_wave_report(wave_id="<id>")`
+- If `--adhoc` present, use `query_adhoc_report()`
 - Otherwise pass no arguments (full report)
 
 Run the query script:
@@ -78,11 +80,30 @@ print(query_wave_report(wave_id='wave-20260412-140000'))
 "
 ```
 
+Ad-hoc agent breakdown:
+```bash
+uv run python -c "
+import os, sys; sys.path.insert(0, os.path.join(os.environ['CLAUDE_PLUGIN_ROOT'], 'lib'))
+from orchestrator.metrics import query_adhoc_report
+print(query_adhoc_report())
+"
+```
+
 ### Output Format
 
 #### Empty DB
 ```
 No data yet — implement some beads first.
+```
+
+#### Ad-hoc Agent Breakdown (`--adhoc`)
+```
+## Ad-hoc Agent Usage
+
+| Agent | Calls | Tokens | Model |
+|-------|-------|--------|-------|
+| impl-sonnet | 12 | 245,000 | claude-sonnet-4-6 |
+| review-opus | 4 | 98,000 | claude-opus-4-5 |
 ```
 
 #### Normal Report
