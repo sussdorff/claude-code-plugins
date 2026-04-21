@@ -122,3 +122,55 @@ After finding a defect, propose the smallest change that restores coherence:
 - move ownership explicitly
 
 Prefer minimal graph edits over rewriting the whole tree.
+
+## Per-Bead Quality Checks
+
+Evaluate each bead in the review set against this A/B/C rubric. Score is recorded in the Phase 1 bead table and feeds automatic MEDIUM findings.
+
+### A — Fully factory-ready spec
+
+All of the following must hold:
+- Description > 20 words and clearly states what changes
+- At least 1 outcome-focused AC (not implementation steps)
+- For features/epics: MoC table present in description
+- For features/epics: `metadata.intent` populated (non-empty)
+- Single-concern scope (no mixed scope)
+
+### B — Usable but has warnings
+
+Meets A criteria partially — at least one of:
+- Thin description (< 20 words or lacks context)
+- ACs present but phrased as implementation tasks ("Implement X", "Write code for Y")
+- Missing MoC table (feature/epic only)
+- Missing `metadata.intent` (feature/epic only)
+
+Not fatally broken — an agent can proceed with caution.
+
+### C — Needs interactive work
+
+Any of the following disqualifies the bead:
+- Empty, "TBD", or placeholder description
+- No ACs present at all
+- Feature or epic without a MoC table
+- Feature or epic without `metadata.intent`
+- Mixed scope / epic-level work packed into a single bead
+
+### Automatic MEDIUM Finding Rule
+
+Generate a MEDIUM finding in the wave Findings table whenever:
+- Any bead scores **C** (always, regardless of type)
+- A **feature or epic** bead scores **B** (partial spec is insufficient for autonomous execution of high-scope work)
+
+Do NOT generate a finding for task/bug/chore beads that score B.
+
+Finding format:
+
+```
+- MEDIUM — <bead-id> — Bead quality score <B/C> (bead_quality): <specific gap>. Fix: <minimal action to reach A>.
+```
+
+Example:
+
+```
+- MEDIUM — CCP-xyz — Bead quality score C (bead_quality): no acceptance criteria present. Fix: add at least 1 outcome-focused AC before dispatch.
+```

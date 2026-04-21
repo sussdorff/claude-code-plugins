@@ -77,8 +77,8 @@ the codebase before calling it a defect.
 3. Build a simple review table:
 
 ```markdown
-| Bead | Type | Ready | Depends On | Blocks |
-|---|---|---|---|---|
+| Bead | Type | Ready | Depends On | Blocks | Bead Quality |
+|---|---|---|---|---|---|
 ```
 
 ### Phase 2: Extract the real contracts
@@ -99,6 +99,29 @@ Examples:
 - If a bead says an agent writes to notes, verify the agent has tools to do that.
 - If a bead says validation compares two runs, verify the metrics identity model can distinguish them.
 - If a bead says cleanup happens after validation, verify dependency order actually enforces that.
+
+### Phase 2.5: Per-Bead Quality Assessment
+
+For each bead in the review set, evaluate the spec quality score (A/B/C) using the rubric in `references/checklist.md` under "Per-Bead Quality Checks".
+
+Steps:
+1. Check description length and clarity (>20 words, clearly states what changes)
+2. Check acceptance criteria — present and outcome-focused (not implementation steps)
+3. For features/epics: check for a MoC table in the description
+4. For features/epics: check that `metadata.intent` is populated
+5. Check for single-concern scope (no mixed scope or epic-packed bead)
+
+Record the score (A/B/C) and any deficiency note in the Phase 1 review table.
+
+Then apply the automatic MEDIUM finding rule:
+- Score C on any bead → generate a MEDIUM finding with category `bead_quality`
+- Score B on a feature/epic bead → generate a MEDIUM finding with category `bead_quality`
+- Score B on task/bug/chore → no finding (record score only)
+
+Finding format:
+```
+- MEDIUM — <bead-id> — Bead quality score <B/C> (bead_quality): <specific gap>. Fix: <minimal action to reach A>.
+```
 
 ### Phase 3: Run the structural checklist
 
@@ -138,10 +161,17 @@ Findings first, ordered by severity.
 Output format:
 
 ```markdown
+## Bead Overview
+
+| Bead | Type | Ready | Depends On | Blocks | Bead Quality |
+|---|---|---|---|---|---|
+| <bead-id> | <type> | <yes/no> | <ids or —> | <ids or —> | <A/B/C> |
+
 ## Findings
 
 - HIGH — <bead-id[, bead-id]> — <specific contradiction or structural risk>. Fix: <minimal change>.
 - MEDIUM — <bead-id[, bead-id]> — <specific contradiction or structural risk>. Fix: <minimal change>.
+- MEDIUM — <bead-id> — Bead quality score <B/C> (bead_quality): <specific gap>. Fix: <minimal action to reach A>.
 
 ## Ready Verdict
 
@@ -165,6 +195,7 @@ Good:
 - "Cleanup bead deletes the old control arm before validation bead can run the comparison."
 - "Wrapper bead depends on helper API that no other bead explicitly owns."
 - "Validation bead compares same logical bead twice, but session-close mutates main between runs."
+- "MEDIUM — CCP-xyz — Bead quality score C (bead_quality): no acceptance criteria present. Fix: add at least 1 outcome-focused AC before dispatch."
 
 Weak:
 - "This feels risky."
