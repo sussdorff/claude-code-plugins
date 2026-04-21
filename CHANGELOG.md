@@ -1,5 +1,9 @@
 ## [unreleased]
 
+### Features
+
+- *(CCP-8tb)* **skill-auditor migrated to dedicated Opus subagent** — `meta/agents/skill-auditor.md` created with `model: opus`, full audit workflow (5 scoring dimensions, tier budgets, grade thresholds), improve-mode, and eval-viewer integration; `meta/skills/skill-auditor/SKILL.md` rewritten as a 26-line trampoline dispatching via `Agent(subagent_type='meta:skill-auditor', prompt=$ARGUMENTS)`; deterministic Opus reasoning on an isolated context window; no fallback to lower models.
+
 ### Bug Fixes
 
 - *(CCP-1m6)* **agent-standards.yml coverage gaps closed** — added `infra/*`, `meta/*`, `business/*`, and `content/*` pattern mappings so agents in those namespaces receive standards injection; added `TestAgentStandardsCoverage` structural test that discovers all agent-bearing plugin namespaces and asserts each has a mapping entry, preventing future drift. `orchestrator_handled` correctly excludes `beads-workflow/*` and `core/*` since `verification-agent` and `session-close` are not spawned under the orchestrator preamble.
