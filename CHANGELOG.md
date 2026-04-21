@@ -1,3 +1,9 @@
+## [unreleased]
+
+### Features
+
+- *(CCP-50y)* **Codex Skills Portability** — convert 10 additional skills to agentskills-compatible format with portable core and SKILL.claude-adapter.md harness adapters; add portability compliance tracking in docs/codex-skills-candidates.md with selection criteria and non-portable deferrals with rationale
+
 ## [2026.04.61] - 2026-04-21
 
 ### Removed

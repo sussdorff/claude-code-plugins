@@ -1,8 +1,10 @@
 """
 Test: CCP-tkd — Portability split for pilot skills.
+Test: CCP-50y — Portability split for 10 candidate skills.
 Verifies that SKILL.md files contain no Claude-specific references,
 and that adapter files exist.
 """
+import json
 import re
 from pathlib import Path
 
@@ -10,6 +12,17 @@ SKILL_ROOTS = [
     Path("dev-tools/skills/bug-triage"),
     Path("dev-tools/skills/spec-developer"),
     Path("dev-tools/skills/project-context"),
+    # CCP-50y: 10 new candidate skills
+    Path("dev-tools/skills/project-health"),
+    Path("dev-tools/skills/binary-explorer"),
+    Path("meta/skills/entropy-scan"),
+    Path("meta/skills/nbj-audit"),
+    Path("meta/skills/system-prompt-audit"),
+    Path("core/skills/vision"),
+    Path("infra/skills/infra-principles"),
+    Path("meta/skills/skill-auditor"),
+    Path("meta/skills/token-cost"),
+    Path("meta/skills/agent-forge"),
 ]
 
 # Patterns that MUST NOT appear in portable SKILL.md
@@ -56,6 +69,61 @@ def test_claude_adapter_exists_for_each_skill():
         assert adapter_file.exists(), f"Missing adapter: {adapter_file}"
         content = adapter_file.read_text()
         assert "harness: claude" in content, f"Adapter {adapter_file} missing 'harness: claude' frontmatter"
+
+def test_codex_skills_candidates_doc_exists():
+    """CCP-50y AC1/AC2: docs/codex-skills-candidates.md must exist and contain required sections."""
+    doc = Path("docs/codex-skills-candidates.md")
+    assert doc.exists(), "docs/codex-skills-candidates.md does not exist"
+    content = doc.read_text()
+    # AC2: Selection criteria must be documented
+    assert "## Selection Criteria" in content, "Missing '## Selection Criteria' section"
+    # AC1: Candidate list with 10 items
+    assert "## Candidate List" in content, "Missing '## Candidate List' section"
+    # AC4: Deferrals must be documented
+    assert "## Deferrals" in content, "Missing '## Deferrals' section"
+    # Must have at least 10 candidate rows (each row starts with '|' and has a skill name)
+    candidate_rows = [
+        line for line in content.splitlines()
+        if line.strip().startswith('|')
+        and any(token in line for token in ('converted', 'deferred', '✅', '⏭'))
+    ]
+    assert len(candidate_rows) >= 10, (
+        f"Expected at least 10 skill rows in candidate list, found {len(candidate_rows)}"
+    )
+
+
+def test_skills_registry_entries_resolve():
+    """CCP-50y: Every skill in DEFAULT_SKILLS must have a registry entry pointing to an existing directory."""
+    registry_file = Path("scripts/skills-registry.json")
+    assert registry_file.exists(), "scripts/skills-registry.json does not exist"
+    registry = json.loads(registry_file.read_text())
+    # Parse DEFAULT_SKILLS from sync-codex-skills script
+    sync_script = Path("scripts/sync-codex-skills")
+    assert sync_script.exists(), "scripts/sync-codex-skills does not exist"
+    default_skills_line = next(
+        line for line in sync_script.read_text().splitlines()
+        if line.startswith("DEFAULT_SKILLS=")
+    )
+    default_skills_value = default_skills_line.split("=", 1)[1].strip('"')
+    default_skills = [s.strip() for s in default_skills_value.split(",") if s.strip()]
+
+    missing_entries = []
+    missing_dirs = []
+    for skill in default_skills:
+        if skill not in registry or registry[skill].startswith("_"):
+            missing_entries.append(skill)
+        else:
+            skill_dir = Path(registry[skill])
+            if not skill_dir.exists():
+                missing_dirs.append(f"{skill} -> {registry[skill]}")
+
+    assert not missing_entries, (
+        f"Skills in DEFAULT_SKILLS missing from registry: {missing_entries}"
+    )
+    assert not missing_dirs, (
+        f"Registry entries pointing to non-existent directories: {missing_dirs}"
+    )
+
 
 def test_portability_rules_doc_exists():
     rules_doc = Path("docs/codex-skills-portability-rules.md")
