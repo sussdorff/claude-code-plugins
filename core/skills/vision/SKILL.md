@@ -63,8 +63,8 @@ When you detect an exit trigger:
 3. If the user selects none or declines (e.g. "keine", "nichts", "none"), acknowledge and exit Vision Mode cleanly without creating anything.
 
 4. After the user selects one or more:
-   - Offer: "Soll ich dafür ein Bead anlegen (`bd create`) oder einen Epic ausarbeiten (`/epic-init`)?"
-   - Execute whichever they choose — or both if they want structure + tracking
+   - Offer: "Soll ich dafür ein Bead anlegen oder einen Epic ausarbeiten?"
+   - Execute whichever they choose — or both if they want structure + tracking. See your harness adapter for the exact commands.
 
 ## Tone
 

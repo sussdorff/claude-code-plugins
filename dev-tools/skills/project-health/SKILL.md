@@ -86,41 +86,19 @@ if [ -d .beads ]; then
 fi
 ```
 
-**CLAUDE.md completeness**: check file exists, contains an Overview/project description, and contains a Commands section with at least one command.
+**Conventions file completeness**: check the project conventions file exists, contains an Overview/project description, and contains a Commands section with at least one command. See your harness adapter for the exact filename and path.
 
-**Harness check** (only if `malte/skills/` or `.claude/agents/` exists — harness repository):
+**Harness check** (only if a harness skills directory exists — harness repository):
 
-```bash
-if [[ -d malte/skills ]] || [[ -d .claude/agents ]]; then
-  # Run entropy-scan script if present
-  if [ -f malte/skills/entropy-scan/scripts/entropy-scan.sh ]; then
-    entropy_output=$(bash malte/skills/entropy-scan/scripts/entropy-scan.sh 2>&1)
-    entropy_exit=$?
-    if [[ $entropy_exit -eq 2 ]]; then
-      # Script error — score as red with error note
-      violation_count="error"
-    else
-      violation_count=$(echo "$entropy_output" | grep -c "VIOLATION \[" 2>/dev/null || echo 0)
-    fi
-  else
-    violation_count=0
-  fi
+Run the entropy-scan invariant checker if present in the harness. Tally `VIOLATION [` lines in the output.
 
-  if [[ "$violation_count" == "error" ]]; then
-    harness_status="🔴"
-    harness_detail="entropy-scan script error"
-  elif [[ $violation_count -eq 0 ]]; then
-    harness_status="🟢"
-    harness_detail="0 violations"
-  elif [[ $violation_count -le 5 ]]; then
-    harness_status="🟡"
-    harness_detail="$violation_count violation(s)"
-  else
-    harness_status="🔴"
-    harness_detail="$violation_count violations"
-  fi
-fi
-```
+- 0 violations → 🟢
+- 1–5 violations → 🟡
+- 6+ violations or script error → 🔴
+
+If the harness check is unavailable, skip this row.
+
+See your harness adapter for the exact paths to check and the entropy-scan invocation.
 
 ### 5. Score Each Check
 

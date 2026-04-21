@@ -30,7 +30,7 @@ scripts/nbj-audit.sh [project-root]
 ```
 
 Default project-root = cwd. Script auto-detects mode:
-- **harness**: cwd contains `malte/skills/` AND `malte/agents/`
+- **harness**: cwd contains a harness skills directory AND a harness agents directory (see harness adapter for exact paths)
 - **project**: everything else
 
 ### 3. Parse Inventory

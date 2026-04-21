@@ -21,23 +21,22 @@ Fetch the latest Anthropic system prompt from cchistory.mariozechner.at, diff it
 
 ### 1. Fetch and Compare Versions
 
-```bash
-bash malte/skills/system-prompt-audit/scripts/fetch-latest.sh
-```
+Run the `fetch-latest.sh` script from this skill's `scripts/` directory.
+See your harness adapter for the exact invocation path.
 
 Parse output:
-- `BASELINE_VERSION` — version currently in `malte/system-prompts/baseline/`
+- `BASELINE_VERSION` — version currently in the baseline directory
 - `LATEST_VERSION` — latest version from cchistory API
 - `STATUS` — `current` or `outdated`
 - `NEW_PROMPT_FILE` — path to downloaded prompt (only when `STATUS=outdated`)
 
-Baseline file path: `malte/system-prompts/baseline/anthropic-v{BASELINE_VERSION}.md`
+Baseline file path: `{baseline-dir}/anthropic-v{BASELINE_VERSION}.md` (see harness adapter for baseline directory location).
 
 ### 2. Generate Diff (when outdated)
 
 When `STATUS=outdated`:
-1. Read the baseline file: `malte/system-prompts/baseline/anthropic-v{BASELINE_VERSION}.md`
-2. Read the new prompt: `$NEW_PROMPT_FILE`
+1. Load the baseline file at the path output by the script
+2. Load the new prompt at `$NEW_PROMPT_FILE`
 3. Generate a unified diff (conceptual — summarize changes, do NOT run `diff` command and dump raw output)
 4. Classify each changed section:
 
@@ -53,14 +52,11 @@ When `STATUS=current`: skip diff, note "No changes — baseline is current."
 
 ### 3. Review Custom Prompts
 
-Read `malte/system-prompts/registry.yml` to discover all custom prompt files:
+Load the system prompts registry file to discover all custom prompt files. See your harness adapter for the registry path.
+
 1. Extract all `entries[].file` values and the `default.file` value (if present)
 2. Deduplicate the list
-3. For each discovered file path, read that file and evaluate it against the diff (or against full baseline when current)
-
-Example files that may appear in the registry (not a fixed list — always load the actual registry):
-- `malte/system-prompts/golden.md` — main prompt (mode: replace — overrides Anthropic entirely)
-- `malte/system-prompts/agents/_core.md`
+3. For each discovered file path, load that file and evaluate it against the diff (or against full baseline when current)
 
 For each file classify:
 - **✅ Compatible** — no conflict with changed sections; no action needed
@@ -111,10 +107,12 @@ If status is current: omit Recommendations; write "Baseline is current. No updat
 ### 5. Update Baseline (on user confirmation)
 
 When the user confirms they want to update:
-1. Copy `$NEW_PROMPT_FILE` to `malte/system-prompts/baseline/anthropic-v{LATEST_VERSION}.md`
-2. Delete the old baseline file `malte/system-prompts/baseline/anthropic-v{BASELINE_VERSION}.md`
+1. Copy `$NEW_PROMPT_FILE` to `{baseline-dir}/anthropic-v{LATEST_VERSION}.md`
+2. Delete the old baseline file `{baseline-dir}/anthropic-v{BASELINE_VERSION}.md`
 3. Remove the temp file: `rm -f "$NEW_PROMPT_FILE"`
 4. Confirm: "Baseline updated to v{LATEST_VERSION}."
+
+See your harness adapter for the exact baseline directory path.
 
 NEVER auto-update without explicit user confirmation.
 WHY: The baseline is the reference point for future diffs — an accidental update loses the diff history.

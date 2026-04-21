@@ -22,11 +22,10 @@ Scan the Claude Code config filesystem and produce a ranked report of static con
 
 ### 1. Run the Measurement Script
 
-```bash
-~/.claude/skills/token-cost/scripts/measure-context.sh [OPTIONS]
-```
+Run the `measure-context.sh` script from this skill's `scripts/` directory.
+See your harness adapter for the exact invocation path and default scan directories.
 
-Default scans: `~/.claude/skills/`, `~/.claude/agents/`, `~/.claude/CLAUDE.md`, `~/.claude/settings.json`
+Default scans include: the skills directory, agents directory, the project conventions file chain, and MCP/settings configs. See harness adapter for exact paths.
 
 **Flags:**
 - `--skills-dir DIR` — override skills path
@@ -54,10 +53,14 @@ The script produces three sections:
 
 Run with `--save` to append a `### SAVE_OBSERVATION` block to the output.
 
-When that block appears, call `mcp__open-brain__save_memory` with:
+When that block appears, save the observation to persistent memory if supported:
 - `type`: `observation`
 - `title`: from the `title:` line (e.g. `Token Cost Audit 2026-04-05`)
 - `text`: full text block (totals + top contributors + warnings)
+
+If cross-session memory is unavailable, skip this step — the delta tracking feature will be absent.
+
+See your harness adapter for the exact memory-save mechanism.
 
 WHY: Persistent observations enable delta tracking — you can detect slow token creep as skills accumulate reference files across sessions.
 
@@ -93,8 +96,8 @@ Context window: 200,000 tokens (21.00% used by static context)
 ## Resources
 
 - `scripts/measure-context.sh` — measurement engine
-- `~/.claude/standards/skills/token-budget-tiers.md` — tier budget definitions
-- `~/.claude/skills/skill-auditor/SKILL.md` — fleet quality audit (complementary tool)
+- Token budget tiers standard — tier budget definitions (see harness adapter for path)
+- `skill-auditor` skill — fleet quality audit (complementary tool)
 
 ## Out of Scope
 

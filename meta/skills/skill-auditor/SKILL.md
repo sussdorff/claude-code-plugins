@@ -24,10 +24,7 @@ Run `scripts/scan-skills.sh` to find all skills and measure their size.
 
 ### 2. Load Quality Standards
 
-```
-quality_standard="~/.claude/standards/skills/quality.md"
-tier_standard="~/.claude/standards/skills/token-budget-tiers.md"
-```
+Load the quality and tier-budget standards files. See your harness adapter for the exact paths.
 
 Read both standards first. If unavailable, use the embedded dimensions below as fallback.
 
@@ -139,7 +136,7 @@ Select the 1–2 lowest-scoring dimensions. These are the only sections to rewri
 
 ### Step 3 — Load standards
 
-Read `~/.claude/standards/skills/quality.md` and `~/.claude/standards/skills/token-budget-tiers.md` before writing any changes.
+Load the quality and tier-budget standards files (see harness adapter for exact paths) before writing any changes.
 
 ### Step 4 — Surgical rewrite
 
@@ -162,7 +159,7 @@ Do not rewrite sections that scored well.
 
    Example subagent prompt for each scenario:
    ```
-   Load skill: ~/.claude/skills/{skill-name}/SKILL.md
+   Load skill: {skills-dir}/{skill-name}/SKILL.md
    Task: {concrete task that exercises the skill's main function}
    Expected output: {what a good response looks like}
    ```
@@ -198,6 +195,6 @@ Changes made:
 ## Resources
 
 - `scripts/scan-skills.sh` — Discover all skills, measure tokens/lines
-- `~/.claude/standards/skills/quality.md` — Authoritative quality standard
-- `~/.claude/standards/skills/token-budget-tiers.md` — Token budget tier definitions and overage remediation
-- `malte/plugins/marketplaces/claude-plugins-official/plugins/skill-creator/skills/skill-creator/eval-viewer/generate_review.py` — Before/after benchmark viewer: reads workspace dir with run subdirs, generates self-contained HTML comparison report
+- Quality standards file — Authoritative quality standard (see harness adapter for path)
+- Token budget tiers file — Token budget tier definitions and overage remediation (see harness adapter for path)
+- eval-viewer script — Before/after benchmark viewer: reads workspace dir with run subdirs, generates self-contained HTML comparison report (see harness adapter for path)

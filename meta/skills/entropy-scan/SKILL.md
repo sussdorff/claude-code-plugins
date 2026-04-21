@@ -26,17 +26,10 @@ Do NOT use for: feature implementation, bug fixes, or documentation updates unre
 
 ## Running entropy-scan
 
-Run from the repo root:
+Run the `entropy-scan.sh` script from the skill's `scripts/` directory, from the repo root.
+See your harness adapter for the exact invocation path.
 
-```bash
-bash malte/skills/entropy-scan/scripts/entropy-scan.sh
-```
-
-Optional: scan a specific directory:
-
-```bash
-bash malte/skills/entropy-scan/scripts/entropy-scan.sh --dir /path/to/project
-```
+Optional: scan a specific directory by passing `--dir /path/to/project` to the script.
 
 **Exit codes:** 0 = clean, 1 = violations found, 2 = execution error.
 
@@ -75,9 +68,9 @@ The script validates four categories. For full invariant definitions with ration
 ## Resources
 
 - `docs/HARNESS_SPEC.md` — Complete invariant definitions, rationale, and fix guidance
-- `malte/skills/entropy-scan/scripts/entropy-scan.sh` — Executable implementation (single source of truth)
-- `malte/skills/entropy-scan/tests/test_entropy_scan.sh` — Fixture-based test suite
-- `malte/skills/project-health/SKILL.md` — Integration with `/project-health`
+- `scripts/entropy-scan.sh` (in this skill's scripts/ directory) — Executable implementation (single source of truth)
+- `tests/test_entropy_scan.sh` (in this skill's tests/ directory) — Fixture-based test suite
+- The project-health skill — Integration that runs entropy-scan as part of health checks
 
 ## Out of Scope
 
