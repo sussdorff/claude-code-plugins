@@ -1,3 +1,21 @@
+## [2026.04.61] - 2026-04-21
+
+### Removed
+
+- *(CCP-2vo.10)* Delete `beads-workflow/agents/cmux-reviewer.md` — the old 2-pane review orchestrator agent
+- *(CCP-2vo.10)* Delete `beads-workflow/scripts/codex-watch.sh` — polling wrapper for the deprecated Codex runtime (no remaining callers)
+- *(CCP-2vo.10)* Remove `cld -br` / `--bead-review` flag from `~/.claude/scripts/cld` — review is now inline in the bead-orchestrator and quick-fix single-pane flows
+
+### Miscellaneous Tasks
+
+- *(CCP-2vo.10)* Scrub stale `cld -br` / `cmux-reviewer` references from `quick-fix.md`, `review-agent.md`, `bead-orchestrator.md`, `wave-orchestrator/skill.md`, `wave-orchestrator/scripts/wave-status.sh`, `wave-orchestrator/scripts/wave-dispatch.sh`, `wave-orchestrator/references/error-recovery.md`
+
+### Notes
+
+The OpenAI codex plugin's own `codex-companion.mjs` (installed at `~/.claude/plugins/cache/openai-codex/...`) is external to this repo and remains in place — this bead only removed the in-repo wiring (`codex-watch.sh`) that had been superseded by `codex-exec.sh` in CCP-2vo.3/4/6. The companion state directory (`~/.claude/plugins/data/codex-openai-codex/state/`) is user-global data, not repo-owned.
+
+Evidence gate: Waves 4a/4b/5 closed 4 single-pane runs cleanly (Codex adversarial review caught 3 REGRESSIONs on .8 alone, zero truncation deadlocks). The one truncation deadlock this epic hit (.9 in Wave 2) was on the OLD 2-pane path we just deleted.
+
 ## [2026.04.60] - 2026-04-20
 
 ### Miscellaneous Tasks
