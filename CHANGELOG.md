@@ -1,5 +1,11 @@
 ## [unreleased]
 
+## [2026.04.69] - 2026-04-21
+
+### Bug Fixes
+
+- *(CCP-dzp)* **codex exec timeout propagation** — `beads-workflow/scripts/codex-exec.sh` now wraps `codex exec` with `timeout` (or `gtimeout`) so a stalled codex no longer masquerades as a clean "no findings" review (false-green); timeout duration configurable via `CODEX_EXEC_TIMEOUT` env var (default 300s); exit 124 flows through `PIPESTATUS[0]` → `CODEX_EXIT` → final script exit. Graceful degradation with a stderr warning when neither timeout utility is installed. Wave-orchestrator's Phase 1.25 subagent prompt (`beads-workflow/skills/wave-orchestrator/skill.md`) now documents `timeout 300 codex exec …` and names exit 124 explicitly as a Sonnet-fallback trigger. Regression test `test_timeout_exits_nonzero` added to `beads-workflow/scripts/tests/test_codex_exec_sh.py`.
+
 ### Features
 
 - *(CCP-50y)* **Codex Skills Portability** — convert 10 additional skills to agentskills-compatible format with portable core and SKILL.claude-adapter.md harness adapters; add portability compliance tracking in docs/codex-skills-candidates.md with selection criteria and non-portable deferrals with rationale
