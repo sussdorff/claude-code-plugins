@@ -41,8 +41,9 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 
-DEFAULT_SKILLS="project-context,spec-developer,bug-triage"
+DEFAULT_SKILLS="project-context,spec-developer,bug-triage,project-health,binary-explorer,entropy-scan,nbj-audit,system-prompt-audit,vision,infra-principles,skill-auditor,token-cost,agent-forge"
 PLUGIN_BASE="$REPO_ROOT/dev-tools/skills"
+REGISTRY="$SCRIPT_DIR/skills-registry.json"
 REPO_TARGET="$REPO_ROOT/.agents/skills"
 
 # ---------------------------------------------------------------------------
@@ -139,7 +140,26 @@ for skill in "${SKILLS[@]}"; do
     exit 2
   fi
 
-  src="$PLUGIN_BASE/$skill"
+  # Resolve source from registry if available, otherwise fall back to PLUGIN_BASE
+  if [[ -f "$REGISTRY" ]] && command -v python3 &>/dev/null; then
+    registry_path=$(python3 -c "
+import json, sys
+try:
+    reg = json.load(open('$REGISTRY'))
+    val = reg.get('$skill', '')
+    if val and not val.startswith('_'):
+        print(val)
+except Exception:
+    pass
+" 2>/dev/null)
+    if [[ -n "$registry_path" ]]; then
+      src="$REPO_ROOT/$registry_path"
+    else
+      src="$PLUGIN_BASE/$skill"
+    fi
+  else
+    src="$PLUGIN_BASE/$skill"
+  fi
 
   # Guard: missing source is fatal — prevents silent drift in CI/pre-commit
   if [[ ! -d "$src" ]]; then

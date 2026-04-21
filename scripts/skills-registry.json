@@ -1,0 +1,16 @@
+{
+  "_comment": "Maps skill names to their source directories (relative to repo root). Used by sync-codex-skills to resolve multi-directory skill sources.",
+  "project-context":    "dev-tools/skills/project-context",
+  "spec-developer":     "dev-tools/skills/spec-developer",
+  "bug-triage":         "dev-tools/skills/bug-triage",
+  "project-health":     "dev-tools/skills/project-health",
+  "binary-explorer":    "dev-tools/skills/binary-explorer",
+  "entropy-scan":       "meta/skills/entropy-scan",
+  "nbj-audit":          "meta/skills/nbj-audit",
+  "system-prompt-audit":"meta/skills/system-prompt-audit",
+  "vision":             "core/skills/vision",
+  "infra-principles":   "infra/skills/infra-principles",
+  "skill-auditor":      "meta/skills/skill-auditor",
+  "token-cost":         "meta/skills/token-cost",
+  "agent-forge":        "meta/skills/agent-forge"
+}
