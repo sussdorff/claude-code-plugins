@@ -261,14 +261,18 @@ Agent(subagent_type="general-purpose", prompt="
   1. Run `bd show <id>` for each bead to load its title, description, ACs, deps.
   2. Check if `codex` is available: `command -v codex`
      - If YES: run the review via codex (see below).
-     - If NO or codex exits non-zero: perform the review yourself using Sonnet logic
+     - If NO, or codex exits non-zero for ANY reason (not found, runtime error,
+       **timeout (exit 124)**): perform the review yourself using Sonnet logic
        (see wave-reviewer SKILL.md for checklist) and set codex_fallback: 'sonnet'.
 
   ## Using codex exec (when available)
 
-  Run:
+  Run with a hard timeout so a stalled codex cannot masquerade as a clean
+  "no findings" review (a false-green). Exit 124 from `timeout` is treated
+  identically to any other non-zero codex exit and triggers the Sonnet fallback.
+
   ```bash
-  codex exec --sandbox read-only --model o3 '<prompt with bead data>'
+  timeout 300 codex exec --sandbox read-only --model o3 '<prompt with bead data>'
   ```
 
   The prompt must instruct codex to return ONLY valid JSON matching this schema:
@@ -300,7 +304,8 @@ Agent(subagent_type="general-purpose", prompt="
   - MEDIUM: AC-minor issues, bead quality < B, small inconsistencies — auto-fixable
   - LOW / info: Structurally sound, no action required
 
-  If codex exec exits non-zero, capture the exit code and set:
+  If `codex exec` exits non-zero for ANY reason (not found, error, **timeout
+  (exit 124)**), capture the exit code and set:
   - codex_fallback: 'sonnet'
   - codex_exit: <actual exit code>
   Then perform the review yourself using Sonnet (load wave-reviewer SKILL.md logic) and
