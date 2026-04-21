@@ -7,7 +7,10 @@ Roundtrip tests for the CCP-2vo.2 metrics run API:
 start_run, insert_agent_call, rollup_run, get_run
 """
 
+import logging
+import sqlite3
 import sys
+from datetime import datetime, timezone
 from pathlib import Path
 
 # Resolve lib/orchestrator on sys.path regardless of working directory
@@ -170,6 +173,111 @@ def test_init_db_idempotent(tmp_path: Path) -> None:
     conn1.close()
     conn2 = init_db(db)
     conn2.close()
+
+
+def test_rollup_null_run_id(tmp_path: Path, caplog: pytest.LogCaptureFixture) -> None:
+    """
+    CCP-imb regression: rollup_run() must not silently drop work when given
+    a null/empty run_id, and must surface orphan agent_calls rows (run_id IS NULL)
+    via a clear log warning instead of silently ignoring them.
+
+    Before the fix: rollup_run(None) returned silently because SQLite binds None
+    as NULL and `WHERE run_id = NULL` matches no rows — unattributed usage was
+    silently dropped rather than flagged.
+    """
+    db = tmp_path / "null_rollup.db"
+
+    # Sanity: a normal rollup still works end-to-end (existing happy path).
+    valid_run = start_run("NULL-BEAD", mode="quick-fix", db_path=db)
+    insert_agent_call(
+        run_id=valid_run,
+        bead_id="NULL-BEAD",
+        phase_label="impl",
+        agent_label="impl",
+        model="claude-sonnet-4-5",
+        iteration=1,
+        input_tokens=100,
+        cached_input_tokens=0,
+        output_tokens=50,
+        reasoning_output_tokens=0,
+        total_tokens=150,
+        duration_ms=1000,
+        exit_code=0,
+        db_path=db,
+    )
+    # Happy-path rollup must still succeed.
+    rollup_run(valid_run, db_path=db)
+
+    # (a) rollup_run(None) must NOT raise AttributeError and must NOT silently
+    # return — it must raise ValueError so the caller sees the unattributed
+    # work instead of losing it.
+    with pytest.raises(ValueError):
+        rollup_run(None, db_path=db)  # type: ignore[arg-type]
+
+    # Empty-string run_id is equivalent to null for rollup purposes.
+    with pytest.raises(ValueError):
+        rollup_run("", db_path=db)
+
+    # (b) Orphan agent_calls rows (run_id IS NULL) can exist on databases that
+    # were created before run_id was enforced NOT NULL (legacy / cross-schema).
+    # Seed one by bypassing insert_agent_call's FK check and writing raw SQL.
+    conn = sqlite3.connect(db)
+    try:
+        # Temporarily allow NULL on run_id by rebuilding agent_calls without the
+        # NOT NULL constraint. This mirrors a DB upgraded from a pre-CCP-2vo.2
+        # schema where run_id was nullable.
+        conn.execute("ALTER TABLE agent_calls RENAME TO agent_calls_strict")
+        conn.execute(
+            """
+            CREATE TABLE agent_calls (
+              id INTEGER PRIMARY KEY AUTOINCREMENT,
+              run_id TEXT,
+              bead_id TEXT NOT NULL,
+              wave_id TEXT,
+              phase_label TEXT NOT NULL,
+              agent_label TEXT NOT NULL,
+              model TEXT NOT NULL,
+              iteration INTEGER DEFAULT 1,
+              input_tokens INTEGER DEFAULT 0,
+              cached_input_tokens INTEGER DEFAULT 0,
+              output_tokens INTEGER DEFAULT 0,
+              reasoning_output_tokens INTEGER DEFAULT 0,
+              total_tokens INTEGER DEFAULT 0,
+              duration_ms INTEGER DEFAULT 0,
+              exit_code INTEGER DEFAULT 0,
+              recorded_at TEXT NOT NULL
+            )
+            """
+        )
+        conn.execute(
+            "INSERT INTO agent_calls SELECT * FROM agent_calls_strict"
+        )
+        conn.execute("DROP TABLE agent_calls_strict")
+        # Insert a genuinely orphan row with run_id IS NULL.
+        conn.execute(
+            """
+            INSERT INTO agent_calls (
+                run_id, bead_id, phase_label, agent_label, model,
+                total_tokens, recorded_at
+            ) VALUES (NULL, 'ORPHAN-BEAD', 'impl', 'orphan', 'claude-sonnet-4-5',
+                      999, ?)
+            """,
+            (datetime.now(timezone.utc).isoformat(),),
+        )
+        conn.commit()
+    finally:
+        conn.close()
+
+    # Rolling up a VALID run must now log a visible warning about the orphan
+    # rows — they must not be silently dropped per AK.
+    caplog.clear()
+    with caplog.at_level(logging.WARNING, logger="metrics"):
+        rollup_run(valid_run, db_path=db)
+
+    messages = " ".join(rec.getMessage().lower() for rec in caplog.records)
+    assert "orphan" in messages or "null run_id" in messages or "unattributed" in messages, (
+        f"Expected a visible warning about orphan/null-run_id agent_calls, got: {caplog.records}"
+    )
 
 
 if __name__ == "__main__":
