@@ -418,5 +418,6 @@ class TestPerformance:
             durations_ms.append(elapsed)
 
         durations_ms.sort()
-        p95 = durations_ms[int(len(durations_ms) * 0.95)]
+        p95_idx = max(0, int(len(durations_ms) * 0.95) - 1)
+        p95 = durations_ms[p95_idx]
         assert p95 < 100, f"p95 latency {p95:.1f}ms exceeds 100ms threshold"
