@@ -103,14 +103,17 @@ Required sections: `Overview` (or `# ProjectName` + description), `Commands` (wi
 
 ### Harness Invariants Check
 
-Only run if `malte/skills/` or `.claude/agents/` exists (harness repository).
+Only run if a harness skills directory or agents directory exists (harness repository).
+See your harness adapter for the exact directory names to check.
 
 ```bash
-# Check if this is a harness repo
-if [[ -d malte/skills ]] || [[ -d .claude/agents ]]; then
+# Check if this is a harness repo — replace <skills-dir> and <agents-dir> with
+# the harness-specific paths from your adapter (e.g. malte/skills, .claude/agents)
+if [[ -d <skills-dir> ]] || [[ -d <agents-dir> ]]; then
   # Run entropy-scan script if present; falls back to 0 violations if not installed
-  if [ -f malte/skills/entropy-scan/scripts/entropy-scan.sh ]; then
-    entropy_output=$(bash malte/skills/entropy-scan/scripts/entropy-scan.sh 2>&1)
+  entropy_scan_script="<skills-dir>/entropy-scan/scripts/entropy-scan.sh"
+  if [ -f "$entropy_scan_script" ]; then
+    entropy_output=$(bash "$entropy_scan_script" 2>&1)
     entropy_exit=$?
     if [[ $entropy_exit -eq 2 ]]; then
       # Script error — score as red with error note

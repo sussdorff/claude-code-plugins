@@ -93,7 +93,7 @@ Use lifecycle hooks for agent handoffs — more reliable than prompt-based instr
 
 ## Filesystem & Paths
 
-Subagents navigate `~/.claude/` symlinks by reading the filesystem (`ls -la`) — don't hard-code resolved paths in orchestrator prompts.
+Subagents navigate harness symlinks by reading the filesystem (`ls -la`) — don't hard-code resolved paths in orchestrator prompts. See your harness adapter for the exact home directory and symlink conventions.
 
 ## The Five Pillars
 

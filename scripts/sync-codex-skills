@@ -145,13 +145,13 @@ for skill in "${SKILLS[@]}"; do
     registry_path=$(python3 -c "
 import json, sys
 try:
-    reg = json.load(open('$REGISTRY'))
-    val = reg.get('$skill', '')
+    reg = json.load(open(sys.argv[1]))
+    val = reg.get(sys.argv[2], '')
     if val and not val.startswith('_'):
         print(val)
-except Exception:
-    pass
-" 2>/dev/null)
+except Exception as e:
+    print(f'WARNING: Failed to read skills registry: {e}', file=sys.stderr)
+" "$REGISTRY" "$skill" 2>/dev/null)
     if [[ -n "$registry_path" ]]; then
       src="$REPO_ROOT/$registry_path"
     else

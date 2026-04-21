@@ -1,25 +1,25 @@
 ---
 name: entropy-scan
 description: >-
-  Scan the Claude harness (skills, hooks, agents, standards) for invariant violations
+  Scan the agent harness (skills, hooks, agents, standards) for invariant violations
   and entropy. Produces a violation report with actionable fix instructions. Triggers on:
   entropy scan, harness check, harness validate, invariants check.
 ---
 
 # Entropy Scan
 
-Mechanically validate the Claude harness against invariants defined in `docs/HARNESS_SPEC.md`. Detects structural violations, reports each with an actionable `FIX:` instruction.
+Mechanically validate the agent harness against invariants defined in `docs/HARNESS_SPEC.md`. Detects structural violations, reports each with an actionable `FIX:` instruction.
 
 ## Overview
 
-Entropy Scan checks four harness artifact types — skills, hooks, agents, and standards — against a fixed set of 17 structural invariants (SKILL-01..05, HOOK-01..04, AGENT-01..04, STD-01..04). Each violation includes the offending path, a description of the problem, and an actionable `FIX:` instruction. The scan is read-only: it reports but never modifies files.
+Entropy Scan checks four agent harness artifact types — skills, hooks, agents, and standards — against a fixed set of 17 structural invariants (SKILL-01..05, HOOK-01..04, AGENT-01..04, STD-01..04). Each violation includes the offending path, a description of the problem, and an actionable `FIX:` instruction. The scan is read-only: it reports but never modifies files.
 
 ## When to Use
 
 - "entropy scan" / "harness check" / "harness validate"
 - "check invariants" / "scan invariants" / "harness health"
 - After adding or modifying skills, hooks, agents, or standards
-- As part of `/project-health` checks (automatic integration)
+- As part of project-health checks (see harness adapter for integration details)
 - Before pushing harness changes to ensure no violations
 
 Do NOT use for: feature implementation, bug fixes, or documentation updates unrelated to harness structure.
@@ -35,8 +35,8 @@ Optional: scan a specific directory by passing `--dir /path/to/project` to the s
 
 **Output format:**
 ```
-VIOLATION [SKILL-01]: malte/skills/foo/ — SKILL.md missing — FIX: Create malte/skills/foo/SKILL.md with required frontmatter
-VIOLATION [HOOK-01]: .claude/hooks/my-hook.sh — Missing exit-code comment block — FIX: Add comment block (# exit 0 = allow, # exit 2 = deny)
+VIOLATION [SKILL-01]: <skills-dir>/foo/ — SKILL.md missing — FIX: Create <skills-dir>/foo/SKILL.md with required frontmatter
+VIOLATION [HOOK-01]: <hooks-dir>/my-hook.sh — Missing exit-code comment block — FIX: Add comment block (# exit 0 = allow, # exit 2 = deny)
 ...
 Total violations: N
 ```
@@ -77,4 +77,4 @@ The script validates four categories. For full invariant definitions with ration
 - Fixing violations automatically (report only)
 - Checking runtime behaviour of skills/hooks (structure validation only)
 - Performance profiling or optimisation
-- Validating files outside `malte/skills/`, `.claude/hooks/`, `.claude/agents/`, `malte/standards/`
+- Validating files outside the harness directories (see harness adapter for exact paths)

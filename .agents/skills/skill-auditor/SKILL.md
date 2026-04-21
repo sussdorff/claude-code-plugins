@@ -1,12 +1,12 @@
 ---
 name: skill-auditor
 model: sonnet
-description: Audit and score Claude Code skills fleet-wide; improve weak skills surgically. Triggers on audit skills, skill health check, fleet quality, improve skill, fix skill, rewrite skill.
+description: Audit and score agent skills fleet-wide; improve weak skills surgically. Triggers on audit skills, skill health check, fleet quality, improve skill, fix skill, rewrite skill.
 ---
 
 # Skill Auditor
 
-Scan and score all Claude Code skills against the quality standard. Produces fleet-wide quality reports with grades, token costs, and actionable findings.
+Scan and score all agent skills (SKILL.md files) against the quality standard. Produces fleet-wide quality reports with grades, token costs, and actionable findings.
 
 ## When to Use
 

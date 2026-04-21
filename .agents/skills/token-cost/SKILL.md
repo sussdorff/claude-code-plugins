@@ -2,14 +2,14 @@
 name: token-cost
 model: sonnet
 description: >-
-  Measure static context token overhead for Claude Code sessions. Use when auditing
-  context window usage, checking skill/agent/CLAUDE.md token costs, or generating
+  Measure static context token overhead for agent sessions. Use when auditing
+  context window usage, checking skill/agent/conventions token costs, or generating
   a ranked report of heaviest context contributors.
 ---
 
 # Token Cost Measurement
 
-Scan the Claude Code config filesystem and produce a ranked report of static context overhead per category: skills, agents, CLAUDE.md chain, and MCP server configs.
+Scan the config filesystem and produce a ranked report of static context overhead per category: skills, agents, conventions file chain, and MCP server configs.
 
 ## When to Use
 

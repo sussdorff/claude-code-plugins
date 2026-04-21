@@ -514,11 +514,13 @@ description: Reviews code for security issues. Use PROACTIVELY when code changes
 
 ## Reference: Priority Loading Order
 
-When multiple agents have same name, priority order is:
+When multiple agents have the same name, the harness resolves them by priority.
+See your harness adapter for the exact priority order and storage paths.
 
-1. Project-level (`.claude/agents/`) - HIGHEST
-2. CLI-defined (`--agents` flag)
-3. User-level (`~/.claude/agents/`)
+General pattern (highest to lowest):
+1. Project-level agents directory - HIGHEST
+2. CLI-defined agents (harness flag)
+3. User-level agents directory
 4. Plugin agents - LOWEST
 
 Keep this in mind when naming agents to avoid conflicts.

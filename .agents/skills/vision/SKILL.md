@@ -19,7 +19,7 @@ too weird, or too impractical here. Generate freely. Defer judgment entirely.
 ## What You Must NOT Do
 
 - Do NOT call `bd show`, `bd ready`, `bd list`, or any beads commands
-- Do NOT call `/inject-standards`
+- Do NOT invoke standards-injection or project tracking commands during vision tasks
 - Do NOT perform feasibility checks, compliance reviews, or cost/effort estimates
 - Do NOT say "that might be difficult" or "we should check if this is possible"
 - Do NOT anchor to existing constraints unless the user explicitly asks

@@ -30,7 +30,7 @@ Skills are selected for Codex/agentskills-compatible conversion based on the fol
 | 7 | infra-principles | infra/skills/ | ✅ converted | Clean; minimal adapter stub only |
 | 8 | skill-auditor | meta/skills/ | ✅ converted | Adapter split: ~/.claude/standards/ paths + eval-viewer path → adapter |
 | 9 | token-cost | meta/skills/ | ✅ converted | Adapter split: mcp__open-brain ref + ~/.claude/ paths → adapter |
-| 10 | agent-forge | meta/skills/ | ✅ converted | Clean; minimal adapter stub (disableModelInvocation note) |
+| 10 | agent-forge | meta/skills/ | ✅ converted | Adapter split: .claude/agents/ paths + ~/.claude/agents/ → adapter; deploy section abstracted |
 
 ## Deferrals
 
@@ -42,4 +42,3 @@ Skills are selected for Codex/agentskills-compatible conversion based on the fol
 | `dev-tools/skills/codex` | This skill wraps the Codex CLI itself. Converting it to an agentskills-compatible format creates a circularity: it would be a Codex skill that tells Codex how to run Codex. |
 | `core/skills/dolt` / `core/skills/event-log` | These skills troubleshoot or query Claude Code harness internals (`~/.claude/events.db`, Dolt server). Entirely Claude Code infrastructure. |
 | `meta/skills/hook-creator` | Creates Claude Code hooks (`.claude/settings.json` `hooks:` config). Deeply Claude Code specific. |
-| `meta/skills/agent-forge` | Actually included above — passes portability checks. The `.claude/agents/` references are structural doc, not harness API calls. |

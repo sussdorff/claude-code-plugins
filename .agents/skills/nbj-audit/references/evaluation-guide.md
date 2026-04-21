@@ -6,17 +6,17 @@ Load this when the script output is ambiguous or you need to investigate a primi
 
 | # | Primitive | Location | present signal | partial signal |
 |---|-----------|----------|----------------|----------------|
-| 1 | Tool Registry | `malte/skills/` | ≥20 skills with SKILL.md | 5–19 skills |
-| 2 | Permission System | `malte/hooks/pre_tool_use.py` + CLAUDE.md | hook + ≥3 safety rules | hook OR rules |
+| 1 | Tool Registry | `<skills-dir>/` | ≥20 skills with SKILL.md | 5–19 skills |
+| 2 | Permission System | `<hooks-dir>/pre_tool_use.py` + conventions file | hook + ≥3 safety rules | hook OR rules |
 | 3 | Session Persistence | `.beads/` + memory skill | both present | one present |
 | 4 | Workflow State | `.beads/` + `bd` CLI | both available | one present |
-| 5 | Token Budget | `malte/skills/token-cost/` + CLAUDE.md | skill + ≥2 tier refs | skill OR refs |
-| 6 | Streaming Events | `malte/skills/cmux/` + orchestrator agents | cmux + streaming phases | cmux only |
-| 7 | Event Logging | `malte/hooks/event-log.py` + `malte/skills/event-log/` | hook + skill | hook OR skill |
-| 8 | Verification Harness | `malte/agents/review-agent`, `holdout-validator`, `verification-agent` | review agents + ≥3 total | any review agent |
-| 9 | Tool Pool Assembly | `.claude/index.yml` or `malte/index.yml` + CLAUDE.md on-demand refs | index + refs | index OR refs |
-| 10 | Transcript Compaction | CLAUDE.md PreCompact/compaction rules | ≥3 mentions | 1–2 mentions |
-| 11 | Permission Audit Trail | `malte/skills/event-log/` + `bd audit` | both present | one present |
+| 5 | Token Budget | `<skills-dir>/token-cost/` + conventions file | skill + ≥2 tier refs | skill OR refs |
+| 6 | Streaming Events | `<skills-dir>/cmux/` + orchestrator agents | cmux + streaming phases | cmux only |
+| 7 | Event Logging | `<hooks-dir>/event-log.py` + `<skills-dir>/event-log/` | hook + skill | hook OR skill |
+| 8 | Verification Harness | `<agents-dir>/review-agent`, `holdout-validator`, `verification-agent` | review agents + ≥3 total | any review agent |
+| 9 | Tool Pool Assembly | `<harness-dir>/index.yml` + conventions file on-demand refs | index + refs | index OR refs |
+| 10 | Transcript Compaction | conventions file PreCompact/compaction rules | ≥3 mentions | 1–2 mentions |
+| 11 | Permission Audit Trail | `<skills-dir>/event-log/` + `bd audit` | both present | one present |
 | 12 | Doctor + Provenance | `bd doctor` command + `.beads/` | both available | one present |
 
 ## Project Mode — Where to Look

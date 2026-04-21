@@ -1,7 +1,7 @@
 ---
 name: agent-forge
 description: >-
-  Create and review Claude Code agents (subagents). Use when creating specialized AI
+  Create and review agents (subagents). Use when creating specialized AI
   assistants, reviewing/auditing existing agents, deciding between agent vs skill vs
   command, or asking about agent best practices, multi-agent pipelines, and model selection.
   MUST BE USED when the user says "create agent", "new subagent", "review agent",
@@ -11,7 +11,7 @@ disableModelInvocation: true
 
 # Agent Forge
 
-Create, review, and improve Claude Code agents -- specialized AI assistants with isolated context windows, custom system prompts, and configurable tool permissions.
+Create, review, and improve agents -- specialized AI assistants with isolated context windows, custom system prompts, and configurable tool permissions.
 
 ## When to Use
 
@@ -54,13 +54,13 @@ Details and real-world examples: `references/agent-patterns.md`
 ```bash
 # Creates <name>.md single-file agent with YAML frontmatter
 python3 scripts/init-agent.py <agent-name>
-python3 scripts/init-agent.py <agent-name> --path .claude/agents/
 ```
 
-Creates a single `.md` file with YAML frontmatter and system prompt. This is the **only format Claude Code supports**.
+Creates a single `.md` file with YAML frontmatter and system prompt.
+See your harness adapter for the exact storage path and supported formats.
 
 ```
-.claude/agents/<agent-name>.md    # Frontmatter + system prompt in one file
+agents/<agent-name>.md    # Frontmatter + system prompt in one file (portable path)
 ```
 
 ### Step 4: Configure Frontmatter
@@ -140,7 +140,7 @@ Comprehensive writing guide: `references/agent-best-practices.md`
 ### Step 6: Validate
 
 ```bash
-python3 scripts/validate-agent.py .claude/agents/<agent-name>.md
+python3 scripts/validate-agent.py <agent-path>
 ```
 
 Checks: frontmatter structure, required fields, name format, description quality, tool validity, model selection, token count, TODO markers.
@@ -153,10 +153,9 @@ Checks: frontmatter structure, required fields, name format, description quality
 
 ### Step 8: Deploy
 
-**Storage locations:**
-- Project-level: `.claude/agents/` (checked into git, highest priority)
-- User-level: `~/.claude/agents/` (personal use)
-- Plugin: `agents/` directory in plugin structure
+**Storage locations:** See your harness adapter for the exact paths and priority order.
+In general, agents can be stored at project-level (highest priority), user-level (personal use),
+and plugin-level. Consult your harness documentation for the exact directory names.
 
 Document usage examples, expected inputs, and when to use vs other agents.
 

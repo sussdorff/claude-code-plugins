@@ -64,7 +64,7 @@ Run: {timestamp}
 
 | # | Primitive | Status | Finding | Risk | Delta |
 |---|-----------|--------|---------|------|-------|
-| 1 | Tool Registry | present | 52 skills in malte/skills/ | low | = |
+| 1 | Tool Registry | present | 52 skills in <skills-dir>/ | low | = |
 ...
 
 ### Assessment Overview
