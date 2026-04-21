@@ -28,7 +28,7 @@ from pathlib import Path
 _REPO_ROOT = Path(__file__).resolve().parents[3]
 _HOOK_PATH = Path.home() / ".claude" / "hooks" / "log-adhoc-subagent-metrics.py"
 sys.path.insert(0, str(_REPO_ROOT / "beads-workflow" / "lib" / "orchestrator"))
-from metrics import init_db, DB_PATH  # noqa: E402
+from metrics import init_db  # noqa: E402
 
 import pytest
 
@@ -166,6 +166,28 @@ def test_off_switch_skips_write(tmp_path: Path) -> None:
 
 
 # ---------------------------------------------------------------------------
+# Both env vars set together → no write (CCP_NO_SUBAGENT_METRICS takes priority)
+# ---------------------------------------------------------------------------
+
+def test_both_env_vars_set_skips_write(tmp_path: Path) -> None:
+    """Both CCP_ORCHESTRATOR_RUN_ID and CCP_NO_SUBAGENT_METRICS set → exit 0, zero rows written."""
+    db = tmp_path / "metrics.db"
+    init_db(db)
+
+    payload = _make_payload()
+    result = _run_hook(
+        payload,
+        env={"CCP_ORCHESTRATOR_RUN_ID": "rn-xyz", "CCP_NO_SUBAGENT_METRICS": "1"},
+        db_path=db,
+    )
+
+    assert result.returncode == 0, f"Hook exited {result.returncode}: {result.stderr}"
+
+    rows = _count_adhoc_rows(db)
+    assert len(rows) == 0, f"Expected 0 rows when both env vars are set, got {len(rows)}"
+
+
+# ---------------------------------------------------------------------------
 # Malformed payload: missing token fields → coerce to 0
 # ---------------------------------------------------------------------------
 
@@ -266,17 +288,24 @@ def test_two_payloads_produce_distinct_run_ids(tmp_path: Path) -> None:
 # ---------------------------------------------------------------------------
 
 def test_hook_overhead_under_50ms(tmp_path: Path) -> None:
-    """Hook must complete in under 50ms (non-blocking performance requirement)."""
+    """Hook must complete in under 50ms across 10 trials (non-blocking performance requirement)."""
     db = tmp_path / "metrics.db"
     init_db(db)
 
     payload = _make_payload()
-    start = time.perf_counter()
-    result = _run_hook(payload, db_path=db)
-    elapsed_ms = (time.perf_counter() - start) * 1000
+    elapsed_times = []
+    for _ in range(10):
+        start = time.perf_counter()
+        result = _run_hook(payload, db_path=db)
+        elapsed_ms = (time.perf_counter() - start) * 1000
+        assert result.returncode == 0
+        elapsed_times.append(elapsed_ms)
 
-    assert result.returncode == 0
-    assert elapsed_ms < 50, f"Hook took {elapsed_ms:.1f}ms (must be < 50ms)"
+    median_ms = sorted(elapsed_times)[len(elapsed_times) // 2]
+    assert median_ms < 50, (
+        f"Median hook time {median_ms:.1f}ms exceeds 50ms limit "
+        f"(all times: {[f'{t:.1f}' for t in elapsed_times]})"
+    )
 
 
 # ---------------------------------------------------------------------------

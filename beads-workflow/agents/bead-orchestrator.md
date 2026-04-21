@@ -209,15 +209,12 @@ Announce: "Routing: GSD mode — [reason]" or "Routing: PAUL mode — [reason]"
 After routing (and before bd claim), create the metrics run:
 
 ```python
+import os
 import sys; sys.path.insert(0, '<repo>/beads-workflow/lib/orchestrator')
 from metrics import start_run
 run_id = start_run('<bead_id>', wave_id='<wave_id_or_None>', mode='full-1pane')
+os.environ['CCP_ORCHESTRATOR_RUN_ID'] = run_id  # Prevents SubagentStop hook from double-writing ad-hoc rows
 # Store run_id in your agent context — propagate to every subsequent subagent and codex-exec.sh call
-```
-
-```bash
-# Export run_id so SubagentStop hook skips ad-hoc metrics for orchestrator-driven spawns
-export CCP_ORCHESTRATOR_RUN_ID=<run_id>
 ```
 
 **Claim the bead:**

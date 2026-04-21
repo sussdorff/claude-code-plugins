@@ -825,7 +825,7 @@ def query_adhoc_report(db_path: Path = DB_PATH) -> str:
         rows = conn.execute("""
             SELECT agent_label, COUNT(*) as calls,
                    SUM(total_tokens) as total_tokens,
-                   MAX(model) as model
+                   GROUP_CONCAT(DISTINCT model) as model
             FROM agent_calls
             WHERE phase_label = 'adhoc'
             GROUP BY agent_label
