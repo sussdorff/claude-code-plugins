@@ -115,8 +115,7 @@ Record the score (A/B/C) and any deficiency note in the Phase 1 review table.
 
 Then apply the automatic MEDIUM finding rule:
 - Score C on any bead → generate a MEDIUM finding with category `bead_quality`
-- Score B on a feature/epic bead → generate a MEDIUM finding with category `bead_quality`
-- Score B on task/bug/chore → no finding (record score only)
+- Score A or B on any bead → no finding (record score only)
 
 Finding format:
 ```
@@ -161,17 +160,17 @@ Findings first, ordered by severity.
 Output format:
 
 ```markdown
-## Bead Overview
-
-| Bead | Type | Ready | Depends On | Blocks | Bead Quality |
-|---|---|---|---|---|---|
-| <bead-id> | <type> | <yes/no> | <ids or —> | <ids or —> | <A/B/C> |
-
 ## Findings
 
 - HIGH — <bead-id[, bead-id]> — <specific contradiction or structural risk>. Fix: <minimal change>.
 - MEDIUM — <bead-id[, bead-id]> — <specific contradiction or structural risk>. Fix: <minimal change>.
 - MEDIUM — <bead-id> — Bead quality score <B/C> (bead_quality): <specific gap>. Fix: <minimal action to reach A>.
+
+## Bead Overview
+
+| Bead | Type | Ready | Depends On | Blocks | Bead Quality |
+|---|---|---|---|---|---|
+| <bead-id> | <type> | <yes/no> | <ids or —> | <ids or —> | <A/B/C> |
 
 ## Ready Verdict
 

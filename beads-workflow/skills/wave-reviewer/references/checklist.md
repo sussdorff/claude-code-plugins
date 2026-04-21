@@ -141,8 +141,6 @@ All of the following must hold:
 Meets A criteria partially — at least one of:
 - Thin description (< 20 words or lacks context)
 - ACs present but phrased as implementation tasks ("Implement X", "Write code for Y")
-- Missing MoC table (feature/epic only)
-- Missing `metadata.intent` (feature/epic only)
 
 Not fatally broken — an agent can proceed with caution.
 
@@ -159,9 +157,8 @@ Any of the following disqualifies the bead:
 
 Generate a MEDIUM finding in the wave Findings table whenever:
 - Any bead scores **C** (always, regardless of type)
-- A **feature or epic** bead scores **B** (partial spec is insufficient for autonomous execution of high-scope work)
 
-Do NOT generate a finding for task/bug/chore beads that score B.
+Do NOT generate a finding for beads that score A or B.
 
 Finding format:
 
