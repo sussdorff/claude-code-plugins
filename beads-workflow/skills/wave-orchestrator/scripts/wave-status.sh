@@ -3,9 +3,9 @@
 #
 # Usage: wave-status.sh <wave-config.json>
 #
-# 1-surface-per-bead mode: after CCP-2vo.4, bead-orchestrator runs all phases
-# (implementation + Codex adversarial review) inline in a single pane. There is
-# no separate cmux-reviewer surface to monitor.
+# 1-surface-per-bead mode: bead-orchestrator (CCP-2vo.4) and quick-fix run all
+# phases — implementation + Codex adversarial review — inline in a single pane.
+# The old 2-pane flow with a separate reviewer surface was removed in CCP-2vo.10.
 #
 # Input: JSON file with wave configuration:
 #   {

@@ -38,13 +38,12 @@ You do NOT implement code yourself. You do NOT review code yourself.
 
 ## Single-Pane Design
 
-Unlike the full bead-orchestrator (which spawns a separate `cld -br` review pane),
-the quick-fix agent runs everything in ONE pane. The Codex review happens inline via
-`codex-exec.sh` — no cmux-reviewer agent, no second surface. This halves the
-resource footprint per bead.
+Quick-fix runs everything in ONE pane. The Codex review happens inline via
+`codex-exec.sh` — no separate review surface. This is the same single-pane model
+that the full bead-orchestrator now uses (CCP-2vo.4); the old 2-pane review flow
+(`cld -br` + cmux-reviewer) was removed in CCP-2vo.10.
 
-**Consequence for wave-orchestrator:** Quick-fix beads consume 1 pane each. Full beads
-consume 2 (impl + review). A mixed wave of 2 full + 2 quick uses 6 panes, not 8.
+**Consequence for wave-orchestrator:** All beads (quick and full) consume 1 pane each.
 
 ## Worktree Isolation
 

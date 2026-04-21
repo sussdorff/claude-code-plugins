@@ -200,9 +200,9 @@ Warning: Conflict risk — 0al, doq both modify pvs-router.ts
 Quick-fix beads typically complete faster (no plan gate, no UAT, 2 review iterations max).
 This is visible in monitoring — quick-fix surfaces show `<id>-qf` labels.
 
-**Pane budget:** All beads use 1 pane each. After CCP-2vo.4, full beads run their Codex
-review inline (no separate review pane, no `cld -br`). Quick-fix beads were already 1-pane.
-Factor this into `max-parallel` calculations: a wave of 2 full + 2 quick needs 4 panes.
+**Pane budget:** All beads use 1 pane each. Both full and quick-fix run their Codex
+review inline (single-pane model). Factor this into `max-parallel` calculations:
+a wave of 2 full + 2 quick needs 4 panes.
 
 Wait for user confirmation before proceeding. If `--dry-run`, stop here.
 
@@ -584,8 +584,8 @@ The script:
 
 After dispatch, confirm to the user which beads were dispatched to which surfaces and in which mode.
 
-**Important**: Do NOT use `cld -br` — that's for review-only sessions. The dispatch script
-uses `cld -b` (full) or `cld -bq` (quick-fix) based on the `--quick` flag.
+**Important**: The dispatch script uses `cld -b` (full) or `cld -bq` (quick-fix) based
+on the `--quick` flag. Both modes run single-pane — no separate review surface.
 
 ---
 
@@ -969,12 +969,12 @@ data source and is lost once surfaces close.
 For each completed bead, collect:
 
 1. **Bead notes**: `bd show <id>` — close reason, iteration count, quality grade
-2. **Reviewer findings** (if cmux-reviewer was used):
+2. **Reviewer findings**: Extracted from the bead's own surface scrollback (single-pane
+   inline review — no separate reviewer surface):
    ```bash
-   # Read reviewer surface scrollback before it's cleaned up
-   cmux read-screen --surface <reviewer-surface> --scrollback --lines 100
+   cmux read-screen --surface <bead-surface> --scrollback --lines 500
    ```
-   Extract: BLOCKING findings (fixed), ADVISORY findings (deferred), Codex findings
+   Look for BLOCKING findings (fixed), ADVISORY findings (deferred), Codex REGRESSION markers
 3. **Implementation commits**: `git log --oneline <branch>` — what actually changed
 4. **Follow-up beads created**: beads with `discovered-from: <bead-id>` in the wave
 5. **Auto-decisions**: scan `bd show <id>` bead notes for entries matching the
@@ -1151,7 +1151,7 @@ For all error scenarios, read `references/error-recovery.md`. It covers:
 
 - **Output language**: Respond in the user's language. The skill instructions are English but output should match the user.
 - **Use the scripts**: Prefer `wave-dispatch.sh`, `wave-status.sh`, and `wave-completion.sh` over manual cmux calls. They're faster, produce structured output, and reduce context usage.
-- **NEVER session close**: The wave orchestrator must never trigger or send `session close`. The bead-orchestrator/cmux-reviewer handles this autonomously.
+- **NEVER session close**: The wave orchestrator must never trigger or send `session close`. The bead-orchestrator (or quick-fix) handles this autonomously.
 - **NEVER reuse surfaces**: Always dispatch to fresh surfaces via `wave-dispatch.sh`.
 - **Integration-verification after epic**: After the final wave closes, always run Phase 6.5 to catch cross-bead gaps. Skip only with `--skip-integration-check` and only when there are no cross-bead invariants to check (e.g. single-bead waves).
 - **Delegate scenarios**: Delegate scenario generation to subagents, not inline.
@@ -1163,4 +1163,4 @@ For all error scenarios, read `references/error-recovery.md`. It covers:
 - **max 4-5 panes**: Beyond 5, layout overhead and resource contention become issues.
 - **Pull between waves**: Always `git pull --no-rebase` + `bd dolt pull` between waves.
 - **Stay cache-warm**: Poll every 270s (not 300s+, not <60s). First check at T+4.5min. 270s keeps the prompt cache alive across the full wave; gaps ≥300s force a full-context re-read.
-- **Don't intervene in bead surfaces**: Bead-orchestrators run single-pane (no `cld -br`, no separate reviewer). Only intervene when the bead surface appears dead and bd status is still in_progress (stall scenario — see stall detection).
+- **Don't intervene in bead surfaces**: Bead-orchestrators run single-pane (inline Codex review, no separate reviewer surface). Only intervene when the bead surface appears dead and bd status is still in_progress (stall scenario — see stall detection).

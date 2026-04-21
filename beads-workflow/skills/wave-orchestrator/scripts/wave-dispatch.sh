@@ -5,8 +5,8 @@
 #
 # Creates ONE pane per bead (1-pane mode: full and quick-fix beads both use a single
 # pane). Renames each surface, dispatches cld -b or cld -bq, and outputs wave config JSON.
-# NOTE: cld -br (review-only sessions) is NOT used here. After CCP-2vo.4, bead-orchestrator
-# runs all phases (including Codex review) inline in a single pane.
+# Both modes run all phases (including Codex adversarial review) inline — the old
+# 2-pane review flow was removed in CCP-2vo.10.
 #
 # The output JSON can be fed directly into wave-status.sh for monitoring.
 

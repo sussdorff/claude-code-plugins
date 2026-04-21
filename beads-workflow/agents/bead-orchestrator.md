@@ -938,8 +938,8 @@ Do NOT spawn `core:session-close`.
 - Do NOT use `bd edit` (opens $EDITOR, blocks agents)
 - Do NOT close beads — EVER. Beads are closed by session-close as the absolute last step after merge+push. The orchestrator hands off, it does not close. **Exception:** Closing a parent bead during slicing (Phase 0) is permitted.
 - Do NOT create beads for new work discovered during implementation — report to user instead
-- Do NOT use `cld -br`, `cmux-reviewer`, or `cmux send` for review injection — review is inline (Phase 6)
-- Do NOT use `codex-companion.mjs` — all Codex calls go through `beads-workflow/scripts/codex-exec.sh`
+- Do NOT use `cmux send` for review injection — review is inline (Phase 6). The old 2-pane flow (`cld -br`, cmux-reviewer, old Codex runtime wrapper) was removed in CCP-2vo.10
+- All Codex calls go through `beads-workflow/scripts/codex-exec.sh`
 - Every metric write MUST be keyed by `run_id` — NO bead_id-only writes
 
 ## Session Capture

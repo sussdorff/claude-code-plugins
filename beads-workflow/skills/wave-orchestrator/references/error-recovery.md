@@ -14,26 +14,6 @@ The user can:
 - Skip the bead and continue with the wave
 - Abort the wave
 
-## Reviewer Disconnect (No Impl Surface)
-
-When a cmux-reviewer reports `impl_surface: none` or `No impl surface available`, the
-reviewer cannot send fixes back to the implementer. This happens when the impl surface
-was closed or became unreachable.
-
-**The orchestrator may intervene in this specific case:**
-
-1. Read the reviewer surface to understand what fixes are needed
-2. If the reviewer already sent a cmux command that didn't arrive, re-send it:
-   ```bash
-   cmux send --surface surface:<reviewer> "re-review" && cmux send-key --surface surface:<reviewer> enter
-   ```
-3. If the reviewer is waiting for fixes that the implementer already committed,
-   trigger re-review directly
-
-**Otherwise**: Stay out of the communication between reviewer and implementer. The
-bead-orchestrator and cmux-reviewer coordinate autonomously — only intervene when you
-can see that a cmux send was attempted but didn't arrive.
-
 ## Merge Conflicts During Session Close
 
 Common when multiple beads in the same wave touch shared files (routing, test setup,

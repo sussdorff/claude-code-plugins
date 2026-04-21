@@ -19,7 +19,6 @@ Pure code reviewer — no cmux, no fix injection, no session orchestration. Retu
 
 Used by:
 - **bead-orchestrator** (Phase 3.5): spawned as subagent, report drives fix loop
-- **cmux-reviewer**: spawned as subagent, report drives cmux fix injection
 
 ## Role
 
