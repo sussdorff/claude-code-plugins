@@ -104,7 +104,52 @@ packages/*/package.json
 
 For each package found, record its name (directory name). Build a package list.
 
-Filter to only the packages mentioned in `touched_paths` (unless `touched_paths` is empty — then use all packages).
+### Normalize `touched_paths` → `touched_packages`
+
+Callers may pass `touched_paths` in any of the following forms. Every form MUST
+resolve to a canonical package name (matching the `packages/<pkg>/` directory name)
+before Step 4 (matrix filtering) or Step 5 (vision-boundary intersection) uses it.
+
+| Input form | Example | Canonical |
+|------------|---------|-----------|
+| Empty list | `[]` | (all discovered packages) |
+| Bare package name | `"adapter-common"` | `"adapter-common"` |
+| Package path | `"packages/adapter-common"` | `"adapter-common"` |
+| Package path with trailing slash | `"packages/adapter-common/"` | `"adapter-common"` |
+| File path inside a package | `"packages/adapter-common/src/x.ts"` | `"adapter-common"` |
+
+**Normalization rule** (apply to every non-empty entry):
+
+1. Trim whitespace.
+2. Strip a leading `packages/` segment if present.
+3. Take the first remaining path segment (everything before the next `/`). This
+   yields the package directory name for path and file-path forms, and leaves
+   bare names unchanged.
+
+```
+entry = "packages/adapter-common/src/x.ts"
+  after trim           → "packages/adapter-common/src/x.ts"
+  after strip-packages → "adapter-common/src/x.ts"
+  after first-segment  → "adapter-common"
+```
+
+**Empty `touched_paths` semantics:**
+
+If `touched_paths == []`, set `touched_packages` to the set of ALL discovered
+package names. This preserves the pre-iter-2 "scan everything" behaviour and is
+required for callers (e.g. `/epic-init`) that do not yet know which packages are
+in scope when invoking the scout.
+
+De-duplicate the resulting list. From this point on, **use `touched_packages`
+for every membership check** — do NOT test membership against the raw
+`touched_paths` array, because the raw array may mix bare names, package paths,
+and file paths that will fail literal string equality.
+
+### Filter Packages
+
+Filter the discovered package list to include only packages whose name is in
+`touched_packages`. If `touched_packages` was expanded from `[]` above, the
+filter is a no-op and all packages are kept.
 
 ---
 
@@ -157,26 +202,32 @@ Try to locate `vision.md` at either:
 
 Use the first one found. If neither exists: skip this step silently.
 
-**Severity is determined by which side of the boundary intersects `touched_paths`:**
+**Severity is determined by which side of the boundary intersects `touched_packages`** — the canonical package-name set built in Step 3. Do NOT test membership against the raw `touched_paths` array; it may mix bare names, package paths, and file paths that cannot be compared with literal string equality.
 
-| forbidden-from ∈ touched_paths | forbidden-to ∈ touched_paths | Action |
+| forbidden-from ∈ touched_packages | forbidden-to ∈ touched_packages | Action |
 |------|------|------|
 | ✅ yes | (any) | Grep; emit BLOCKING finding |
 | ❌ no | ✅ yes | Grep; emit ADVISORY finding ("pre-existing violation in non-touched package") |
 | ❌ no | ❌ no | Skip this rule entirely |
 
-The unconditional rule: **BLOCKING requires the importing package (forbidden-from) to be in `touched_paths`.** The bead author is responsible for violations in packages they touch, not in packages they don't touch.
+The unconditional rule: **BLOCKING requires the importing package (forbidden-from) to be in `touched_packages`.** The bead author is responsible for violations in packages they touch, not in packages they don't touch.
+
+> **Empty-input reminder:** If the caller passed `touched_paths == []`, Step 3
+> expanded `touched_packages` to the set of ALL discovered packages, so every
+> forbidden-from and forbidden-to will be "∈ touched_packages" and BLOCKING rules
+> will fire for any actual violation. This preserves the pre-iter-2 "scan all"
+> behaviour for callers that cannot enumerate touched packages up front.
 
 1. Read the found `vision.md` and locate a table with columns `rule | scope | source-section` or `layer | forbidden-from | forbidden-to`.
 2. For each boundary rule, identify:
    - The **forbidden-from** layer packages (the layer that must NOT import from the other)
    - The **forbidden-to** layer packages (the packages that must not be imported)
 3. For each boundary rule, classify it using the three-way table above:
-   - Determine whether the **forbidden-from** package is in `touched_paths`
-   - Determine whether the **forbidden-to** package is in `touched_paths`
-   - If neither is in `touched_paths`: skip this rule entirely (no grep needed)
-   - If forbidden-from IS in `touched_paths`: grep and emit BLOCKING if a match is found
-   - If forbidden-from is NOT in `touched_paths` but forbidden-to IS: grep and emit ADVISORY if a match is found
+   - Determine whether the **forbidden-from** package is in `touched_packages`
+   - Determine whether the **forbidden-to** package is in `touched_packages`
+   - If neither is in `touched_packages`: skip this rule entirely (no grep needed)
+   - If forbidden-from IS in `touched_packages`: grep and emit BLOCKING if a match is found
+   - If forbidden-from is NOT in `touched_packages` but forbidden-to IS: grep and emit ADVISORY if a match is found
 
    Use Grep to search source files for imports of forbidden-to packages **by package name** (not layer name — imports use package directory names, not abstract layer labels):
    ```
@@ -184,17 +235,17 @@ The unconditional rule: **BLOCKING requires the importing package (forbidden-fro
    path: packages/<forbidden-from-pkg>/src/
    ```
    Example: if `adapter-common` (platform layer) must not import from `pvs-charly` (application layer),
-   and `adapter-common` IS in `touched_paths`:
+   and `adapter-common` IS in `touched_packages`:
    ```
    pattern: import.*from.*['"].*pvs-charly
    path: packages/adapter-common/src/
    ```
 4. Emit findings based on classification:
-   - If forbidden-from ∈ touched_paths and a match is found → add BLOCKING finding:
+   - If forbidden-from ∈ touched_packages and a match is found → add BLOCKING finding:
      ```json
      { "rule": "vision-boundary:<rule>", "concern": "Package X imports from Y (forbidden by vision boundary)", "severity": "BLOCKING", "source": "file:line" }
      ```
-   - If forbidden-from ∉ touched_paths but forbidden-to ∈ touched_paths and a match is found → add ADVISORY finding:
+   - If forbidden-from ∉ touched_packages but forbidden-to ∈ touched_packages and a match is found → add ADVISORY finding:
      ```json
      { "rule": "vision-boundary:<rule>", "concern": "Pre-existing violation: Package X (non-touched) imports from Y (touched) — forbidden by vision boundary. Not owned by this bead.", "severity": "ADVISORY", "source": "file:line" }
      ```
@@ -322,7 +373,7 @@ Produce both JSON and Markdown outputs.
 ```
 
 - `status` = `VIOLATION` if ANY finding has `severity: "BLOCKING"`; otherwise `CONFORM`
-- `matrix` covers ONLY the packages in `touched_paths` (or all packages if `touched_paths` is empty)
+- `matrix` covers ONLY the packages in `touched_packages` (the canonical set built in Step 3; equals all discovered packages when `touched_paths` is empty)
 - `matrix` includes ALL discovered contracts (from `docs/adr/`) as top-level keys, even if the package has `n/a` for that contract
 - Use `n/a` for contract × package pairs where the contract's `applies_to` does not include that package
 - `touched_packages` is the resolved list of package names (directory names) that were actually scanned

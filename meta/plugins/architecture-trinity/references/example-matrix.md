@@ -15,6 +15,15 @@ and a test fixture for verifying the scout's output format.
 }
 ```
 
+> **Note on `touched_paths` normalization (Step 3):** The input above uses the
+> package-path form (`"packages/<pkg>"`). Step 3 of the scout normalizes this to
+> the canonical package-name set `{"pvs-charly", "pvs-x-isynet"}`, which appears
+> in the output as `touched_packages`. Step 5's vision-boundary intersection uses
+> this canonical set — so the ADVISORY finding below fires because
+> `pvs-charly` (forbidden-to side) IS in `touched_packages`, even though the
+> raw input string `"packages/pvs-charly"` would have failed a literal
+> membership test.
+
 ## JSON Output
 
 ```json
