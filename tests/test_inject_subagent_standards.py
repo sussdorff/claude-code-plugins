@@ -421,3 +421,77 @@ class TestPerformance:
         p95_idx = max(0, int(len(durations_ms) * 0.95) - 1)
         p95 = durations_ms[p95_idx]
         assert p95 < 100, f"p95 latency {p95:.1f}ms exceeds 100ms threshold"
+
+
+# ---------------------------------------------------------------------------
+# Structural: agent-standards.yml covers every agents/ directory namespace
+# ---------------------------------------------------------------------------
+
+class TestAgentStandardsCoverage:
+    """Verify ~/.claude/agent-standards.yml covers every discovered plugin namespace."""
+
+    PLUGIN_CACHE_DIR = Path.home() / ".claude" / "plugins" / "cache" / "sussdorff-plugins"
+    AGENT_STANDARDS_PATH = Path.home() / ".claude" / "agent-standards.yml"
+
+    def _discover_namespaces(self) -> set[str]:
+        """Discover plugin namespaces from the sussdorff-plugins cache directory.
+
+        The structure is: sussdorff-plugins/<namespace>/<version>/agents/...
+        Only includes namespaces where at least one version has a top-level agents/ directory
+        (i.e. <namespace>/<version>/agents/, NOT <namespace>/<version>/skills/*/agents/).
+        Skill-only plugins (e.g. business, content) are excluded.
+        """
+        namespaces: set[str] = set()
+        if not self.PLUGIN_CACHE_DIR.exists():
+            return namespaces
+        for namespace_dir in self.PLUGIN_CACHE_DIR.iterdir():
+            if namespace_dir.is_dir():
+                # Only include if at least one version has a top-level agents/ directory
+                has_agents = any(
+                    (version_dir / "agents").is_dir()
+                    for version_dir in namespace_dir.iterdir()
+                    if version_dir.is_dir()
+                )
+                if has_agents:
+                    namespaces.add(namespace_dir.name)
+        return namespaces
+
+    def test_agent_standards_file_exists(self) -> None:
+        if not self.AGENT_STANDARDS_PATH.exists():
+            pytest.skip(f"agent-standards.yml not found at {self.AGENT_STANDARDS_PATH} — skipping on this environment")
+
+    def test_plugin_cache_dir_exists(self) -> None:
+        if not self.PLUGIN_CACHE_DIR.exists():
+            pytest.skip(f"Plugin cache directory not found at {self.PLUGIN_CACHE_DIR} — skipping on this environment")
+
+    def test_every_namespace_is_covered(self) -> None:
+        """Every discovered namespace must have a direct mapping or a 'namespace/*' wildcard."""
+        if not self.PLUGIN_CACHE_DIR.exists():
+            pytest.skip(f"Plugin cache dir not found at {self.PLUGIN_CACHE_DIR} — skipping on this environment")
+        if not self.AGENT_STANDARDS_PATH.exists():
+            pytest.skip(f"agent-standards.yml not found at {self.AGENT_STANDARDS_PATH} — skipping on this environment")
+        # Read the file as text and extract mapping keys without depending on pyyaml.
+        # Mapping keys appear as quoted YAML keys at the start of lines under `mappings:`.
+        content = self.AGENT_STANDARDS_PATH.read_text()
+
+        # Extract all quoted keys from the mappings section (lines like: '  "key":')
+        import re
+
+        mapping_patterns: set[str] = set(re.findall(r'^\s+"([^"]+)"\s*:', content, re.MULTILINE))
+
+        namespaces = self._discover_namespaces()
+        assert namespaces, "No namespaces discovered — check the plugin cache directory"
+
+        uncovered: list[str] = []
+        for ns in sorted(namespaces):
+            wildcard = f"{ns}/*"
+            # A namespace is covered if there is a wildcard pattern or any direct entry for that namespace
+            has_wildcard = wildcard in mapping_patterns
+            has_direct = any(p == ns or p.startswith(f"{ns}/") or p.startswith(f"{ns}:") for p in mapping_patterns)
+            if not has_wildcard and not has_direct:
+                uncovered.append(ns)
+
+        assert not uncovered, (
+            f"Namespaces not covered in agent-standards.yml mappings: {uncovered}. "
+            f"Add 'namespace/*' wildcard entries for each."
+        )

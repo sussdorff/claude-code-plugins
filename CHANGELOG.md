@@ -2,6 +2,8 @@
 
 ### Bug Fixes
 
+- *(CCP-1m6)* **agent-standards.yml coverage gaps closed** — added `infra/*`, `meta/*`, `business/*`, and `content/*` pattern mappings so agents in those namespaces receive standards injection; added `TestAgentStandardsCoverage` structural test that discovers all agent-bearing plugin namespaces and asserts each has a mapping entry, preventing future drift. `orchestrator_handled` correctly excludes `beads-workflow/*` and `core/*` since `verification-agent` and `session-close` are not spawned under the orchestrator preamble.
+
 - *(CCP-imb)* **rollup_run null-safety + orphan agent_calls logging** — `metrics.rollup_run` now raises `ValueError` on null/empty `run_id` instead of silently no-oping (unattributed work is no longer silently dropped, per AK), and emits a warning log listing orphan `agent_calls` rows with `run_id IS NULL`. Schema unchanged (`run_id` remains nullable on ingest). New regression test `test_rollup_null_run_id` in `beads-workflow/scripts/tests/test_metrics_run_api.py`; 4/4 tests green. **Behavioural change:** callers relying on the previous silent-drop for `rollup_run(None)` must now catch `ValueError`.
 
 ## [2026.04.72] - 2026-04-21
