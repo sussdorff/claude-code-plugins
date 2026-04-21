@@ -25,7 +25,7 @@ if [ -d "$MAIN_ROOT/.claude" ]; then
   rsync -a --delete-after "$MAIN_ROOT/.claude/" "$WORKTREE_PATH/.claude/"
 fi
 
-# Start bd dolt server if .beads/ exists and bd is available
+# Start bd dolt server if .beads/ exists and bd is available (auto-discovers db from cwd)
 if [ -d "$WORKTREE_PATH/.beads" ] && command -v bd &>/dev/null; then
-  bd dolt start --dir "$WORKTREE_PATH" &>/dev/null || true
+  (cd "$WORKTREE_PATH" && bd dolt start &>/dev/null) || true
 fi
