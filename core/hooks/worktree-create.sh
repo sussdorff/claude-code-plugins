@@ -1,12 +1,26 @@
 #!/usr/bin/env bash
 # WorktreeCreate hook: sync config files from main repo into the new worktree.
-# Receives JSON via stdin with worktreePath.
+# Receives JSON via stdin: {cwd, name, ...} or {worktreePath, ...}
 set -euo pipefail
 
-WORKTREE_PATH=$(python3 -c "import sys,json; print(json.load(sys.stdin).get('worktreePath',''))")
-if [ -z "$WORKTREE_PATH" ]; then
-  exit 0
-fi
+STDIN=$(cat)
+
+# Derive worktree path: prefer explicit worktreePath, fall back to cwd/.claude/worktrees/name
+WORKTREE_PATH=$(echo "$STDIN" | python3 -c "
+import sys, json
+d = json.load(sys.stdin)
+p = d.get('worktreePath') or d.get('worktree', {}).get('path') or ''
+if not p:
+    cwd = d.get('cwd', '')
+    name = d.get('name', '')
+    if cwd and name:
+        p = f'{cwd}/.claude/worktrees/{name}'
+print(p)
+" 2>/dev/null || echo "")
+
+# Guard: path must be a non-empty existing directory
+[ -z "$WORKTREE_PATH" ] && exit 0
+[ -d "$WORKTREE_PATH" ] || exit 0
 
 # Resolve main repo root (first entry in worktree list)
 MAIN_ROOT=$(git -C "$WORKTREE_PATH" worktree list --porcelain | head -1 | awk '{print $2}')
