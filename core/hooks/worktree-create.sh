@@ -34,9 +34,9 @@ fi
 # Copy CLAUDE.local.md if present
 [ -f "$MAIN_ROOT/CLAUDE.local.md" ] && cp "$MAIN_ROOT/CLAUDE.local.md" "$WORKTREE_PATH/CLAUDE.local.md"
 
-# Sync .claude/ directory if present
+# Sync .claude/ directory if present (exclude worktrees/ to avoid recursive copies)
 if [ -d "$MAIN_ROOT/.claude" ]; then
-  rsync -a --delete-after "$MAIN_ROOT/.claude/" "$WORKTREE_PATH/.claude/"
+  rsync -a --delete-after --exclude='worktrees/' "$MAIN_ROOT/.claude/" "$WORKTREE_PATH/.claude/"
 fi
 
 # Start bd dolt server if .beads/ exists and bd is available (auto-discovers db from cwd)
