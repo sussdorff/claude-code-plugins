@@ -18,6 +18,12 @@ Portable cores MUST NOT include:
 - Slash-command invocation syntax such as `/spec-developer`
 - Harness-specific agent names such as `bead-orchestrator` or `session-close`
 
+**Note — multi-harness conventions files**: When a project ships both `CLAUDE.md` and `AGENTS.md`
+(one per harness), the correct portable pattern is to **load all found conventions files and
+concatenate them with a source header per file** (e.g. `# From CLAUDE.md` / `# From AGENTS.md`).
+Do NOT pick only one file — silently dropping the other causes the skill to miss content that is
+relevant for the running harness. If only one file exists, load that file alone (no regression).
+
 ## Rule 2: Harness adapter (`SKILL.<harness>-adapter.md`)
 
 The harness adapter contains the mechanics that only apply to one runtime:

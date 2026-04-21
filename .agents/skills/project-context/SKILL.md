@@ -71,9 +71,21 @@ Pass arguments directly when invoking this skill. Supported flags: `--force`, `-
 
 Collect all available context using your harness's file-read and glob primitives (see your harness adapter for specific tool names). Avoid raw shell text-grep for source discovery; use the provided glob/read primitives.
 
-**1a. Project conventions file** (primary source for principles and invariants):
-Load `./CLAUDE.md` or the equivalent project conventions file for your harness. If not found: note "conventions file not present — deriving principles from codebase analysis only."
-Follow symlinks: the conventions file may be a symlink. Load the resolved file content.
+**1a. Project conventions files** (primary source for principles and invariants):
+Load ALL conventions files that exist in the project root. Check for both `./CLAUDE.md` and `./AGENTS.md` (and any harness-equivalent; see your harness adapter). For each file found, load its content and prefix it with a source header so downstream analysis knows its provenance:
+
+```
+# From CLAUDE.md
+<content of CLAUDE.md>
+
+# From AGENTS.md
+<content of AGENTS.md>
+```
+
+If multiple files exist, concatenate them in the order: `CLAUDE.md` first, then `AGENTS.md`.
+If only one file exists, load that file alone — behavior is unchanged.
+If neither file exists: note "conventions file not present — deriving principles from codebase analysis only."
+Follow symlinks: conventions files may be symlinks. Load the resolved file content.
 
 **1b. Architecture documents** (secondary source):
 Glob `docs/architecture/**/*.md`, `docs/arch/*.md`, `docs/design/*.md`, `ADR-*.md`, `architecture.md`.
@@ -100,7 +112,7 @@ Derive each section from gathered sources:
 
 **Tech Stack** — from package manifests + CI.
 
-**Architecture Principles** — from CLAUDE.md + arch docs + README. Extract explicit architectural
+**Architecture Principles** — from project conventions files (CLAUDE.md + AGENTS.md, whichever are present) + arch docs + README. Extract explicit architectural
 decisions and rationale. If none found: derive from structural patterns.
 Format as numbered list: **Name**: Explanation.
 
@@ -108,10 +120,10 @@ Format as numbered list: **Name**: Explanation.
 purpose and 1-2 key files. Skip: `.git/`, `node_modules/`, `__pycache__/`, `dist/`, `build/`.
 For monorepos: list sub-packages, not individual files.
 
-**Established Patterns** — from CLAUDE.md + codebase reading. Minimum 3 patterns, maximum 8.
+**Established Patterns** — from project conventions files (CLAUDE.md + AGENTS.md, whichever are present) + codebase reading. Minimum 3 patterns, maximum 8.
 Each pattern: name, where it appears, what it is, why it exists.
 
-**Critical Invariants** — from CLAUDE.md + arch docs. Extract explicit must/never/always rules.
+**Critical Invariants** — from project conventions files (CLAUDE.md + AGENTS.md, whichever are present) + arch docs. Extract explicit must/never/always rules.
 Minimum 3 invariants.
 
 ### Phase 3: Generate Output
@@ -168,6 +180,7 @@ After writing (or dry-running):
 
 **Sources used:**
 - CLAUDE.md: {found/not found}
+- AGENTS.md: {found/not found}
 - Architecture docs: {N files}
 - Package manifests: {list}
 - Directory scan: {N top-level dirs}
@@ -192,6 +205,8 @@ Next: Review the generated file, edit as needed, then commit:
 | Situation | Behavior |
 |-----------|----------|
 | No `CLAUDE.md` | Note in output header; derive from codebase |
+| `AGENTS.md` present alongside `CLAUDE.md` | Concat both with source headers (`# From CLAUDE.md` / `# From AGENTS.md`); use combined content as conventions input |
+| Only `AGENTS.md` present (no `CLAUDE.md`) | Load `AGENTS.md` alone; note in output that only `AGENTS.md` was found |
 | No architecture docs | Module Map from directory structure only |
 | `docs/project-context.md` exists, no `--force` | Ask for confirmation before overwriting |
 | Large monorepo (N > 20 top-level dirs) | Limit Module Map to 15 entries + count note |
