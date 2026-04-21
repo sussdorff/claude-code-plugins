@@ -28,7 +28,7 @@ from pathlib import Path
 import pytest
 
 # Path to the hook script
-HOOK_SCRIPT = Path("/Users/malte/.claude/hooks/inject-subagent-standards.py")
+HOOK_SCRIPT = Path(os.environ.get("HOOK_SCRIPT_PATH", Path.home() / ".claude" / "hooks" / "inject-subagent-standards.py"))
 
 # Minimal valid agent-standards.yml content for tests
 SAMPLE_AGENT_STANDARDS = """
@@ -44,6 +44,7 @@ mappings:
   "medical/*":
     - "healthcare/control-areas.md"
     - "workflow/english-only.md"
+  "core/researcher": []
   "core/*":
     - "workflow/english-only.md"
   "beads-workflow/*":
@@ -179,11 +180,12 @@ class TestExploreNoEnvFlags:
 
 
 # ---------------------------------------------------------------------------
-# AC 3: core:researcher matches core/* → injects english-only.md
-# (Note: bare "researcher" maps to empty list, but "core:researcher" matches "core/*")
+# AC 3: core:researcher → no injection (read-only agent, explicit empty-list exclusion)
 # ---------------------------------------------------------------------------
 
 class TestCoreResearcherEmptyList:
+    """Variant 3: core:researcher → no injection (read-only agent)."""
+
     def test_returns_exit_0(self, standards_file: Path) -> None:
         code, stdout, stderr = run_hook(
             make_payload("core:researcher"),
@@ -191,15 +193,10 @@ class TestCoreResearcherEmptyList:
         )
         assert code == 0
 
-    def test_injects_english_only(self, standards_file: Path) -> None:
-        """core:researcher matches core/* pattern → injects english-only.md."""
-        code, stdout, stderr = run_hook(
-            make_payload("core:researcher"),
-            standards_file=standards_file,
-        )
-        output = json.loads(stdout)
-        prompt = output["hookSpecificOutput"]["additionalSystemPrompt"]
-        assert "workflow/english-only.md" in prompt
+    def test_no_injection_for_core_researcher(self, standards_file: Path) -> None:
+        """core:researcher has explicit empty-list exclusion before core/* → no injection."""
+        rc, stdout, stderr = run_hook(make_payload("core:researcher"), standards_file=standards_file)
+        assert stdout.strip() == "" or json.loads(stdout).get("hookSpecificOutput", {}).get("additionalSystemPrompt", "") == ""
 
 
 # ---------------------------------------------------------------------------
