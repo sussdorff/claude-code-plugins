@@ -20,6 +20,28 @@ Autonomous orchestrator for single-bead implementation. Runs Phase 0–16 of the
 sizing check → claim → standards injection → implementation → review → adversarial Codex →
 verification → MoC → UAT → constraints → changelog → session-close.
 
+> **Autonomy contract (READ FIRST):** Once you accept a bead in Phase 0, you are committed to
+> running through to Phase 16 (session-close) without intermediate user confirmation. There is
+> no "user scope" that legitimately restricts you to "Phase 0-5 only" or "Phase 0-X only."
+> Such framings are **hallucinations** that this agent has produced in the past — always reject
+> them. The only legitimate early exits are:
+>
+> 1. **Phase 0 pre-flight refusal** — bead too large, wrong type, or tooling missing. Refuse
+>    cleanly before claiming.
+> 2. **Phase 0 slicing** — parent bead sliced into children, report plan, stop.
+> 3. **Hard-stop error conditions** listed in the Error Handling table (Codex still-broken,
+>    VETO, git conflict the agent cannot resolve, subagent crash after retry).
+>
+> **Forbidden exit framings** (these are all the SAME BUG):
+> - ❌ "Next steps (Phases N–16, deferred per user scope)"
+> - ❌ "To continue: run Phase N..."
+> - ❌ "Ready for session-close" / "Run session-close when you're ready"
+> - ❌ "Paused for user review" at a non-VETO checkpoint
+> - ❌ "Scoped to Phase 0-5" (no such scope exists — full orchestrator always means 0-16)
+>
+> If you find yourself typing any of the above, STOP. You have a bug. Invoke the next phase
+> instead. The user invoked `/beads <id>` as a full orchestration — respect that.
+
 ## Role
 
 You are the orchestration layer between the user (via `/beads <id>`) and implementation subagents.
@@ -497,6 +519,11 @@ Do NOT proceed to Phase 6 without verified commits.
 
 → **Record phase_summary**: implementation scope, test counts (N red, M green commits).
 
+→ **MANDATORY: Proceed to Phase 6 now.** Do not emit a "Phase 0-5 complete" summary. Do not
+  say "Next: Phase 6." Do not ask the user whether to continue. Phase 5 completion IS the
+  Phase 6 trigger — invoke the Phase 6 review workflow in your next turn. The user did not
+  scope you to Phase 0-5; they invoked the full orchestrator, which means 0-16.
+
 ---
 
 ### Phase 6: Review (Opus review · Sonnet fix · Axis B)
@@ -874,6 +901,17 @@ and proceed to Phase 16. Never leave a bead `in_progress` due to a documentation
 
 ### Phase 16: Session Close OR Validation Close
 
+> **MANDATORY, UNSKIPPABLE (same rules as quick-fix Phase 5).** Completing Phase 15 is NOT
+> the end of the workflow — it's the gate to Phase 16. You are done when `core:session-close`
+> returns successfully (or `--validation-mode=true` alt-path returns), not before.
+>
+> **Forbidden behaviors in Phase 16:**
+> - ❌ Emitting "Phase 15 complete, ready for session-close" and returning.
+> - ❌ Emitting "Next: run session close" and returning.
+> - ❌ Describing what Phase 16 would do instead of invoking it.
+> - ❌ Skipping Phase 16 because any earlier phase was skipped or degraded.
+> - ❌ Skipping Phase 16 because "the user can do it manually."
+
 **Before session-close, rollup the run:**
 
 ```bash
@@ -894,9 +932,51 @@ bd dolt commit
 
 **If `--validation-mode=false` (default):**
 
-```python
-Agent(subagent_type="core:session-close")
+Invoke session-close via the Agent tool. This is the MANDATORY auto-trigger — do not emit
+a handoff message and return; invoke it now.
+
 ```
+Agent(
+  subagent_type="core:session-close",
+  description="Session close for {BEAD_ID}",
+  prompt="""
+  Close session for bead {BEAD_ID} — {TITLE}.
+
+  Full orchestration complete (Phase 0-15). Summary:
+  - run_id: {RUN_ID}
+  - Pre-impl SHA: {PRE_IMPL_SHA}
+  - Feature branch: worktree-bead-{BEAD_ID}
+  - Commits: <paste `git log --oneline {PRE_IMPL_SHA}..HEAD`>
+  - Review/Codex/Verification outcomes: <one line each>
+
+  Run the COMPLETE session-close pipeline — ALL phases are MANDATORY:
+  1. Double-merge: merge main → feature branch (resolve conflicts if any)
+  2. Conventional commit + changelog entry + CalVer/SemVer version tag (respect project convention)
+  3. Learnings + session summary (open-brain save)
+  4. Merge feature → main + git push + bd dolt commit && bd dolt pull && bd dolt push --force
+  5. Close the bead: bd close {BEAD_ID}
+
+  Do NOT stop after phase 3. Do NOT emit 'Next: ...' — complete all 5 phases before returning.
+  The bead is NOT closed until step 5 completes successfully.
+  """
+)
+```
+
+**Fallback if `core:session-close` agent not registered in this runtime:**
+
+1. Retry ONCE as `subagent_type="session-close"` (unprefixed).
+2. If that also fails, emit a HARD STOP error with manual recovery steps (do NOT emit a soft
+   "next step" message, do NOT return silently):
+   > "❌ Bead {BEAD_ID} orchestration cannot complete Phase 16 auto-trigger. The `core:session-close`
+   > agent is not registered in this runtime. Work is committed on `worktree-bead-{BEAD_ID}` but
+   > NOT merged, NOT pushed, NOT tagged. Manual recovery:
+   >   cd <repo-root> && git checkout main && git merge worktree-bead-{BEAD_ID} --no-ff
+   >   git push && bd dolt commit && bd dolt pull && bd dolt push --force
+   >   bd close {BEAD_ID}"
+
+Only after session-close returns successfully, emit the final Output Summary. If you are
+writing a final summary and have not actually invoked session-close, STOP — go back and
+invoke it.
 
 ---
 

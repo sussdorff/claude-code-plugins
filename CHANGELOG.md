@@ -1,5 +1,21 @@
 ## [unreleased]
 
+### Bug Fixes
+
+- *(CCP-imb)* **rollup_run null-safety + orphan agent_calls logging** — `metrics.rollup_run` now raises `ValueError` on null/empty `run_id` instead of silently no-oping (unattributed work is no longer silently dropped, per AK), and emits a warning log listing orphan `agent_calls` rows with `run_id IS NULL`. Schema unchanged (`run_id` remains nullable on ingest). New regression test `test_rollup_null_run_id` in `beads-workflow/scripts/tests/test_metrics_run_api.py`; 4/4 tests green. **Behavioural change:** callers relying on the previous silent-drop for `rollup_run(None)` must now catch `ValueError`.
+
+## [2026.04.70] - 2026-04-21
+
+### Bug Fixes
+
+- *(CCP-2hd.1)* **architecture-scout: normalize `touched_paths` before vision boundary check** — fix Codex iter 3 regression where the iter-2 fix compared bare package names against raw `touched_paths` entries, silently skipping every boundary rule when callers passed package paths (`packages/adapter-common`) or file paths (`packages/adapter-common/src/x.ts`), causing gate mode to return false CONFORM. Step 3 now resolves every input form (empty list, bare name, package path, trailing-slash path, file path, `./` prefix, Windows separators) to a canonical `touched_packages` set; empty input expands to all discovered packages; Step 5 consumes the canonical set for all forbidden-from/forbidden-to intersection checks
+
+## [2026.04.69] - 2026-04-21
+
+### Bug Fixes
+
+- *(CCP-dzp)* **codex exec timeout propagation** — `beads-workflow/scripts/codex-exec.sh` now wraps `codex exec` with `timeout` (or `gtimeout`) so a stalled codex no longer masquerades as a clean "no findings" review (false-green); timeout duration configurable via `CODEX_EXEC_TIMEOUT` env var (default 300s); exit 124 flows through `PIPESTATUS[0]` → `CODEX_EXIT` → final script exit. Graceful degradation with a stderr warning when neither timeout utility is installed. Wave-orchestrator's Phase 1.25 subagent prompt (`beads-workflow/skills/wave-orchestrator/skill.md`) now documents `timeout 300 codex exec …` and names exit 124 explicitly as a Sonnet-fallback trigger. Regression test `test_timeout_exits_nonzero` added to `beads-workflow/scripts/tests/test_codex_exec_sh.py`.
+
 ### Features
 
 - *(CCP-50y)* **Codex Skills Portability** — convert 10 additional skills to agentskills-compatible format with portable core and SKILL.claude-adapter.md harness adapters; add portability compliance tracking in docs/codex-skills-candidates.md with selection criteria and non-portable deferrals with rationale

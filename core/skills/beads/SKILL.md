@@ -2,8 +2,9 @@
 name: beads
 model: sonnet
 description: >-
-  Dispatch bead implementation to the bead-orchestrator (full, Phase 0–5) or quick-fix agent
-  (lightweight, Phase 0–3). Use when implementing a bead by ID, or to list ready beads.
+  Dispatch bead implementation to the bead-orchestrator (full, Phase 0–16 end-to-end
+  including session-close) or quick-fix agent (lightweight, Phase 0–5 end-to-end including
+  session-close). Use when implementing a bead by ID, or to list ready beads.
   Triggers on implementiere bead, arbeite an bead, slice bead, bead zu gross.
 ---
 
@@ -51,7 +52,9 @@ In that case, spawn the quick-fix agent as a follow-up.
 **Quick-fix path:**
 ```
 Agent(subagent_type="beads-workflow:quick-fix", prompt="
-  Bead ID: {BEAD_ID}. Execute quick-fix workflow (Phase 0–3).
+  Bead ID: {BEAD_ID}. Execute quick-fix workflow end-to-end: Phase 0 through Phase 5
+  (session-close). Do not stop after any intermediate phase. Session-close auto-triggers
+  in Phase 5.
 ")
 ```
 
@@ -60,7 +63,9 @@ Agent(subagent_type="beads-workflow:quick-fix", prompt="
 Agent(subagent_type="beads-workflow:bead-orchestrator", prompt="
   Bead ID: {BEAD_ID}
   Flags: {FLAGS}
-  Execute the full orchestration workflow (Phase 0–5) for this bead.
+  Execute the full orchestration workflow end-to-end: Phase 0 through Phase 16
+  (session-close). Do not stop after any intermediate phase. Session-close auto-triggers
+  in Phase 16.
 ")
 ```
 
