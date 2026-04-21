@@ -76,15 +76,34 @@ TMPFILE="$(mktemp)"
 trap 'rm -f "$TMPFILE"' EXIT
 
 # ---------------------------------------------------------------------------
+# Detect timeout utility (CCP-dzp): prefer GNU `timeout`, fall back to
+# `gtimeout` (Homebrew coreutils on macOS). If neither is available, run
+# codex unwrapped — degraded-but-working beats hard-failing on minimal systems.
+# A stalled codex without a timeout is a regression, but losing the wrapper
+# entirely would be worse.
+# ---------------------------------------------------------------------------
+CODEX_EXEC_TIMEOUT="${CODEX_EXEC_TIMEOUT:-300}"
+TIMEOUT_CMD=()
+if command -v timeout >/dev/null 2>&1; then
+    TIMEOUT_CMD=(timeout "$CODEX_EXEC_TIMEOUT")
+elif command -v gtimeout >/dev/null 2>&1; then
+    TIMEOUT_CMD=(gtimeout "$CODEX_EXEC_TIMEOUT")
+else
+    echo "codex-exec.sh: WARNING: neither 'timeout' nor 'gtimeout' found; running codex without a timeout" >&2
+fi
+
+# ---------------------------------------------------------------------------
 # Run codex, tee output to temp file (stdout unchanged)
 # ---------------------------------------------------------------------------
 START_MS=$(python3 -c "import time; print(int(time.time() * 1000))")
 
 CODEX_EXIT=0
-codex exec --json "$@" | tee "$TMPFILE"
-# Capture codex's exit code from PIPESTATUS (index 0 = codex, index 1 = tee).
-# pipefail is set, so the pipeline exit reflects the first failing command,
-# but PIPESTATUS gives per-command codes regardless.
+"${TIMEOUT_CMD[@]}" codex exec --json "$@" | tee "$TMPFILE"
+# Capture codex's (or timeout's) exit code from PIPESTATUS (index 0 = left side
+# of pipe, index 1 = tee). When TIMEOUT_CMD is set and the timeout fires, the
+# `timeout` utility exits 124; that 124 flows through PIPESTATUS[0] into
+# CODEX_EXIT and out via the final `exit "$CODEX_EXIT"` — the acceptance
+# criterion for CCP-dzp.
 CODEX_EXIT="${PIPESTATUS[0]}"
 
 END_MS=$(python3 -c "import time; print(int(time.time() * 1000))")
