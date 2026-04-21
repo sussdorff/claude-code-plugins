@@ -4,6 +4,12 @@
 
 - *(CCP-imb)* **rollup_run null-safety + orphan agent_calls logging** — `metrics.rollup_run` now raises `ValueError` on null/empty `run_id` instead of silently no-oping (unattributed work is no longer silently dropped, per AK), and emits a warning log listing orphan `agent_calls` rows with `run_id IS NULL`. Schema unchanged (`run_id` remains nullable on ingest). New regression test `test_rollup_null_run_id` in `beads-workflow/scripts/tests/test_metrics_run_api.py`; 4/4 tests green. **Behavioural change:** callers relying on the previous silent-drop for `rollup_run(None)` must now catch `ValueError`.
 
+## [2026.04.72] - 2026-04-21
+
+### Bug Fixes
+
+- *(CCP-9xy)* **harden bead agents against mid-flow stops and session-close handoff failures** — root cause of CCP-8ix stopping at Phase 5 was `cld`'s launcher prompt literally saying "Execute Phase 0-5" for the full orchestrator; agent obeyed, did not hallucinate. Fix: `cld` now passes `--setting-sources=user,project,local` explicitly and uses end-to-end phase phrasing. `bead-orchestrator.md` gains an autonomy contract forbidding fake "user scope" early exits and a hardened Phase 16 session-close with fallback. `quick-fix.md` renumbered to explicit Phase 0-5 with Phase 0a pre-flight probe for `core:session-close` availability and MANDATORY/UNSKIPPABLE Phase 5 with retry + hard-stop. `core/skills/beads/SKILL.md` dispatch prompts use "end-to-end Phase 0 through N" phrasing to eliminate scope-limit ambiguity.
+
 ## [2026.04.70] - 2026-04-21
 
 ### Bug Fixes
