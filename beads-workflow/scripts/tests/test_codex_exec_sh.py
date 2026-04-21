@@ -36,13 +36,19 @@ _METRICS_DIR = str(_REPO_ROOT / "beads-workflow" / "lib" / "orchestrator")
 # Helper: create a mock 'codex' binary that emits a known turn.completed event
 # ---------------------------------------------------------------------------
 
-def _make_mock_codex(bin_dir: Path, *, exit_code: int = 0) -> Path:
-    """Write a mock codex binary to bin_dir and return bin_dir."""
+def _make_mock_codex(bin_dir: Path, *, exit_code: int = 0, sleep_secs: float = 0) -> Path:
+    """Write a mock codex binary to bin_dir and return bin_dir.
+
+    If sleep_secs > 0, the mock sleeps that many seconds BEFORE emitting any
+    output (used to simulate a hang for the timeout test).
+    """
     bin_dir.mkdir(parents=True, exist_ok=True)
     mock = bin_dir / "codex"
+    sleep_line = f"sleep {sleep_secs}" if sleep_secs > 0 else ""
     mock.write_text(
         f"""#!/usr/bin/env bash
 # Mock codex — ignores all arguments, emits known JSON events
+{sleep_line}
 echo '{{"type":"thread.started","thread_id":"mock-thread"}}'
 echo '{{"type":"turn.started"}}'
 echo '{{"type":"item.completed","item":{{"id":"item_0","type":"agent_message","text":"mock done"}}}}'
@@ -263,6 +269,54 @@ def test_python_metrics_failure_exits_nonzero(tmp_path: Path) -> None:
     )
     assert "ERROR" in result.stderr, (
         f"Expected 'ERROR' in stderr, got: {result.stderr!r}"
+    )
+
+
+# ---------------------------------------------------------------------------
+# Regression test (CCP-dzp): timeout must propagate as non-zero exit
+# ---------------------------------------------------------------------------
+
+
+def test_timeout_exits_nonzero(tmp_path: Path) -> None:
+    """
+    When codex hangs longer than CODEX_EXEC_TIMEOUT, codex-exec.sh must exit
+    non-zero (specifically 124 from the `timeout` utility). Without this, a
+    stalled codex could be reported as a clean exit, masking a false-green.
+
+    Skipped if neither `timeout` nor `gtimeout` is available on PATH.
+    """
+    import shutil
+
+    if not (shutil.which("timeout") or shutil.which("gtimeout")):
+        pytest.skip("Neither 'timeout' nor 'gtimeout' is available on this system")
+
+    db = tmp_path / "metrics.db"
+    run_id = start_run("TEST-CCP-dzp.timeout", mode="quick-fix", db_path=db)
+
+    # Mock sleeps 5s; timeout fires at 1s → must trigger.
+    mock_dir = _make_mock_codex(tmp_path / "mock_bin", sleep_secs=5)
+    codex_config = _make_mock_config(tmp_path / "codex_cfg", model="gpt-5.4")
+    env = _env_for_script(
+        run_id=run_id, db=db, mock_bin_dir=mock_dir, codex_config=codex_config
+    )
+    env["CODEX_EXEC_TIMEOUT"] = "1"
+
+    result = subprocess.run(
+        ["bash", str(_CODEX_EXEC)],
+        env=env,
+        capture_output=True,
+        text=True,
+        timeout=30,  # test safety net — must not hang
+    )
+    assert result.returncode != 0, (
+        f"Expected non-zero exit on timeout, got {result.returncode}\n"
+        f"stdout={result.stdout!r}\nstderr={result.stderr!r}"
+    )
+    # `timeout` utility returns 124 when SIGTERM fires on timeout; that's the
+    # contract we want flowing through the wrapper.
+    assert result.returncode == 124, (
+        f"Expected exit code 124 (timeout), got {result.returncode}\n"
+        f"stdout={result.stdout!r}\nstderr={result.stderr!r}"
     )
 
 

@@ -1,6 +1,17 @@
 {
   "description": "Core safety and behavioral hooks: rules.d loader at session start, read-before-edit guard.",
   "hooks": {
+    "WorktreeCreate": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash \"${CLAUDE_PLUGIN_ROOT}/hooks/worktree-create.sh\"",
+            "timeout": 30
+          }
+        ]
+      }
+    ],
     "SessionStart": [
       {
         "hooks": [
