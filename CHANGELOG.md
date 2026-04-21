@@ -3,6 +3,7 @@
 ### Features
 
 - *(CCP-50y)* **Codex Skills Portability** — convert 10 additional skills to agentskills-compatible format with portable core and SKILL.claude-adapter.md harness adapters; add portability compliance tracking in docs/codex-skills-candidates.md with selection criteria and non-portable deferrals with rationale
+- *(CCP-2n7)* **SubagentStop ad-hoc metrics hook** — new `~/.claude/hooks/log-adhoc-subagent-metrics.py` hook writes one `agent_calls` row per ad-hoc Agent() completion; env-var gate (`CCP_ORCHESTRATOR_RUN_ID`) prevents dual-writer race with orchestrator's `insert_agent_call()`; off-switch via `CCP_NO_SUBAGENT_METRICS=1`; `bead-metrics` skill extended with `--adhoc` breakdown; 12 unit tests, ~20ms hook overhead
 
 ## [2026.04.61] - 2026-04-21
 
