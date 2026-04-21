@@ -6,6 +6,10 @@
 - *(CCP-2vo.10)* Delete `beads-workflow/scripts/codex-watch.sh` — polling wrapper for the deprecated Codex runtime (no remaining callers)
 - *(CCP-2vo.10)* Remove `cld -br` / `--bead-review` flag from `~/.claude/scripts/cld` — review is now inline in the bead-orchestrator and quick-fix single-pane flows
 
+### Features
+
+- *(CCP-rjq)* **Wave Structural Review Gate (Phase 1.25)** — new orchestration phase between Phase 1 and Phase 1.5 that performs cross-bead structural analysis via general-purpose subagent; severity-based triage (HIGH-fundamental/lokal, MEDIUM, LOW) with user halt/confirm/auto-fix logic; Sonnet fallback when codex unavailable; bounded re-review loop with escalation; `--skip-wave-review` and `--dry-run` flags supported
+
 ### Miscellaneous Tasks
 
 - *(CCP-2vo.10)* Scrub stale `cld -br` / `cmux-reviewer` references from `quick-fix.md`, `review-agent.md`, `bead-orchestrator.md`, `wave-orchestrator/skill.md`, `wave-orchestrator/scripts/wave-status.sh`, `wave-orchestrator/scripts/wave-dispatch.sh`, `wave-orchestrator/references/error-recovery.md`
