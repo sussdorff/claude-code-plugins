@@ -83,7 +83,11 @@ HANDLERS_DIR="$HOME/.claude/plugins/cache/sussdorff-plugins/core/agents/session-
 
 ## Phase B: Ship-Close (Steps 1-7, 9, 13-17)
 
-### Step 1: Setup & First Merge
+### Steps 1, 2, 3, 4, 5, 7, 9: Prepare (phase-b-prepare.sh)
+
+Run the prepare handler before Step 6 (conventional commit). This single call replaces
+seven individual step handlers (first merge, plan cleanup, git-state capture, bun audit,
+simplification advisory, changelog, and docs check).
 
 1. **Detect environment:**
    ```bash
@@ -93,60 +97,48 @@ HANDLERS_DIR="$HOME/.claude/plugins/cache/sussdorff-plugins/core/agents/session-
    ```
    Determine if we're in a worktree (`REPO_ROOT != MAIN_REPO`).
 
-2. **First merge from main** (brings in latest main context) via handler:
+2. **Run prepare handler:**
    ```bash
-   bash "$HANDLERS_DIR/merge-from-main.sh" ${DRY_RUN:+--dry-run} --label "first"
+   PREPARE_JSON=$(bash "$HANDLERS_DIR/phase-b-prepare.sh" \
+     ${DRY_RUN:+--dry-run} \
+     ${SKIP_AUDIT:+--skip-audit} \
+     ${SKIP_SIMPLIFY:+--skip-simplify} \
+     2>/dev/null)
+   PREPARE_EXIT=$?
    ```
-   Handler exit 2 = merge conflict — see Error Handling.
+   Parse `PREPARE_JSON` (see `phase-b-prepare.schema.json` for the full schema):
+   ```
+   .first_merge.status      - ok|conflict|skipped|failed
+   .plan_cleanup.deleted[]  - plan files deleted
+   .git_state.staged[]      - files staged for commit
+   .git_state.unstaged[]    - files modified but not staged
+   .git_state.untracked[]   - untracked files
+   .bun_audit.status        - ok|high|critical|skipped
+   .bun_audit.vulns[]       - vulnerability descriptions
+   .simplify.status         - advisory|ok|skipped
+   .changelog.status        - updated|no_change|skipped
+   .docs_check.gaps[]       - advisory documentation gaps
+   ```
 
-3. Print session header using `MERGE_FROM_MAIN_STATUS` from the handler output:
+3. **Exit 2 = merge conflict:** Stop session-close, surface conflict to user.
+
+4. **Print session header:**
    ```
    === SESSION CLOSE PROTOCOL v3 (Agent) ===
    Branch: <branch>
    Repository: <repo_root>
    Worktree: yes/no
-   First merge from main: <status>
+   First merge from main: <.first_merge.status>
    ```
 
-### Step 2: Plan Cleanup
+5. **Review with user:**
+   - Show `.git_state.unstaged[]` and `.git_state.untracked[]` — ask which files to stage
+   - If `.bun_audit.status` is `high` or `critical`: report vulnerabilities, ask whether to proceed
+   - If `.simplify.status` is `advisory`: note for the user (non-blocking)
+   - If `.docs_check.gaps[]` non-empty: report gaps (advisory, non-blocking)
 
-Scan `malte/plans/` for bead-ID-named files (pattern: `^[a-z]+-[a-z0-9]{3,}$`).
-
-For each matching file:
-1. Check bead status via `bd show <name>`
-2. If bead is closed or not found: delete the plan file
-3. If bead is active: keep
-
-In `--dry-run`: print which files would be deleted without deleting.
-Skip silently if no plan files exist.
-
-### Step 3: Git Status Review
-
-```bash
-git status --short
-git diff --stat
-git diff --cached --stat
-```
-
-Show to user. If unstaged changes exist, ask which files to stage.
-
-### Step 4: Dependency Audit
-
-Skip if `--skip-audit`.
-
-```bash
-bun audit --severity high 2>/dev/null || true
-```
-
-If `frontend/` exists: also run `(cd frontend && bun audit --severity high)`.
-If critical/high vulnerabilities found: report and ask user whether to proceed.
-
-### Step 5: Code Simplification
-
-Skip if `--skip-simplify` or if work was managed by bead-orchestrator.
-
-Check for code changes (excluding docs/config files). If code changed, note it for the user
-but do not block — this is advisory.
+6. **Note for Step 6 (conventional commit):** If `.changelog.status == "updated"`,
+   `CHANGELOG.md` is already staged — include it in the Step 6 commit (no separate changelog commit).
 
 ### Step 6: Conventional Commit
 
@@ -155,29 +147,9 @@ Interactive. Build commit message with user:
 2. Optional scope
 3. Short description (imperative, lowercase)
 4. Optional body
-5. Stage files and commit
+5. Stage files and commit (include staged `CHANGELOG.md` if `.changelog.status == "updated"`)
 
 **IMPORTANT:** Do NOT create tags before the commit. Do NOT skip interactive commit message.
-
-### Step 7: Changelog Generation
-
-Run the handler script:
-```bash
-bash "$HANDLERS_DIR/changelog.sh" [--dry-run]
-```
-
-If CHANGELOG.md was updated, stage and create follow-up commit:
-```bash
-git add CHANGELOG.md && git commit -m "chore: update changelog"
-```
-
-### Step 9: Documentation Gap Check
-
-```bash
-bash "$HANDLERS_DIR/docs-check.sh"
-```
-
-Advisory only — report findings, do not block.
 
 ## Phase A: Worker-Debrief (Steps 10-12)
 
@@ -238,161 +210,75 @@ Only runs in a worktree (`REPO_ROOT != MAIN_REPO`). **Non-blocking** — any fai
    ```
 3. Parse `TURN_LOG_STATUS` from output: `uploaded_deleted` / `empty_deleted` / `error_kept ...` / `skipped_dry_run`.
 
-### Step 13: Kill Worktree Dev Processes
+### Steps 13, 14, 15, 15b, 16, 16a, 16c: Ship (phase-b-ship.sh)
 
-Only if in a worktree. Kill portless-wrapped processes for this worktree's namespace:
-
-```bash
-NS="${MIRA_NS:-$(basename "$WORKTREE_PATH")}"
-pkill -f "portless ${NS}-api" 2>/dev/null || true
-pkill -f "portless ${NS} " 2>/dev/null || true
-```
-
-In `--dry-run`: print what would be killed.
-NEVER kill processes from other namespaces.
-Skip silently if not in a worktree.
-
-### Step 14: Second Merge from Main
-
-Catch up with any changes that landed on main while we were doing Steps 2–13:
+Run the ship handler after Step 6 (conventional commit). This single call replaces seven
+individual step handlers (kill procs, second merge, feature merge, version bump, push, pipeline
+watch, and plugin cache sync). Steps 14+15 run in tight sequence to minimize the race window.
 
 ```bash
-bash "$HANDLERS_DIR/merge-from-main.sh" ${DRY_RUN:+--dry-run} --label "second"
-```
-
-Handler exit 2 = merge conflict — see Error Handling. Previous work (commit, changelog, tag) is preserved on the branch. User can resolve and re-run `--ship-only`.
-
-### Step 15: Merge Feature into Main
-
-Only runs in a worktree. Skip if `BRANCH == main`.
-
-```bash
-bash "$HANDLERS_DIR/merge-feature.sh" \
-  --main-repo "$MAIN_REPO" \
+SHIP_JSON=$(bash "$HANDLERS_DIR/phase-b-ship.sh" \
+  ${DRY_RUN:+--dry-run} \
+  ${SKIP_PUSH:+--skip-push} \
+  ${SKIP_PIPELINE:+--skip-pipeline} \
+  --main-repo "${MAIN_REPO:-}" \
   --branch "$BRANCH" \
-  ${DRY_RUN:+--dry-run}
+  --namespace "${MIRA_NS:-$(basename "$REPO_ROOT")}" \
+  2>/dev/null)
+SHIP_EXIT=$?
 ```
 
-Handler exit 2 = merge conflict — see Error Handling. Do NOT force or delete.
+Parse `SHIP_JSON` (see `phase-b-ship.schema.json` for the full schema):
+```
+.kill_procs.status    - ok|skipped
+.second_merge.status  - ok|conflict|skipped|failed
+.merge_feature.status - ok|conflict|skipped|not_attempted
+.version.status       - ok|failed|not_attempted
+.version.tag          - e.g. v2026.04.77
+.push.status          - ok|failed|screen_locked|skipped|not_attempted
+.pipeline.status      - passed|failed|skipped_*|not_attempted
+.pipeline.run_url     - GitHub Actions run URL (on passed/failed)
+.plugin_cache.status  - ok|skipped|not_attempted
+```
 
-Runs immediately after Step 14 to minimize the race window for parallel session-closes.
+**Exit 2 = merge conflict** (step 14 or 15): Stop, surface conflict to user. Previous work
+(commit, changelog, version) is preserved on the branch. User resolves and re-runs `--ship-only`.
 
-### Step 15b: Version Tag
+**Pipeline decision tree:**
 
-Bump version after Steps 14+15 (avoids parallel VERSION conflicts). Strategy auto-detected from `VERSION` file — see `version.sh` header.
+| `.pipeline.status` | Action |
+|--------------------|--------|
+| `passed` | Proceed to Step 16b. |
+| `failed` | Abort. Report `.pipeline.run_url`. Beads stay `in_progress`. |
+| `failed` + `.pipeline.error == no_run_registered` | Abort. Workflow exists but no run registered. |
+| `skipped_*` | Log reason, proceed to Step 16b. |
+
+**Screen locked:** If `.push.status == screen_locked`: stop, inform user.
+
+### Step 16b: Close Beads (phase-b-close-beads.sh)
+
+Run only after `.pipeline.status` is `passed` or `skipped_*`. Skip if `.push.status != ok`.
 
 ```bash
-WORK_DIR="${MAIN_REPO:-$REPO_ROOT}"
-bash "$HANDLERS_DIR/version.sh" [--dry-run]
+CLOSE_JSON=$(bash "$HANDLERS_DIR/phase-b-close-beads.sh" \
+  ${DRY_RUN:+--dry-run} \
+  2>/dev/null)
+CLOSE_EXIT=$?
 ```
 
-If VERSION updated:
-```bash
-git -C "$WORK_DIR" add VERSION sushi-config.yaml 2>/dev/null; true
-git -C "$WORK_DIR" commit -m "chore: bump version to $(cat VERSION)"
-# Create tag AFTER commit (parse TAG_PENDING / TAG_MESSAGE from handler output)
-TAG=$(grep 'TAG_PENDING=' <<< "$VERSION_OUTPUT" | cut -d= -f2)
-git -C "$WORK_DIR" tag -a "$TAG" -m "$(grep 'TAG_MESSAGE=' <<< "$VERSION_OUTPUT" | cut -d= -f2)"
+Parse `CLOSE_JSON` (see `phase-b-close-beads.schema.json`):
+```
+.closed[]              - {id, type, title, close_reason} — used for Step 17
+.missing_reason[]      - bead IDs that need a close reason (exit 3)
+.dolt_sync.status      - ok|failed|skipped
+.metrics_ingest.status - ok|partial|skipped
 ```
 
-### Step 16: Push & Sync
+**Exit 3 = missing close reasons:** For each ID in `.missing_reason[]`, compose a close reason
+and stamp it into the bead: `bd update <id> --append-notes="Close reason: <reason>"`. Then rerun
+`phase-b-close-beads.sh`.
 
-Skip if `--skip-push`.
-
-1. **Screen lock safety check:**
-   ```bash
-   ioreg -c AppleDisplayWakeReason | grep -q IODisplayWrangler && echo "unlocked" || echo "locked"
-   ```
-   If locked: STOP, inform user.
-
-2. **Push** (from main repo if worktree, otherwise from current):
-   ```bash
-   GIT_PUSH_DIR="${MAIN_REPO:-$REPO_ROOT}"
-   git -C "$GIT_PUSH_DIR" push origin main
-   ```
-
-3. **Push tag:**
-   ```bash
-   LATEST_TAG=$(git -C "$GIT_PUSH_DIR" describe --tags --abbrev=0 2>/dev/null || echo "")
-   [ -n "$LATEST_TAG" ] && git -C "$GIT_PUSH_DIR" push origin "$LATEST_TAG"
-   ```
-
-### Step 16a: Pipeline Watch
-
-Skip if `--skip-pipeline`. Skip cleanly (non-blocking) if `gh` is missing, not authenticated,
-the remote is not GitHub, or the repo has no push-triggered workflow. See `pipeline-watch.sh` header for the rationale and registration/completion semantics.
-
-**Run the handler:**
-```bash
-GIT_PUSH_DIR="${MAIN_REPO:-$REPO_ROOT}"
-PUSH_SHA=$(git -C "$GIT_PUSH_DIR" rev-parse HEAD)
-
-PIPELINE_OUT=$(bash "$HANDLERS_DIR/pipeline-watch.sh" \
-  --repo-dir "$GIT_PUSH_DIR" \
-  --sha "$PUSH_SHA" \
-  ${DRY_RUN:+--dry-run})
-PIPELINE_EXIT=$?
-```
-
-Parse the KV output:
-```
-PIPELINE_STATUS=<passed|failed|skipped_no_gh|skipped_not_authed|skipped_no_workflow|skipped_dry_run>
-PIPELINE_RUN_ID=<id>      # only on passed/failed
-PIPELINE_RUN_URL=<url>    # only on passed/failed
-```
-
-**Decision tree:**
-
-| Status | Action |
-|--------|--------|
-| `passed` | Continue to Step 16b. |
-| `failed` (exit 1) | Abort Phase B. Report run URL. Beads stay `in_progress`. See Error Handling. |
-| `failed` + `PIPELINE_ERROR=no_run_registered` | Abort Phase B. Workflow exists but no run registered — runner offline, webhook broken, Actions disabled. See Error Handling. |
-| `skipped_*` (exit 0) | Log reason, continue to Step 16b. |
-
-### Step 16b: Close Beads
-
-1. Find in-progress beads for this session:
-   ```bash
-   bd list --status=in_progress
-   ```
-
-2. For each in-progress bead, check if it was worked on in this session by reading its notes
-   (the orchestrator stores handoff info there):
-   ```bash
-   bd show <id>
-   # Look for: implementation notes, review loop results, break analysis
-   # These indicate the bead was actively worked on
-   ```
-
-3. Close each with a proper reason. If the orchestrator stored a close reason in the bead
-   notes (look for "Close reason:" prefix), use that. Otherwise compose one from the bead's
-   notes and commit history:
-   ```bash
-   bd close <id> --reason="<1-line summary with key metrics>"
-   ```
-
-4. **Track closed beads:** After closing each bead, add it to a running list for use in Step 17:
-   ```
-   CLOSED_BEADS=[{id, type, title, close_reason}, ...]
-   ```
-   Capture: bead ID, type (`feat`/`fix`/`chore`/`refactor`/`task`), title, and close reason.
-
-5. **Ingest ccusage + Codex metrics** for each closed bead (non-blocking):
-   ```bash
-   PLUGIN_LIB="${CLAUDE_PLUGIN_ROOT:-$HOME/code/claude-code-plugins/beads-workflow}/lib/orchestrator"
-   SINCE=$(date -v-7d +%Y%m%d 2>/dev/null || date -d '-7 days' +%Y%m%d)
-   for id in $CLOSED_IDS; do
-     python3 "$PLUGIN_LIB/ingest_ccusage.py" --bead "$id" --since "$SINCE" || true
-     python3 "$PLUGIN_LIB/ingest_codex.py"   --bead "$id" --since "$SINCE" || true
-   done
-   ```
-   Both handlers exit 0 on failure; capture stderr warnings for Step 17.
-
-6. Sync:
-   ```bash
-   bd dolt commit && bd dolt pull && bd dolt push --force
-   ```
+**Store closed beads list** from `.closed[]` — used by Step 17 for What's New synthesis.
 
 Good close reasons:
 - "12 Methoden implementiert, 30/32 Tests passing (2 Windows-only geskippt)"
@@ -400,28 +286,13 @@ Good close reasons:
 
 Bad close reasons: "Done", "Closed", "Fixed"
 
-If no in-progress beads found for this session: skip silently.
-
-### Step 16c: Sync Plugin Cache
-
-After push succeeds, sync the local plugin cache if the repo is `claude-code-plugins` or `open-brain`.
-
-Run the handler for each repo committed in this session (and for any secondary `claude-code-plugins` / `open-brain` repos in multi-repo sessions):
-
-```bash
-bash "$HANDLERS_DIR/sync-plugin-cache.sh" "$REPO_ROOT"
-# Multi-repo: also run for any other claude-code-plugins / open-brain repo committed
-```
-
-The handler is **non-blocking**: detects changed plugin dirs, runs `claude plugins update`, skips silently if nothing matches.
-
 ### Step 17: Summary
 
 #### What's New (always shown — not controlled by any flag)
 
 Generate a "What's New" section from the beads closed in Step 16b, then print it BEFORE the technical summary.
 
-**Derivation logic (from `CLOSED_BEADS` list):**
+**Derivation logic (from `.closed[]` list returned by `phase-b-close-beads.sh`):**
 
 - **Feature beads** (`type=feat`): Translate to a user-facing capability statement.
   Use the title and close reason. Frame as "you can now..." or "New: ...".
@@ -436,7 +307,7 @@ Generate a "What's New" section from the beads closed in Step 16b, then print it
   If there are NO chore/refactor beads: omit the "Internal" line entirely.
   Example: `"Internal: upgraded bun dependencies, refactored version handler"`
 
-**If no beads were closed in this session** (CLOSED_BEADS is empty): Fall back to git diff analysis:
+**If no beads were closed in this session** (`.closed[]` is empty or phase-b-close-beads.sh was skipped): Fall back to git diff analysis:
 ```bash
 git diff origin/main...HEAD --name-only
 ```
@@ -456,7 +327,7 @@ If no meaningful signals found: omit the What's New section entirely (do not pri
 - Internal: <collapsed chore/refactor summary>
 ```
 
-**Dry-run:** Still generate and print the What's New section (read-only preview — no bead interaction needed since CLOSED_BEADS was already populated or the git diff is read-only).
+**Dry-run:** Still generate and print the What's New section (read-only preview — no bead interaction needed since `.closed[]` was already populated or the git diff is read-only).
 
 ---
 
@@ -465,23 +336,30 @@ If no meaningful signals found: omit the What's New section entirely (do not pri
 Assemble the session state as JSON and render it via the handler:
 
 ```bash
-# Build state JSON from variables collected across the steps above, e.g.:
-STATE_JSON=$(python3 -c "import json, sys; print(json.dumps({
+# Build state JSON from parsed phase handler outputs, e.g.:
+# - PREPARE_JSON: output of phase-b-prepare.sh
+# - SHIP_JSON: output of phase-b-ship.sh
+STATE_JSON=$(python3 -c "
+import json, sys
+prepare = json.loads('''$PREPARE_JSON''')
+ship    = json.loads('''$SHIP_JSON''')
+print(json.dumps({
   'commit_sha':             '$COMMIT_SHA',
   'commit_msg':             '$COMMIT_MSG',
-  'version_tag':            '$VERSION_TAG',
-  'changelog_updated':      ${CHANGELOG_UPDATED:-false},
-  'doc_gaps':               [],
+  'version_tag':            ship.get('version', {}).get('tag', ''),
+  'changelog_updated':      prepare.get('changelog', {}).get('status') == 'updated',
+  'doc_gaps':               prepare.get('docs_check', {}).get('gaps', []),
   'learnings_extracted':    ${LEARNINGS_EXTRACTED:-false},
   'session_summary_saved':  ${SESSION_SUMMARY_SAVED:-false},
   'turn_log_status':        '${TURN_LOG_STATUS:-skipped_no_file}',
-  'merge_from_main_first':  '${MERGE_FROM_MAIN_FIRST_STATUS:-skipped}',
-  'merge_from_main_second': '${MERGE_FROM_MAIN_SECOND_STATUS:-skipped}',
-  'worktree_merged':        ${WORKTREE_MERGED:-false},
-  'push_status':            '${PUSH_STATUS:-skipped}',
-  'pipeline_status':        '${PIPELINE_STATUS:-skipped_dry_run}',
-  'pipeline_run_url':       '${PIPELINE_RUN_URL:-}'
-}))")
+  'merge_from_main_first':  prepare.get('first_merge', {}).get('status', 'skipped'),
+  'merge_from_main_second': ship.get('second_merge', {}).get('status', 'skipped'),
+  'worktree_merged':        ship.get('merge_feature', {}).get('status') == 'ok',
+  'push_status':            ship.get('push', {}).get('status', 'skipped'),
+  'pipeline_status':        ship.get('pipeline', {}).get('status', 'skipped_dry_run'),
+  'pipeline_run_url':       ship.get('pipeline', {}).get('run_url', '')
+}))
+")
 echo "$STATE_JSON" | python3 "$HANDLERS_DIR/render-summary.py"
 ```
 

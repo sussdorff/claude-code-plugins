@@ -1,0 +1,125 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "phase-b-prepare output",
+  "description": "JSON emitted by phase-b-prepare.sh. Covers Steps 1, 2, 3, 4, 5, 7, 9 of session-close Phase B. Exit 2 = merge conflict (partial JSON still emitted). Exit 0 = caller can reason about all sub-step outcomes.",
+  "type": "object",
+  "required": ["first_merge", "plan_cleanup", "git_state", "bun_audit", "simplify", "changelog", "docs_check"],
+  "properties": {
+    "first_merge": {
+      "type": "object",
+      "description": "Step 1: First merge from main",
+      "required": ["status", "detail"],
+      "properties": {
+        "status": {
+          "type": "string",
+          "enum": ["ok", "conflict", "skipped", "failed", "unknown", "not_attempted"],
+          "description": "ok=merged cleanly, conflict=merge conflict (exit 2), skipped=on main branch or dry-run, failed=fetch error"
+        },
+        "detail": {
+          "type": "string",
+          "description": "Human-readable explanation"
+        }
+      }
+    },
+    "plan_cleanup": {
+      "type": "object",
+      "description": "Step 2: Plan file cleanup in malte/plans/",
+      "required": ["deleted", "kept"],
+      "properties": {
+        "deleted": {
+          "type": "array",
+          "items": {"type": "string"},
+          "description": "Plan files deleted (bead was closed or not found)"
+        },
+        "kept": {
+          "type": "array",
+          "items": {"type": "string"},
+          "description": "Plan files kept (bead still active)"
+        }
+      }
+    },
+    "git_state": {
+      "type": "object",
+      "description": "Step 3: Git working tree snapshot",
+      "required": ["staged", "unstaged", "untracked"],
+      "properties": {
+        "staged": {
+          "type": "array",
+          "items": {"type": "string"},
+          "description": "Files staged for commit (index modified)"
+        },
+        "unstaged": {
+          "type": "array",
+          "items": {"type": "string"},
+          "description": "Files modified in working tree but not staged"
+        },
+        "untracked": {
+          "type": "array",
+          "items": {"type": "string"},
+          "description": "Untracked files"
+        }
+      }
+    },
+    "bun_audit": {
+      "type": "object",
+      "description": "Step 4: Dependency audit result",
+      "required": ["status", "vulns"],
+      "properties": {
+        "status": {
+          "type": "string",
+          "enum": ["ok", "high", "critical", "skipped", "not_attempted"],
+          "description": "ok=no high/critical vulns, high=high/moderate found, critical=critical found, skipped=audit not run"
+        },
+        "vulns": {
+          "type": "array",
+          "items": {"type": "string"},
+          "description": "Vulnerability descriptions (subset, for human review)"
+        }
+      }
+    },
+    "simplify": {
+      "type": "object",
+      "description": "Step 5: Code simplification advisory",
+      "required": ["status", "changed_code_files"],
+      "properties": {
+        "status": {
+          "type": "string",
+          "enum": ["advisory", "ok", "skipped", "not_attempted"],
+          "description": "advisory=code files changed (consider simplification), ok=no code changes, skipped=flag set"
+        },
+        "changed_code_files": {
+          "type": "integer",
+          "description": "Number of non-doc files changed since last tag"
+        }
+      }
+    },
+    "changelog": {
+      "type": "object",
+      "description": "Step 7: Changelog generation. CHANGELOG.md is staged (not committed) when status=updated. Include in Step 6 conventional commit.",
+      "required": ["status", "commit_made"],
+      "properties": {
+        "status": {
+          "type": "string",
+          "enum": ["updated", "no_change", "skipped", "not_attempted"],
+          "description": "updated=CHANGELOG.md regenerated and staged, no_change=no new commits, skipped=tool missing or dry-run"
+        },
+        "commit_made": {
+          "type": "boolean",
+          "description": "Always false — changelog is staged only. Caller commits it in Step 6."
+        }
+      }
+    },
+    "docs_check": {
+      "type": "object",
+      "description": "Step 9: Documentation gap check (advisory only)",
+      "required": ["gaps"],
+      "properties": {
+        "gaps": {
+          "type": "array",
+          "items": {"type": "string"},
+          "description": "Documentation gap descriptions (advisory, does not block session-close)"
+        }
+      }
+    }
+  }
+}

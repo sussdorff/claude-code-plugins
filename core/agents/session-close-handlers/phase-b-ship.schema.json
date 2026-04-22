@@ -1,0 +1,124 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "phase-b-ship output",
+  "description": "JSON emitted by phase-b-ship.sh. Covers Steps 13, 14, 15, 15b, 16, 16a, 16c of session-close Phase B. Partial completion is first-class: any sub-step can report status=not_attempted if a prior step failed. Exit 2 = merge conflict (partial JSON still emitted). Exit 0 = caller can reason about all sub-step outcomes including pipeline failures.",
+  "type": "object",
+  "required": ["kill_procs", "second_merge", "merge_feature", "version", "push", "pipeline", "plugin_cache"],
+  "properties": {
+    "kill_procs": {
+      "type": "object",
+      "description": "Step 13: Kill worktree dev processes",
+      "required": ["status", "killed"],
+      "properties": {
+        "status": {
+          "type": "string",
+          "enum": ["ok", "skipped"],
+          "description": "ok=kill attempted (even if no processes found), skipped=not in worktree or dry-run"
+        },
+        "killed": {
+          "type": "array",
+          "items": {"type": "string"},
+          "description": "Portless process patterns that were killed"
+        }
+      }
+    },
+    "second_merge": {
+      "type": "object",
+      "description": "Step 14: Second merge from main (catch up with changes during Phase A)",
+      "required": ["status", "detail"],
+      "properties": {
+        "status": {
+          "type": "string",
+          "enum": ["ok", "conflict", "skipped", "failed", "not_attempted"],
+          "description": "ok=merged cleanly, conflict=merge conflict (exit 2), skipped=on main branch or dry-run"
+        },
+        "detail": {"type": "string"}
+      }
+    },
+    "merge_feature": {
+      "type": "object",
+      "description": "Step 15: Merge feature branch into main (worktree only)",
+      "required": ["status", "detail"],
+      "properties": {
+        "status": {
+          "type": "string",
+          "enum": ["ok", "conflict", "skipped", "failed", "not_attempted"],
+          "description": "ok=merged into main, conflict=merge conflict (exit 2), skipped=not in worktree or dry-run, not_attempted=prior step failed"
+        },
+        "detail": {"type": "string"}
+      }
+    },
+    "version": {
+      "type": "object",
+      "description": "Step 15b: Version bump and tag creation",
+      "required": ["status", "tag", "version"],
+      "properties": {
+        "status": {
+          "type": "string",
+          "enum": ["ok", "failed", "skipped", "not_attempted"]
+        },
+        "tag": {
+          "type": "string",
+          "description": "Git tag created (e.g. v2026.04.77) or empty string"
+        },
+        "version": {
+          "type": "string",
+          "description": "Version string written to VERSION file (e.g. 2026.04.77) or empty string"
+        }
+      }
+    },
+    "push": {
+      "type": "object",
+      "description": "Step 16: Git push (main branch + tag)",
+      "required": ["status", "detail"],
+      "properties": {
+        "status": {
+          "type": "string",
+          "enum": ["ok", "failed", "skipped", "screen_locked", "not_attempted"],
+          "description": "ok=pushed, failed=push error, screen_locked=macOS screen locked (push aborted), skipped=--skip-push or dry-run, not_attempted=prior step failed"
+        },
+        "detail": {
+          "type": "string",
+          "description": "Error output on failure, flag reason on skip"
+        }
+      }
+    },
+    "pipeline": {
+      "type": "object",
+      "description": "Step 16a: GitHub Actions pipeline watch",
+      "required": ["status", "run_url"],
+      "properties": {
+        "status": {
+          "type": "string",
+          "enum": [
+            "passed", "failed", "skipped", "skipped_flag",
+            "skipped_no_gh", "skipped_not_authed", "skipped_no_workflow",
+            "skipped_dry_run", "skipped_no_handler", "not_attempted", "unknown"
+          ],
+          "description": "passed=CI green, failed=CI red (beads must NOT be closed), skipped_*=non-blocking skip"
+        },
+        "run_url": {
+          "type": "string",
+          "description": "GitHub Actions run URL (when status is passed or failed)"
+        },
+        "error": {
+          "type": "string",
+          "description": "Error detail on failure (e.g. no_run_registered)"
+        }
+      }
+    },
+    "plugin_cache": {
+      "type": "object",
+      "description": "Step 16c: Plugin cache sync after push",
+      "required": ["status", "detail"],
+      "properties": {
+        "status": {
+          "type": "string",
+          "enum": ["ok", "skipped", "failed", "not_attempted"],
+          "description": "ok=cache synced, skipped=not a plugin repo or dry-run, not_attempted=push failed so skip"
+        },
+        "detail": {"type": "string"}
+      }
+    }
+  }
+}
