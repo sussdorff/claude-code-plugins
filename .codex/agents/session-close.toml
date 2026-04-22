@@ -219,9 +219,30 @@ Save each learning via the open-brain MCP `save_memory` tool:
 **Fallback** (if open-brain is unavailable): write learnings to `docs/learnings-YYYY-MM-DD.md`
 and commit it as `chore: capture session learnings [YYYY-MM-DD]`.
 
+**Handoff scope clarification:** This step is NOT superseded by the orchestrator handoff file.
+Step 10 extracts cross-bead patterns, user behavioral signals, and meta-observations from the
+full session transcript — a superset of what the bead-level debrief aggregates. Step 11 uses
+the handoff file; Step 10 always runs on the full transcript regardless of handoff presence
+(unless `--skip-learnings` is passed).
+
 ### Step 11: Session Debrief
 
 Skip if `--skip-debrief`.
+
+**First, check for an orchestrator handoff file:**
+
+```bash
+HANDOFF="$REPO_ROOT/.worktree-handoff.json"
+if [[ -f "$HANDOFF" ]]; then
+  python3 -c "import json,sys; d=json.load(open(sys.argv[1])); print(json.dumps(d['aggregated_debrief'], ensure_ascii=False))" "$HANDOFF"
+fi
+```
+
+- If found: use `aggregated_debrief` from the handoff file as the seed data for the debrief.
+  Merge it with any additional `### Debrief` blocks found in the immediate session context.
+  Do NOT delete the handoff file here — it must survive `--debrief-only` retries.
+- If not found: synthesize from session context as before (graceful fallback — collect any
+  `### Debrief` blocks present in the session).
 
 Synthesize the session into a structured debrief:
 - Key Decisions
@@ -234,6 +255,7 @@ Save via open-brain MCP `save_memory`:
 - type: `debrief`
 - project: repo name
 - session_ref: bead-id or `session-YYYY-MM-DD`
+- metadata: { "source": "session-close" }
 
 **Fallback** (if open-brain is unavailable): append the debrief to `docs/session-debriefs.md`.
 
@@ -244,9 +266,14 @@ Skip if `--skip-summary`.
 Gather session data and save via open-brain MCP `save_memory`:
 - title: `Session Summary [YYYY-MM-DD] - <project>`
 - text: branch, tag, commits, files changed, beads status
+- narrative: When the orchestrator handoff was present (Step 11 consumed `aggregated_debrief`),
+  include the structured debrief sections in the narrative field: Key Decisions, Challenges
+  Encountered, Surprising Findings, Follow-up Items. If no handoff was available, derive the
+  narrative from any `### Debrief` blocks collected in the session context.
 - type: `session_summary`
 - project: repo name
 - session_ref: bead-id or `session-YYYY-MM-DD`
+- metadata: { "source": "session-close" }
 
 **Fallback** (if open-brain is unavailable): print the summary to stdout.
 
