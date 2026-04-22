@@ -81,7 +81,7 @@ blocking gate: CI fail means [7] does not run and beads stay `in_progress`.
 
 Handler scripts live in the plugin cache. Resolve the path by running:
 ```bash
-HANDLERS_DIR="$HOME/.claude/plugins/cache/sussdorff-plugins/core/agents/session-close-handlers"
+HANDLERS_DIR="${SESSION_CLOSE_HANDLERS_DIR:-$HOME/.claude/plugins/cache/sussdorff-plugins/core/agents/session-close-handlers}"
 # Fallback: locate via find if the path above doesn't exist
 if [ ! -d "$HANDLERS_DIR" ]; then
   HANDLERS_DIR=$(find "$HOME/.claude/plugins" -type d -name "session-close-handlers" 2>/dev/null | head -1)
@@ -326,12 +326,13 @@ WORK_DIR="${MAIN_REPO:-$REPO_ROOT}"
 if [ -f "$HANDLERS_DIR/version.sh" ]; then
   VERSION_OUTPUT=$(bash "$HANDLERS_DIR/version.sh" ${DRY_RUN:+--dry-run})
 else
-  # Fallback: parse VERSION file and bump CalVer patch
-  CURRENT=$(cat "$WORK_DIR/VERSION" 2>/dev/null || echo "")
-  echo "No version handler found; manually bump VERSION file and create tag." >&2
+  # Fallback: no version handler available
+  echo "No version handler found. Manually bump VERSION file and create a tag." >&2
+  # $TAG is not set in this path — tag creation skipped
 fi
 
-if [ -n "$TAG" ]; then
+# Only create tag if handler set $TAG
+if [ -n "${TAG:-}" ]; then
   git -C "$WORK_DIR" tag -a "$TAG" -m "Release $TAG"
 fi
 ```
@@ -490,11 +491,11 @@ and the Codex agent runtime.
   filesystem, `mcp_servers` table for MCP tool selection per agent, and `skills.config` for skill access.
 
 ### open-brain MCP
-- **Claude**: Invokes open-brain tools directly via Claude Code's MCP tool naming convention
-  (server name + double underscore + tool name, e.g. `save_memory`, `search`, `timeline`)
-  — these are Claude Code harness-specific tool identifiers that Codex does not use.
+- **Claude**: Invokes open-brain tools via harness-specific identifiers. In Claude Code, the runtime
+  prefixes them internally — Codex does not use this prefix. In Codex, call them as plain MCP tool
+  names: `save_memory`, `search`, `timeline`.
 - **Codex**: open-brain is configured globally in `~/.codex/config.toml` under `[mcp_servers.open-brain]`.
-  The tools are available as MCP tools in the Codex session — call them without the `mcp__` prefix
+  The tools are available as MCP tools in the Codex session — call them as plain tool names
   (Codex uses the server name + tool name convention from its MCP integration).
   Approval mode for `search` and `timeline` is set to `approve` in config.toml.
 
@@ -503,8 +504,14 @@ and the Codex agent runtime.
 - **Codex**: Identical — use the same shell command. The `bd` CLI is harness-agnostic.
 
 ### Slash commands
-- **Claude**: `/session-close`, `/learnings-pipeline`, etc. can be invoked as slash commands
+- **Claude**: The `session-close`, `learnings-pipeline`, etc. workflows can be invoked as slash commands in the Claude Code harness (not available in Codex).
 - **Codex**: No slash-command system. All actions are performed via shell commands or MCP tools.
+
+### Handler scripts
+- Handler scripts are currently resolved from the Claude plugin cache via `$SESSION_CLOSE_HANDLERS_DIR`
+  (set by the Codex harness) with fallback to the Claude plugin cache path. This is a known harness
+  coupling. Set `SESSION_CLOSE_HANDLERS_DIR` to an alternative path if the Claude plugin cache is not
+  installed.
 
 ### Session context
 - **Claude**: The full conversation context is visible to the agent for learnings extraction
