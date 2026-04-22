@@ -1,0 +1,8 @@
+{
+  "council_mode": "mock",
+  "findings": {
+    "P1": "MOCK: No issues found with this principle.",
+    "P2": "MOCK: Principle appears consistent with current practice.",
+    "P3": "MOCK: No contradictions detected."
+  }
+}
