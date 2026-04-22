@@ -1,3 +1,10 @@
+## [Unreleased]
+
+### Changed
+
+- *(CCP-9yd)* Port **session-close** agent to Codex format (TOML agents, gap documentation, E2E evidence)
+- *(CCP-e2r)* Collapse **session-close** step-handlers into phase-level handlers (reduces tool calls from ~44 to ~9-11)
+
 ## [2026.04.76] - 2026-04-22
 
 ### Features
