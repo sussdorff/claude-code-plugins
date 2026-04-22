@@ -1,5 +1,15 @@
 ## [Unreleased]
 
+## [2026.04.95] - 2026-04-22
+
+### Fixed
+
+- *(CCP-28l)* Fix prompt tail-truncation and document timeout Bash wrapper alignment — middle-truncation preserves tail format instructions; Bash wrapper timeout alignment documented as BLOCKING
+
+### Added
+
+- *(CCP-28l)* Document Codex timeout threshold in codex-exec.sh header; add pre-truncation guard (CODEX_EXEC_MAX_PROMPT_CHARS=32000) with configurable tail buffer (CODEX_EXEC_TAIL_BUFFER=1024)
+
 ## [2026.04.93] - 2026-04-22
 
 ### Refactored
