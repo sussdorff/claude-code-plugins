@@ -26,13 +26,20 @@ def _content() -> str:
 
 
 def _section(content: str, start_marker: str, end_marker: str | None = None) -> str:
-    """Extract text between two markers (or from marker to end of file)."""
+    """Extract text between two markers (or from marker to end of file).
+
+    When end_marker is "## ", search for a newline-prefixed h2 heading to avoid
+    matching "## " inside h3 headings ("### ").
+    """
     start = content.find(start_marker)
     if start == -1:
         return ""
     if end_marker is None:
         return content[start:]
-    end = content.find(end_marker, start + len(start_marker))
+    # Use newline-anchored search for heading markers to avoid substring matches
+    # inside deeper headings (e.g. "## " inside "### ").
+    search_marker = f"\n{end_marker.lstrip()}" if end_marker.startswith("#") else end_marker
+    end = content.find(search_marker, start + len(start_marker))
     return content[start:end] if end != -1 else content[start:]
 
 
