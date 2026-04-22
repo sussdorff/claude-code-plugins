@@ -133,15 +133,13 @@ def check_conformance(path: Path) -> ConformanceResult:
 
     # Stage 2: attempt full parse to catch boundary table issues
     # Only if structural check passes
-    parse_error: str | None = None
     if not missing_sections:
         try:
             from scripts.vision_parser import parse_vision, VisionParseError
             parse_vision(path)
-        except Exception as exc:
-            # Any parse error (including boundary table issues) is a conformance failure
+        except (VisionParseError, OSError) as exc:
+            # Parse error (boundary table issues, etc.) is a conformance failure
             error_msg = str(exc)
-            parse_error = error_msg
             # Detect boundary table specifically
             if "boundary table" in error_msg.lower() or "table" in error_msg.lower():
                 has_boundary_table = False
@@ -150,7 +148,7 @@ def check_conformance(path: Path) -> ConformanceResult:
         # If sections are missing, we can't reliably parse — mark boundary table unknown
         # but check heuristically whether the table line pattern is present
         has_boundary_table = any(
-            "rule_id" in line and "scope" in line and "source-section" in line
+            line.strip().startswith("|") and all(tok in line for tok in ("rule_id", "scope", "source-section"))
             for line in lines
         )
 

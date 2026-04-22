@@ -35,7 +35,7 @@ def _import_hyphen_module(name: str, path: Path):
 # Import tense_gate (filename: tense-gate.py)
 tense_gate = _import_hyphen_module("tense_gate", SCRIPTS_DIR / "tense-gate.py")
 
-from scripts.vision_renderer import VisionAnswers, render_vision  # noqa: E402
+from scripts.vision_renderer import VisionAnswers, render_vision, render_genesis_adr  # noqa: E402
 from scripts.vision_conformance import ConformanceResult, check_conformance  # noqa: E402
 
 
@@ -235,22 +235,39 @@ class TestVisionRenderer:
             elif in_table and not line.startswith("|"):
                 in_table = False
 
-    def test_render_principle_ids_match_boundary_rule_ids(self, minimal_answers):
+    def test_render_principle_ids_match_boundary_rule_ids(self, minimal_answers, tmp_path):
         """Principle IDs in the list must match rule_ids in the boundary table."""
-        output = render_vision(minimal_answers)
-        # Parse back using vision_parser to validate
         from scripts.vision_parser import parse_vision
-        import tempfile, os
-        with tempfile.NamedTemporaryFile(mode="w", suffix=".md", delete=False, encoding="utf-8") as f:
-            f.write(output)
-            tmp_path = f.name
-        try:
-            vision = parse_vision(Path(tmp_path))
-            principle_ids = {p.id for p in vision.principles}
-            boundary_ids = {br.rule_id for br in vision.boundary_table}
-            assert principle_ids == boundary_ids
-        finally:
-            os.unlink(tmp_path)
+        output = render_vision(minimal_answers)
+        vision_file = tmp_path / "vision.md"
+        vision_file.write_text(output, encoding="utf-8")
+        vision = parse_vision(vision_file)
+        principle_ids = {p.id for p in vision.principles}
+        boundary_ids = {br.rule_id for br in vision.boundary_table}
+        assert principle_ids == boundary_ids
+
+    def test_render_rejects_missing_principle_scope(self):
+        """render_vision must raise ValueError if principle_scopes is missing an entry."""
+        answers = VisionAnswers(
+            vision_statement="We deliver reliable infrastructure tooling for platform engineers.",
+            target_group="Platform engineers at mid-size companies.",
+            core_need="Engineers need reproducible infrastructure changes without toil.",
+            positioning="Automated enforcement for platform teams.",
+            principles=[
+                ("P1", "All infrastructure changes are version-controlled."),
+                ("P2", "Every policy violation surfaces at plan time."),
+                ("P3", "Operators see full change context before confirming."),
+            ],
+            principle_scopes={
+                "P1": "all infrastructure modules",
+                "P2": "policy engine, CI pipelines",
+                # P3 intentionally omitted
+            },
+            business_goal="Reduce outages by 90% within six months.",
+            not_in_vision=["Auto-remediation", "Non-declarative tools"],
+        )
+        with pytest.raises(ValueError, match="[Mm]issing scopes"):
+            render_vision(answers)
 
     def test_render_5_principles_accepted(self, five_principle_answers):
         """Exactly 5 principles must be accepted without raising."""
@@ -420,3 +437,21 @@ class TestRefreshModeConformance:
         result = check_conformance(FIXTURES_DIR / "missing_section.md")
         for section in result.missing_sections:
             assert isinstance(section, str)
+
+
+# ---------------------------------------------------------------------------
+# Group 5: TestGenesisADR
+# ---------------------------------------------------------------------------
+
+class TestGenesisADR:
+    """Tests for scripts/vision_renderer.py :: render_genesis_adr()."""
+
+    def test_render_genesis_adr_contains_required_sections(self):
+        """render_genesis_adr must produce an ADR with all required sections and markers."""
+        output = render_genesis_adr("my-project", "2026-04-22")
+        assert "# ADR-0000" in output, "Must contain '# ADR-0000' heading"
+        assert "**Status:** accepted" in output, "Must contain accepted status"
+        assert "## Context" in output, "Must contain Context section"
+        assert "## Decision" in output, "Must contain Decision section"
+        assert "## Consequences" in output, "Must contain Consequences section"
+        assert "generator: vision-author" in output, "Must contain generator marker"
