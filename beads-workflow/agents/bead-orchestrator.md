@@ -652,6 +652,9 @@ guidance for large ones.
 > to allow the full Codex run to complete. If Codex exits 124 (timeout) without findings, the
 > prompt is likely too large — raise `CODEX_EXEC_TIMEOUT` and/or lower `CODEX_EXEC_MAX_PROMPT_CHARS`
 > (default: 32000 chars) to trigger earlier truncation.
+> **When overriding `CODEX_EXEC_TIMEOUT`, you MUST also raise the Bash `timeout:` to
+> `(CODEX_EXEC_TIMEOUT + 60) * 1000` ms** so the Bash wrapper does not race the internal timeout.
+> Example: `CODEX_EXEC_TIMEOUT=600` → `timeout: 660000`.
 > Pattern `sleep N && cat <output>` is blocked by hooks — it will never work.
 
 ```bash
