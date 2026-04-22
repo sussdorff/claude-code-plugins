@@ -151,17 +151,16 @@ Gather minimal context:
    Store these values as `CURRENT_BRANCH` and `WORKTREE_MODE` in your context.
 
 5. Create a metrics run (store `RUN_ID` for codex-exec.sh calls):
-   ```python
-   import sys; sys.path.insert(0, 'beads-workflow/lib/orchestrator')
-   try:
-       from metrics import start_run
-       run_id = start_run('<bead_id>', wave_id=None, mode='quick-fix')
-       print(run_id)
-   except Exception as e:
-       print(f'WARNING: metrics unavailable ({e}) — Codex review will be skipped', file=__import__("sys").stderr)
-       print('')  # empty run_id signals skip
+   ```bash
+   # Locate metrics-start.sh (prefer repo-local, fall back to installed)
+   METRICS_START="beads-workflow/scripts/metrics-start.sh"
+   if [[ ! -f "$METRICS_START" ]]; then
+     METRICS_START=$(find ~/.claude/plugins -name metrics-start.sh -type f 2>/dev/null | sort -r | head -1)
+   fi
+   RUN_ID=$("$METRICS_START" "<bead_id>" "" "quick-fix")
+   echo "$RUN_ID"
    ```
-   Store the printed value as `RUN_ID` in your context.
+   Store the printed value as `RUN_ID` in your context. If the script is not found, set `RUN_ID=""` — codex-exec.sh degrades gracefully when `RUN_ID` is unset.
 
 ### Phase 1: Spawn Implementer
 
@@ -217,7 +216,8 @@ fi
 If not found: **skip review, proceed to Phase 3 with a warning.** Quick fixes should not be
 blocked by missing tooling — log it and move on.
 
-If `RUN_ID` is empty (metrics unavailable): **skip review, proceed to Phase 3 with a warning.**
+If `RUN_ID` is empty (metrics unavailable): **proceed normally.** `codex-exec.sh` degrades
+gracefully — it runs codex and skips DB recording. The review still happens; only metrics are lost.
 
 Capture the diff:
 ```bash
@@ -315,16 +315,14 @@ Non-blocking telemetry. Capture tokens and Codex stats. Do NOT emit an output su
 return here — Phase 5 must fire next, unconditionally.
 
 ```bash
-uv run python -c "
-import sys; sys.path.insert(0, 'beads-workflow/lib/orchestrator')
-try:
-    from metrics import rollup_run, update_phase2_metrics
-    rollup_run('{RUN_ID}')
-    update_phase2_metrics(bead_id='{BEAD_ID}', triggered=True, findings={TOTAL_FINDINGS}, critical={REGRESSION_COUNT}, run_id='{RUN_ID}')
-    print('Metrics updated')
-except Exception as e:
-    print(f'Metrics skipped: {e}')
-"
+# Locate metrics-rollup.sh (prefer repo-local, fall back to installed)
+METRICS_ROLLUP="beads-workflow/scripts/metrics-rollup.sh"
+if [[ ! -f "$METRICS_ROLLUP" ]]; then
+  METRICS_ROLLUP=$(find ~/.claude/plugins -name metrics-rollup.sh -type f 2>/dev/null | sort -r | head -1)
+fi
+if [[ -n "$METRICS_ROLLUP" ]]; then
+  "$METRICS_ROLLUP" "{RUN_ID}" "{BEAD_ID}" "{TOTAL_FINDINGS}" "{REGRESSION_COUNT}"
+fi
 ```
 
 Metrics failure does NOT block Phase 5. Proceed regardless.
