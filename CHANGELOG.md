@@ -1,141 +1,720 @@
-## [unreleased]
+## [2026.04.73] - 2026-04-22
 
-## [2026.04.74] - 2026-04-21
+### 🚀 Features
 
-### Research
+- *(session-close)* Auto-deploy codex skills after CC plugin update
 
-- *(CCP-ar0)* **parent-session parking verified** — spike confirmed that when a subagent runs via `Agent()`, the parent session is fully parked (zero token re-reads during child execution). Empirical evidence from session log analysis showing no parent LLM activity during 101-second child runs. Design implication for CCP-aoc: wave-monitor subagent should use `bash sleep 270` between polls (not `ScheduleWakeup`, which creates new sessions and breaks the `Agent()` paradigm). Parent context is NOT re-read during subagent execution — cost savings from the wave-monitor pattern are confirmed.
+### 🐛 Bug Fixes
 
-### Features
+- *(CCP-793)* Harden quick-fix session-close handoff
+- *(skill-auditor)* Flag description overflow >1024 chars as blocking
+## [2026.04.74] - 2026-04-22
 
-- *(CCP-aoc)* **wave-monitor Haiku subagent for wave polling** — `beads-workflow/agents/wave-monitor.md` created with `model: haiku`, tools `Bash, Read`. Long-lived polling agent that runs `wave-completion.sh` every 270s via `bash sleep` (not `ScheduleWakeup`), keeping the parent `Agent()` call blocked/parked. Returns structured JSON with 5 terminal verdicts: `complete` and `needs_intervention` with reasons `pane-error | stuck | review-loop | ambiguous`. Configurable thresholds: `stuck_threshold_hours` (default 4h), `review_loop_max_iterations` (default 3). Smoke test covers 4/5 auto-testable verdict paths.
+### 🚀 Features
 
-- *(CCP-8tb)* **skill-auditor migrated to dedicated Opus subagent** — `meta/agents/skill-auditor.md` created with `model: opus`, full audit workflow (5 scoring dimensions, tier budgets, grade thresholds), improve-mode, and eval-viewer integration; `meta/skills/skill-auditor/SKILL.md` rewritten as a 26-line trampoline dispatching via `Agent(subagent_type='meta:skill-auditor', prompt=$ARGUMENTS)`; deterministic Opus reasoning on an isolated context window; no fallback to lower models.
+- *(CCP-aoc)* Add wave-monitor Haiku agent for wave polling
 
-### Bug Fixes
+### 🧪 Testing
 
-- *(CCP-1m6)* **agent-standards.yml coverage gaps closed** — added `infra/*`, `meta/*`, `business/*`, and `content/*` pattern mappings so agents in those namespaces receive standards injection; added `TestAgentStandardsCoverage` structural test that discovers all agent-bearing plugin namespaces and asserts each has a mapping entry, preventing future drift. `orchestrator_handled` correctly excludes `beads-workflow/*` and `core/*` since `verification-agent` and `session-close` are not spawned under the orchestrator preamble.
+- *(CCP-aoc)* Add smoke test for wave-monitor verdict routing
 
-- *(CCP-imb)* **rollup_run null-safety + orphan agent_calls logging** — `metrics.rollup_run` now raises `ValueError` on null/empty `run_id` instead of silently no-oping (unattributed work is no longer silently dropped, per AK), and emits a warning log listing orphan `agent_calls` rows with `run_id IS NULL`. Schema unchanged (`run_id` remains nullable on ingest). New regression test `test_rollup_null_run_id` in `beads-workflow/scripts/tests/test_metrics_run_api.py`; 4/4 tests green. **Behavioural change:** callers relying on the previous silent-drop for `rollup_run(None)` must now catch `ValueError`.
+### ⚙️ Miscellaneous Tasks
 
+- *(CCP-aoc)* Update changelog for wave-monitor agent
+- Bump version to 2026.04.74
+## [2026.04.73] - 2026-04-21
+
+### 🚀 Features
+
+- *(CCP-8tb)* Convert skill-auditor to Opus subagent with trampoline skill
+
+### 💼 Other
+
+- *(CCP-ar0)* Document parent-session parking spike verdict
+
+### ⚙️ Miscellaneous Tasks
+
+- *(CCP-8tb)* Update changelog for skill-auditor subagent migration
+- Bump version to 2026.04.73
 ## [2026.04.72] - 2026-04-21
 
-### Bug Fixes
+### 🐛 Bug Fixes
 
-- *(CCP-9xy)* **harden bead agents against mid-flow stops and session-close handoff failures** — root cause of CCP-8ix stopping at Phase 5 was `cld`'s launcher prompt literally saying "Execute Phase 0-5" for the full orchestrator; agent obeyed, did not hallucinate. Fix: `cld` now passes `--setting-sources=user,project,local` explicitly and uses end-to-end phase phrasing. `bead-orchestrator.md` gains an autonomy contract forbidding fake "user scope" early exits and a hardened Phase 16 session-close with fallback. `quick-fix.md` renumbered to explicit Phase 0-5 with Phase 0a pre-flight probe for `core:session-close` availability and MANDATORY/UNSKIPPABLE Phase 5 with retry + hard-stop. `core/skills/beads/SKILL.md` dispatch prompts use "end-to-end Phase 0 through N" phrasing to eliminate scope-limit ambiguity.
+- *(CCP-9xy)* Harden bead agents against mid-flow stops and session-close handoff failures
+- *(CCP-1m6)* Address codex adversarial findings — non-hermetic test, namespace filter, orchestrator_handled
 
+### 💼 Other
+
+- Worktree-bead-CCP-1m6
+
+### 🧪 Testing
+
+- *(CCP-1m6)* Add structural coverage test for agent-standards.yml
+
+### ⚙️ Miscellaneous Tasks
+
+- Bump version to 2026.04.72 and update changelog for CCP-9xy
+- *(CCP-1m6)* Update changelog
+- Bump version to 2026.04.72
+## [2026.04.71] - 2026-04-21
+
+### 💼 Other
+
+- Worktree-bead-CCP-imb
+
+### ⚙️ Miscellaneous Tasks
+
+- *(CCP-imb)* Sync issues.jsonl post-merge
+- *(CCP-imb)* Absorb issues.jsonl auto-export drift
+- *(CCP-imb)* Stabilize issues.jsonl export
+- *(CCP-imb)* Add CHANGELOG entry for rollup_run null-safety
+- Bump version to 2026.04.71
 ## [2026.04.70] - 2026-04-21
 
-### Bug Fixes
+### 💼 Other
 
-- *(CCP-2hd.1)* **architecture-scout: normalize `touched_paths` before vision boundary check** — fix Codex iter 3 regression where the iter-2 fix compared bare package names against raw `touched_paths` entries, silently skipping every boundary rule when callers passed package paths (`packages/adapter-common`) or file paths (`packages/adapter-common/src/x.ts`), causing gate mode to return false CONFORM. Step 3 now resolves every input form (empty list, bare name, package path, trailing-slash path, file path, `./` prefix, Windows separators) to a canonical `touched_packages` set; empty input expands to all discovered packages; Step 5 consumes the canonical set for all forbidden-from/forbidden-to intersection checks
+- Worktree-bead-CCP-2hd.1
 
+### ⚙️ Miscellaneous Tasks
+
+- *(CCP-2hd.1)* Move changelog entry to [unreleased] after folded merge from main
+- Bump version to 2026.04.70
 ## [2026.04.69] - 2026-04-21
 
-### Bug Fixes
+### 💼 Other
 
-- *(CCP-dzp)* **codex exec timeout propagation** — `beads-workflow/scripts/codex-exec.sh` now wraps `codex exec` with `timeout` (or `gtimeout`) so a stalled codex no longer masquerades as a clean "no findings" review (false-green); timeout duration configurable via `CODEX_EXEC_TIMEOUT` env var (default 300s); exit 124 flows through `PIPESTATUS[0]` → `CODEX_EXIT` → final script exit. Graceful degradation with a stderr warning when neither timeout utility is installed. Wave-orchestrator's Phase 1.25 subagent prompt (`beads-workflow/skills/wave-orchestrator/skill.md`) now documents `timeout 300 codex exec …` and names exit 124 explicitly as a Sonnet-fallback trigger. Regression test `test_timeout_exits_nonzero` added to `beads-workflow/scripts/tests/test_codex_exec_sh.py`.
+- Worktree-bead-CCP-dzp
 
-### Features
+### ⚙️ Miscellaneous Tasks
 
-- *(CCP-50y)* **Codex Skills Portability** — convert 10 additional skills to agentskills-compatible format with portable core and SKILL.claude-adapter.md harness adapters; add portability compliance tracking in docs/codex-skills-candidates.md with selection criteria and non-portable deferrals with rationale
-- *(CCP-2n7)* **SubagentStop ad-hoc metrics hook** — new `~/.claude/hooks/log-adhoc-subagent-metrics.py` hook writes one `agent_calls` row per ad-hoc Agent() completion; env-var gate (`CCP_ORCHESTRATOR_RUN_ID`) prevents dual-writer race with orchestrator's `insert_agent_call()`; off-switch via `CCP_NO_SUBAGENT_METRICS=1`; `bead-metrics` skill extended with `--adhoc` breakdown; 12 unit tests, ~20ms hook overhead
-- *(CCP-dzk)* **TaskCreated hook — conditional standards injection by subagent_type** — new `~/.claude/hooks/inject-subagent-standards.py` hook fires on Agent spawn and injects standards paths based on agent_label pattern matching (Enforcer-Proactive); read-only agents (Explore, researcher, general-purpose, core/researcher) receive no injection; documented in subagent-standards.md with Trinity labels (ADR + Enforcer-Proactive); off-switch via `CCP_NO_SUBAGENT_STANDARDS=1`; CCP_ORCHESTRATOR_RUN_ID orchestrator bypass for pre-handled patterns; <100ms overhead at p95
+- *(CCP-dzp)* Sync issues.jsonl after merge
+- Bump version to 2026.04.69
+## [2026.04.68] - 2026-04-21
 
+### 🐛 Bug Fixes
+
+- *(CCP-dzk)* Address codex adversarial findings
+
+### ⚙️ Miscellaneous Tasks
+
+- *(CCP-dzk)* Update changelog
+- Bump version to 2026.04.68
+## [2026.04.67] - 2026-04-21
+
+### 💼 Other
+
+- Sync issues.jsonl from origin/main
+- Worktree-bead-CCP-2n7
+
+### ⚙️ Miscellaneous Tasks
+
+- Refresh issues.jsonl export
+- Update changelog for CCP-2n7
+- Bump version to 2026.04.67
+## [2026.04.66] - 2026-04-21
+
+### 🚀 Features
+
+- *(CCP-2hd.1)* Normalize touched_paths to canonical packages before vision boundary check
+- *(CCP-2n7)* Green — SubagentStop adhoc metrics implementation
+- *(CCP-dzk)* Green — fix fnmatch normalization and test runner for subagent hook
+
+### 🐛 Bug Fixes
+
+- *(CCP-imb)* Guard rollup_run against null run_id + log orphan agent_calls
+- *(CCP-2hd.1)* Address review findings iteration 1
+- *(CCP-dzp)* Green — propagate codex exec timeout via CODEX_EXEC_TIMEOUT wrapper
+- *(CCP-2n7)* Address review findings iteration 1
+- *(CCP-dzk)* Address review findings iteration 1
+- *(CCP-mit)* Use subshell cd for bd dolt start in worktree hook
+- *(CCP-mit)* Handle WorktreeCreate payload format (cwd+name fallback)
+- *(CCP-mit)* Exclude worktrees/ from .claude rsync to prevent recursive copies
+
+### 💼 Other
+
+- Worktree-bead-CCP-mit
+
+### 🧪 Testing
+
+- *(CCP-imb)* Red — rollup_run drops silently on null run_id
+- *(CCP-dzp)* Red — codex-exec.sh must exit non-zero on timeout
+- *(CCP-2n7)* Red — failing tests for SubagentStop adhoc metrics hook
+- *(CCP-dzk)* Red — inject-subagent-standards hook tests
+
+### ⚙️ Miscellaneous Tasks
+
+- *(CCP-imb)* Update beads issues.jsonl with close-reason note
+- *(CCP-imb)* Sync issues.jsonl pre-merge (bd auto-export)
+- *(CCP-imb)* Sync issues.jsonl after bd dolt pull
+- *(CCP-imb)* Final sync issues.jsonl before merge
+- *(CCP-2hd.1)* Add changelog entry
+- *(CCP-2hd.1)* Reconcile issues.jsonl before merge from main
+- *(CCP-dzp)* Refresh issues.jsonl after bd updates
+- *(CCP-mit)* Add WorktreeCreate hook, deprecate worktree-manager
+- *(CCP-mit)* Sync issues.jsonl from main merge
+- Bump version to 2026.04.66
+## [2026.04.65] - 2026-04-21
+
+### 💼 Other
+
+- Worktree-bead-CCP-50y
+
+### ⚙️ Miscellaneous Tasks
+
+- Bump version to 2026.04.65
+## [2026.04.64] - 2026-04-21
+
+### 🚀 Features
+
+- *(CCP-50y)* Green — extend sync-codex-skills with multi-directory registry
+- *(CCP-50y)* Green — convert 10 candidate skills to portable format
+- *(CCP-50y)* Green — sync 10 converted skills to .agents/skills
+- *(CCP-rjq)* Add Phase 1.25 wave-review-gate to wave-orchestrator
+- *(CCP-rjq)* Add Phase 1.25 wave-review-gate to wave-orchestrator
+
+### 🐛 Bug Fixes
+
+- *(CCP-50y)* Address review findings iteration 1
+- *(CCP-rjq)* Address adversarial findings — initialize PHASE_125_ARCH_FINDINGS, dry-run path-B guard, re-review trigger
+
+### 💼 Other
+
+- Worktree-bead-CCP-rjq
+
+### 🧪 Testing
+
+- *(CCP-50y)* Red — portability tests for 10 candidate skills
+
+### ⚙️ Miscellaneous Tasks
+
+- *(CCP-50y)* Add changelog entry
+- Update changelog (pre-merge commit from main)
+- *(CCP-rjq)* Update bead tracker state
+- *(CCP-rjq)* Reconcile issues.jsonl after first merge from main
+- Update changelog
+- Bump version to 2026.04.64
+## [2026.04.63] - 2026-04-21
+
+### 💼 Other
+
+- Worktree-bead-CCP-pvw
+
+### ⚙️ Miscellaneous Tasks
+
+- Bump version to 2026.04.63
+## [2026.04.62] - 2026-04-21
+
+### 🚀 Features
+
+- *(CCP-5d0)* Load CLAUDE.md and AGENTS.md when both exist in project-context skill
+
+### 🐛 Bug Fixes
+
+- *(CCP-pvw)* Correct quality-B trigger, B/C ambiguity, and output ordering
+
+### 💼 Other
+
+- *(CCP-pvw)* Absorb factory-check quality criteria into wave-reviewer
+- Worktree-bead-CCP-5d0
+
+### ⚙️ Miscellaneous Tasks
+
+- Bump version to 2026.04.62
 ## [2026.04.61] - 2026-04-21
 
-### Removed
+### 🐛 Bug Fixes
 
-- *(CCP-2vo.10)* Delete `beads-workflow/agents/cmux-reviewer.md` — the old 2-pane review orchestrator agent
-- *(CCP-2vo.10)* Delete `beads-workflow/scripts/codex-watch.sh` — polling wrapper for the deprecated Codex runtime (no remaining callers)
-- *(CCP-2vo.10)* Remove `cld -br` / `--bead-review` flag from `~/.claude/scripts/cld` — review is now inline in the bead-orchestrator and quick-fix single-pane flows
+- *(CCP-2vo.10)* Update model-strategy.yml comment after cmux-reviewer removal
 
-### Features
+### 💼 Other
 
-- *(CCP-rjq)* **Wave Structural Review Gate (Phase 1.25)** — new orchestration phase between Phase 1 and Phase 1.5 that performs cross-bead structural analysis via general-purpose subagent; severity-based triage (HIGH-fundamental/lokal, MEDIUM, LOW) with user halt/confirm/auto-fix logic; Sonnet fallback when codex unavailable; bounded re-review loop with escalation; `--skip-wave-review` and `--dry-run` flags supported
+- *(CCP-2vo.10)* Delete 2-pane review infrastructure (cmux-reviewer + cld -br + codex-watch.sh)
 
-### Miscellaneous Tasks
+### ⚙️ Miscellaneous Tasks
 
-- *(CCP-2vo.10)* Scrub stale `cld -br` / `cmux-reviewer` references from `quick-fix.md`, `review-agent.md`, `bead-orchestrator.md`, `wave-orchestrator/skill.md`, `wave-orchestrator/scripts/wave-status.sh`, `wave-orchestrator/scripts/wave-dispatch.sh`, `wave-orchestrator/references/error-recovery.md`
-
-### Notes
-
-The OpenAI codex plugin's own `codex-companion.mjs` (installed at `~/.claude/plugins/cache/openai-codex/...`) is external to this repo and remains in place — this bead only removed the in-repo wiring (`codex-watch.sh`) that had been superseded by `codex-exec.sh` in CCP-2vo.3/4/6. The companion state directory (`~/.claude/plugins/data/codex-openai-codex/state/`) is user-global data, not repo-owned.
-
-Evidence gate: Waves 4a/4b/5 closed 4 single-pane runs cleanly (Codex adversarial review caught 3 REGRESSIONs on .8 alone, zero truncation deadlocks). The one truncation deadlock this epic hit (.9 in Wave 2) was on the OLD 2-pane path we just deleted.
-
+- *(CCP-2vo.10)* Delete 2-pane review infrastructure
 ## [2026.04.60] - 2026-04-20
 
-### Miscellaneous Tasks
-
-- *(CCP-2vo.8)* Add validation infrastructure — canonical beads, sibling dispatch, retrospective template
-
-### Bug Fixes
+### 🐛 Bug Fixes
 
 - *(CCP-2vo.8)* Restore issues.jsonl drift, fix non-existent bd metrics commands
 - *(CCP-2vo.8)* Replace non-existent wall_clock_s with impl_duration_ms in dispatch query
 
+### 💼 Other
+
+- Worktree-bead-CCP-2vo.7
+- *(CCP-2vo.8)* Add validation infrastructure — canonical beads, sibling dispatch, retrospective template
+- Worktree-bead-CCP-2vo.8
+
+### ⚙️ Miscellaneous Tasks
+
+- Update changelog
+- Bump version to 2026.04.60
+## [2026.04.59] - 2026-04-20
+
+### 💼 Other
+
+- Worktree-bead-CCP-2vo.7
+
+### ⚙️ Miscellaneous Tasks
+
+- Sync issues.jsonl bead state
+- Sync issues.jsonl bead state (close CCP-2vo.7)
+- Bump version to 2026.04.59
+## [2026.04.58] - 2026-04-20
+
+### 🚀 Features
+
+- *(CCP-c2p)* Green — 3 pilot skills synced; openai.yaml metadata; decisions locked; evidence captured
+
+### 🐛 Bug Fixes
+
+- *(CCP-c2p)* Address review findings iteration 1 — hermetic tests + stronger evidence scope
+- *(CCP-c2p)* Address review findings iteration 2 — honest evidence scope (Option B)
+
+### 💼 Other
+
+- *(CCP-2vo.7)* Add auto-decisions + token breakdown to Phase 7 learnings report
+- Worktree-bead-CCP-c2p
+
+### 🧪 Testing
+
+- *(CCP-c2p)* Red — pilot skill surface, sync, evidence, decisions
+
+### ⚙️ Miscellaneous Tasks
+
+- *(beads)* Sync issues.jsonl state
+- *(beads)* Sync issues.jsonl state
+- Bump version to 2026.04.58
 ## [2026.04.57] - 2026-04-20
 
-### Miscellaneous Tasks
+### 💼 Other
 
-- *(CCP-2vo.5)* Wave-orchestrator: 1-pane budget, remove review surface spawn, add stall detection with agent_calls false-positive guard and idempotency check
+- Worktree-bead-CCP-2vo.5
 
-### Bug Fixes
+### ⚙️ Miscellaneous Tasks
 
-- *(CCP-2vo.5)* Query agent_calls from metrics.db (sqlite3), not bd sql; guard stall notes for idempotency
-- *(CCP-2vo.5)* Fix epoch-second SQLite comparison and temp-file stall idempotency
-
+- Update changelog
+- Sync issues.jsonl bead state
+- Update changelog
+- Bump version to 2026.04.57
 ## [2026.04.56] - 2026-04-20
 
-### Chores
+### 🐛 Bug Fixes
 
-- *(CCP-2vo.6)* Migrate quick-fix agent to codex-exec.sh, fix session-close handoff (CCP-7cn folded in)
+- *(CCP-2vo.5)* Agent_calls from metrics.db, idempotent stall notes
+- *(CCP-2vo.5)* Epoch-second sqlite comparison, temp-file stall idempotency
 - *(CCP-2vo.6)* Address codex adversarial findings — LAST_SHA, RUN_ID fallback, phase2 metrics
 
+### 💼 Other
+
+- *(CCP-2vo.5)* Wave-orchestrator 1-pane budget + stall detection
+
+### ⚙️ Miscellaneous Tasks
+
+- *(CCP-2vo.6)* Migrate quick-fix to codex-exec.sh, fix session-close handoff
+- Sync issues.jsonl bead state
+- Bump version to 2026.04.56
+## [2026.04.55] - 2026-04-20
+
+### 🚀 Features
+
+- *(CCP-2vo.4)* Rewrite bead-orchestrator flat 0-16, single-pane, inline Codex via codex-exec.sh
+
+### 🐛 Bug Fixes
+
+- *(CCP-2vo.4)* Address review findings — stale phase refs in frontmatter, error table, constraints
+
+### 💼 Other
+
+- Worktree-bead-CCP-2vo.4
+
+### 🧪 Testing
+
+- *(CCP-2vo.4)* Add forced-path fixture specs A/B/C/D for flat 0-16 orchestrator
+
+### ⚙️ Miscellaneous Tasks
+
+- Sync issues.jsonl bead state
+- Sync issues.jsonl bead state
+- Sync issues.jsonl bead state
+- Bump version to 2026.04.55
+## [2026.04.54] - 2026-04-20
+
+### 💼 Other
+
+- Worktree-bead-CCP-2vo.9
+
+### ⚙️ Miscellaneous Tasks
+
+- Sync issues.jsonl bead state
+- Bump version to 2026.04.54
+## [2026.04.53] - 2026-04-20
+
+### 💼 Other
+
+- Worktree-bead-CCP-tkd
+
+### ⚙️ Miscellaneous Tasks
+
+- *(beads)* Sync issues.jsonl state
+- Bump version to 2026.04.53
+## [2026.04.52] - 2026-04-20
+
+### 🚀 Features
+
+- *(CCP-2vo.9)* Green — add Provenance Compliance Checks, upgrade model to opus
+- *(CCP-tkd)* Green — extract portable skill cores + Claude harness adapters
+
+### 🐛 Bug Fixes
+
+- *(CCP-2vo.9)* Address review findings iteration 1
+- *(CCP-2vo.9)* Address review findings iteration 2
+- *(CCP-2vo.9)* Cmux review iter 1 — VETO integrity, docs state consistency, empty provenance normalization
+- *(CCP-2vo.9)* Cmux review iter 2 — missing-file fixability: human → auto
+- *(CCP-tkd)* Address review findings iteration 1
+- *(CCP-tkd)* Address review findings iteration 2 — polish
+- *(CCP-tkd)* Update test_skill_structure to reflect portability split (adapter owns argument-hint)
+- *(CCP-tkd)* Restore runtime frontmatter (model, disable-model-invocation) to spec-developer SKILL.md
+- *(CCP-tkd)* Remove Claude tool name leaks from portable cores; add Rule 6 + test patterns (F3)
+- *(CCP-2vo.3)* Normalize model name for rollup + capture python exit code
+- *(CCP-2vo.3)* Use additive total_tokens formula + capture reasoning_output_tokens
+
+### 💼 Other
+
+- *(CCP-2vo.3)* Add codex-exec.sh wrapper with turn.completed token capture
+- Worktree-bead-CCP-2vo.3
+
+### 🧪 Testing
+
+- *(CCP-2vo.9)* Red — TestModelUpgrade, TestVetoChecks, TestAdvisoryCheck, TestOutputFormatUpdated, TestInformationBarriersUpdated
+- *(CCP-tkd)* Red — portability split assertions for 3 pilot skills
+
+### ⚙️ Miscellaneous Tasks
+
+- Bump version to 2026.04.52
+## [2026.04.51] - 2026-04-20
+
+### 💼 Other
+
+- Bring in origin/main (first merge — resolve metrics.py import conflict)
+- Worktree-bead-CCP-2vo.1
+
+### ⚙️ Miscellaneous Tasks
+
+- Bump version to 2026.04.51
+## [2026.04.50] - 2026-04-20
+
+### 💼 Other
+
+- Worktree-bead-CCP-u01
+
+### ⚙️ Miscellaneous Tasks
+
+- *(beads)* Sync issues.jsonl with main branch state
+- Bump version to 2026.04.50
 ## [2026.04.49] - 2026-04-20
 
-### Features
+### 🚀 Features
 
-- *(CCP-2vo.2)* Add run_id identity column, agent_calls table, and Python insert API to metrics.db — stable contract for orchestrator instrumentation
-- *(metrics)* backfill_codex.py retroactive Codex attribution tool
+- *(metrics)* Backfill_codex.py retroactive Codex attribution tool
+- *(CCP-2vo.1)* Fix verification_tokens silent-fail + provenance contract
+- *(CCP-2vo.2)* Add run_id identity, agent_calls table, Python insert API
+- *(CCP-u01)* Add sync-codex-skills script with --check and --user modes
 
-### Bug Fixes
+### 🐛 Bug Fixes
 
-- *(CCP-2vo.2)* Thread run_id through insert_bead_run, upsert_ccusage_row, update_phase2_metrics — fixes regression from run_id schema addition
+- *(CCP-2vo.1)* Address review findings iteration 1
+- *(CCP-2vo.1)* Address review findings iteration 2
+- *(CCP-2vo.1)* Harden verification token capture against special chars
+- *(CCP-2vo.2)* Thread run_id through insert_bead_run, upsert_ccusage_row, update_phase2_metrics
+- *(CCP-u01)* Guard empty skills tokens and fatal-error on missing sources
+- *(CCP-u01)* Restore issues.jsonl to pre-implementation snapshot
 
-### Miscellaneous Tasks
-
-- *(beads)* Untrack .beads/issues.jsonl — Dolt is canonical
-
-### Documentation
+### 📚 Documentation
 
 - *(codex-skills)* Align rollout plan with machine-state and refined wave
 
+### 🧪 Testing
+
+- *(CCP-2vo.1)* Red — verification provenance contract
+
+### ⚙️ Miscellaneous Tasks
+
+- *(beads)* Untrack .beads/issues.jsonl — Dolt is canonical
+- Update changelog and bump version to 2026.04.49
+## [2026.04.48] - 2026-04-20
+
+### ⚙️ Miscellaneous Tasks
+
+- Bump version to 2026.04.48
 ## [2026.04.47] - 2026-04-20
 
-### Features
+### 🚀 Features
 
-- *(CCP-5ze)* Add Step 16a pipeline watch to session-close: gh run watch + workflow detection decision tree, --skip-pipeline flag, Step 17 reports pipeline status
-- *(CCP-d7b)* Replace Phase 3.6 inline-Python token capture with ccusage + @ccusage/codex ingestion handlers; add cache_read/cache_creation/reasoning/cost_usd columns to metrics.db; 91 historic beads backfilled with $328.72 cost history
+- *(agents)* Add Step 16a pipeline watch to session-close
+- *(agents)* Distinguish no-workflow from no-run-registered in pipeline watch
+- *(metrics)* Ingest Claude Code + Codex tokens via ccusage
 
-### Refactor
+### 🚜 Refactor
 
-- *(CCP-ds0)* Extract turn-log-upload.py, merge-from-main.sh, merge-feature.sh handlers from session-close; dedupe Input/Phase-B-order prose; 700 -> 634 lines
+- *(agents)* Extract turn-log/merge handlers from session-close
 
-## [2026.04.45] - 2026-04-19
+### ⚙️ Miscellaneous Tasks
 
-### Wave Orchestration
+- Update changelog
+- Bump version to 2026.04.47
+## [2026.04.46] - 2026-04-20
 
-- *(wave-1)* Close CCP-2q2 (tense-gate), CCP-9yh (None-mutual-exclusion), CCP-qrg (bd-wrapper PATH-shim)
-- *(wave-2a)* Close CCP-xpr (vision-parser helper) — unblocks CCP-hf1 (/vision-author) for Wave 2b
-- *(arch-council)* Architecture Council reviews for CCP-hf1 (4 HIGH) and CCP-a67 (5 CRITICAL findings) documented pre-implementation
+### 🚀 Features
 
+- *(skills)* Add wave-reviewer skill
+
+### ⚙️ Miscellaneous Tasks
+
+- *(skills)* Tighten wave-reviewer structure
+- *(skills)* Polish wave-reviewer structure (advisory fixes)
+- Bump version to 2026.04.46
+## [2026.04.45] - 2026-04-20
+
+### ⚙️ Miscellaneous Tasks
+
+- Update changelog
+- *(beads)* Sync bead state — wave 1+2a complete, vision skill chain unblocked
+- Update changelog
+- Bump version to 2026.04.45
 ## [2026.04.44] - 2026-04-19
 
 ### 🚀 Features
 
-- *(CCP-xpr)* Add vision_parser.py — shared stdlib parser for vision.md files (Principle, BoundaryRule, Vision dataclasses; VisionParseError with line:col; 4-column boundary table; 30 tests)
+- *(CCP-xpr)* Green — implement vision_parser module
+
+### 🐛 Bug Fixes
+
+- *(CCP-xpr)* Address review findings iteration 1
+- *(CCP-xpr)* Address review findings iteration 2
+- *(CCP-xpr)* Address review findings iteration 3
+
+### 💼 Other
+
+- Worktree-bead-CCP-xpr
+
+### 🧪 Testing
+
+- *(CCP-xpr)* Red — vision_parser tests + fixtures
+
+### ⚙️ Miscellaneous Tasks
+
+- Sync bead state
+- Sync bead state for CCP-xpr session close
+- Bump version to 2026.04.44
+## [2026.04.43] - 2026-04-19
+
+### 🚀 Features
+
+- *(CCP-qrg)* Add PATH-shim bd wrapper so bd lint --check=architecture-contracts works without sourcing shell extension
+
+### 🐛 Bug Fixes
+
+- *(CCP-qrg)* Address Codex review regressions in bd-wrapper and installer
+- *(CCP-qrg)* Detect and skip other bd-wrapper copies in PATH walk to prevent exec loop
+- *(CCP-qrg)* Address review findings iteration 1
+
+### 💼 Other
+
+- Worktree-bead-CCP-qrg
+
+### ⚙️ Miscellaneous Tasks
+
+- Sync bead state
+- *(CCP-qrg)* Sync bead state
+- *(CCP-qrg)* Sync bead state
+- *(CCP-qrg)* Update issues.jsonl bead state
+- *(CCP-qrg)* Update issues.jsonl bead state
+- Final issues.jsonl sync
+- Bump version to 2026.04.43
+## [2026.04.42] - 2026-04-19
+
+### 🐛 Bug Fixes
+
+- *(CCP-2q2)* Handle quoted document_type and skip fenced code blocks in tense-gate
+
+### 💼 Other
+
+- *(CCP-2q2)* Add tense-gate lint script for prescriptive-present enforcement
+- Worktree-bead-CCP-2q2
+
+### ⚙️ Miscellaneous Tasks
+
+- *(beads)* Sync bead state before CCP-2q2 merge
+- *(beads)* Sync bead state for CCP-2q2 session
+- *(beads)* Sync issues.jsonl export
+- Bump version to 2026.04.42
+## [2026.04.41] - 2026-04-19
+
+### 🚀 Features
+
+- *(CCP-9yh)* Enforce mutual exclusion of None with gap markers in bd-lint-contracts
+
+### 💼 Other
+
+- Worktree-bead-CCP-9yh
+
+### ⚙️ Miscellaneous Tasks
+
+- *(beads)* Sync bead state — Trinity waves 1-3, vision skills, CCP-w56 superseded
+- *(beads)* Sync bead state before CCP-9yh merge
+- *(beads)* Sync bead state for CCP-9yh session
+- Bump version to 2026.04.41
+## [2026.04.40] - 2026-04-19
+
+### 💼 Other
+
+- Worktree-bead-CCP-uy2
+
+### ⚙️ Miscellaneous Tasks
+
+- *(CCP-uy2)* Sync bead state and remove stale issues.jsonl symlink
+- *(CCP-uy2)* Remove issues.jsonl from git tracking
+- Bump version to 2026.04.40
+## [2026.04.39] - 2026-04-19
+
+### 💼 Other
+
+- Resolve conflicts from origin/main for CCP-2hd
+- Worktree-bead-CCP-2hd
+
+### ⚙️ Miscellaneous Tasks
+
+- Bump version to 2026.04.39
+## [2026.04.38] - 2026-04-19
+
+### 🚀 Features
+
+- *(CCP-uy2)* Green — implement adr-hoist-check.py
+- *(CCP-uy2)* Add /adr-gap skill, SKILL.md, adr-gap.sh, and adr-frontmatter.md reference
+- *(CCP-2hd)* Add architecture-scout agent definition with coverage matrix output
+- *(CCP-2hd)* Add example-matrix reference for architecture-scout
+- *(CCP-2hd)* Extend mira-adapters fixture for architecture-scout test scenarios
+- *(CCP-2hd)* Integrate architecture-scout into /plan and /epic-init skills
+
+### 🐛 Bug Fixes
+
+- *(CCP-uy2)* Address review findings iteration 1
+- *(CCP-uy2)* Address review findings iteration 2
+- *(CCP-uy2)* Fix 3 regressions from adversarial review + 4 new tests
+- *(CCP-2hd)* Update tests and golden file to match new full-trinity fixture state
+- *(CCP-2hd)* Address review findings iteration 1
+- *(CCP-2hd)* Address review findings iteration 2 — fix line numbers, ADR status, vision grep pattern, conformance_skip passthrough
+- *(CCP-2hd)* Add per-package matrix axis and fix epic-init scout timing/gate-mode
+- *(CCP-2hd)* Strict touched_paths scoping for vision boundary + move scout to Phase 4
+- *(CCP-0ql)* Fix bead-dropping and timezone bugs in wave-status.sh
+
+### 💼 Other
+
+- Worktree-bead-CCP-0ql
+
+### 📚 Documentation
+
+- *(CCP-uy2)* Update architecture-trinity README with feature docs
+
+### 🧪 Testing
+
+- *(CCP-uy2)* Red — failing tests for adr-hoist-check.py
+
+### ⚙️ Miscellaneous Tasks
+
+- *(CCP-uy2)* Untrack issues.jsonl (gitignored)
+- Sync bead state
+- Sync bead state for CCP-0ql
+- Bump version to 2026.04.38
+## [2026.04.37] - 2026-04-19
+
+### 💼 Other
+
+- Resolve conflicts from origin/main for CCP-0hr
+- Worktree-bead-CCP-0hr
+
+### ⚙️ Miscellaneous Tasks
+
+- Sync bead state after merge resolution
+- Remove issues.jsonl from git tracking (gitignored)
+- Bump version to 2026.04.37
+## [2026.04.36] - 2026-04-19
+
+### 🚀 Features
+
+- *(CCP-0hr)* Green — bd_lint_contracts.py linter (stdlib, 30 tests pass)
+- *(CCP-0hr)* Shell wrapper bd-lint-extension.sh for bd lint --check=architecture-contracts
+- *(CCP-0hr)* Update create SKILL.md with Phase 3.5 contract-label check and Phase 4.5 smoke-check
+- *(CCP-0hr)* Add contract-sections.md reference documentation
+
+### 📚 Documentation
+
+- *(wave-orchestrator)* Align monitoring to 270s cache-warm poll cadence
+
+### ⚙️ Miscellaneous Tasks
+
+- Bump version to 2026.04.36
+## [2026.04.35] - 2026-04-19
+
+### 🚀 Features
+
+- *(CCP-0hr)* Green — bd-lint-contracts linter + shell extension + skill + docs
+- *(CCP-vwg)* Green — enforcement matrix scanner, fixtures, SKILL.md update
+
+### 🐛 Bug Fixes
+
+- *(CCP-0hr)* Address review findings iteration 1
+- *(CCP-0hr)* Address review findings iteration 2 — fence-strip in validate, bd-unavailable exit-1, untrack issues.jsonl
+- *(CCP-0hr)* Address review findings iteration 1 (phase2)
+- *(CCP-0hr)* Address review findings iteration 2 (phase2) — require description after NEEDED markers
+- *(CCP-vwg)* Address review findings iteration 1
+- *(CCP-vwg)* Address review findings iteration 2
+- *(CCP-vwg)* Address review findings iteration 2
+- *(CCP-vwg)* Address review findings iteration 3 — inline-list comment ordering and false-pass test
+
+### 💼 Other
+
+- Worktree-bead-CCP-vwg
+
+### 🧪 Testing
+
+- *(CCP-0hr)* Red — fixture-based test suite for bd-lint-contracts
+- *(CCP-0hr)* Red — fixture-based test suite for bd-lint-contracts
+- *(CCP-vwg)* Red — enforcement matrix tests (all failing, scanner not yet created)
+
+### ⚙️ Miscellaneous Tasks
+
+- *(CCP-0hr)* Untrack issues.jsonl (covered by .gitignore)
+- *(CCP-0hr)* Untrack root issues.jsonl from git index
+- *(CCP-vwg)* Remove issues.jsonl from tracking (gitignore)
+- *(CCP-vwg)* Update bead state and untrack issues.jsonl
+- Untrack issues.jsonl (covered by .gitignore)
+- Bump version to 2026.04.35
+## [2026.04.34] - 2026-04-19
+
+### 🐛 Bug Fixes
+
+- *(CCP-089)* Remove duplicate issues.jsonl from tracking
+- *(CCP-089)* Align summary text to four-term vocabulary (advisory)
+
+### 💼 Other
+
+- Resolve conflict from origin/main — keep four-term vocabulary
+- Worktree-bead-CCP-089
+
+### ⚙️ Miscellaneous Tasks
+
+- Update changelog
+- *(CCP-089)* Update bead status to in_progress
+- *(CCP-089)* Introduce Architecture Trinity vocabulary in docs
+- Remove issues.jsonl from tracking (covered by .gitignore)
+- Bump version to 2026.04.34
+## [2026.04.33] - 2026-04-19
+
+### 🚀 Features
+
 - *(CCP-3oy)* Wire Turn-Log consumer in session-close and worktree-manager
 - *(dev-tools)* Add binary-explorer skill for reverse-engineering desktop apps
 
@@ -143,11 +722,8 @@ Evidence gate: Waves 4a/4b/5 closed 4 single-pane runs cleanly (Codex adversaria
 
 - *(beads)* Create Trinity-Harness epic and 10 subtask beads
 - *(CCP-089)* Introduce Architecture Trinity vocabulary in docs
-
-### Bug Fixes
-
-- *(CCP-089)* Remove duplicate issues.jsonl from tracking
-- *(CCP-089)* Align summary text to four-term vocabulary
+- Update changelog
+- Bump version to 2026.04.33
 ## [2026.04.32] - 2026-04-16
 
 ### 🚀 Features
@@ -158,44 +734,228 @@ Evidence gate: Waves 4a/4b/5 closed 4 single-pane runs cleanly (Codex adversaria
 
 - Update changelog
 - Bump version to 2026.04.32
-## [unreleased]
+## [2026.04.31] - 2026-04-15
 
-### Features
+### 💼 Other
 
-- *(CCP-50y)* **Codex Skills Portability** — convert 10 additional skills to agentskills-compatible format with portable core and SKILL.claude-adapter.md harness adapters; add portability compliance tracking in docs/codex-skills-candidates.md with selection criteria and non-portable deferrals with rationale
+- Worktree-bead-CCP-a81
 
-### Bug Fixes
+### ⚙️ Miscellaneous Tasks
 
-- *(wave-orchestrator)* Fix idle detection in wave-status: use position-based approach instead of bag-of-clues to correctly identify idle agents; guard against stale terminal history with thinking/tool-call markers; check 2 preceding lines for thinking markers to handle extra status lines
+- Bump version to 2026.04.31
+## [2026.04.30] - 2026-04-15
 
-### Features
+### 🐛 Bug Fixes
 
-- *(dev-tools)* Add `codex-guide` agent: haiku-powered documentation query agent for OpenAI Codex CLI — covers subcommands, config.toml, sandbox modes, custom TOML subagents (default/worker/explorer). Mirrors claude-code-guide pattern; fetches from developers.openai.com/codex/llms.txt.
-- *(architecture)* Harness-parity pivot: supersede 7 beads (CCP-3rh epic + CCP-rma, CCP-8w8, CCP-uec, CCP-yr3, CCP-q7r, CCP-18q) in favour of forking disler/the-library as cognovis/library with multi-harness (Claude Code + Codex) and marketplace support.
-- *(architecture)* Close 3 CCP-hs9 sub-beads (CCP-b3e, CCP-470, CCP-xa3) superseded by discovery that "62 agents" premise was factually incorrect — Codex ships subagents as first-class citizens (default/worker/explorer built-ins + custom TOML agents).
-- *(dev-tools)* New `/project-context` skill: 4-phase workflow (Scan, Distill, Draft, Validate) for generating docs/project-context.md from a codebase (Constitution Pattern). Includes golden output template with 5 required sections (Tech-Stack, Architecture Principles, Module Map, Patterns, Invariants) and 7 structural tests.
-- *(bead-orchestrator)* Inject Project Architecture Context and Bead Architecture Notes blocks into subagent prompt templates (Phase 2) — reads project-context.md or CLAUDE.md fallback, plus bead design field via JSON
-- *(bead-orchestrator)* Add Phase 2.6 Module Impact Analysis: identify affected modules, grep 3-5 existing patterns per module before implementation; new-file fallback scans siblings; dedicated Module Impact and Existing Patterns sections in both Codex and Standard Claude prompt templates
+- *(codex)* Switch cmux-reviewer and quick-fix to blocking review invocation
 
-## [2026-04-15]
+### ⚙️ Miscellaneous Tasks
 
-### Documentation
+- Bump version to 2026.04.30
+## [2026.04.29] - 2026-04-15
 
-- *(docs)* Add `docs/project-context.md`: generated via `/project-context` skill — Tech Stack, 7 Architecture Principles, 12-row Module Map, 7 Patterns, 9 Invariants
-- *(readme)* Refresh README to match 8-plugin bundle layout: replace legacy per-tool catalog, fix install suffix from `@claude-code-plugins` to `@sussdorff-plugins`, add Repo Conventions and Development sections
-- *(beads-workflow)* Clarify cmux surface detection logic in quick-fix agent
+### 🚀 Features
 
-### Bug Fixes
+- *(CCP-a81)* Green — canonical-catalog detection in council + Phase 6.5 integration-verification
 
-- *(cmux-reviewer)* Replace blind background Codex wait with Monitor-based event loop using codex-watch.sh — STALL_DETECTED triggers cancel+retry, CODEX_FAILED reads log, hard timeout at 40min
-- *(cmux-reviewer)* Remove mktemp dependency from poll loop to fix crashes in locked-down environments
-- *(cmux-reviewer)* Restore actionable error reason in CODEX_WATCH_ERROR events (regression fix)
+### 🐛 Bug Fixes
+
+- *(CCP-a81)* Address review findings iteration 1
+- *(CCP-a81)* Address review findings iteration 2
+- *(CCP-a81)* Address review findings iteration 3
+- *(CCP-a81)* Address review findings iteration 4
 
 ### 📚 Documentation
 
-- *(cmux-reviewer)* Add test-code finding policy for iter 2+: auto-accept test findings unless genuinely broken (TEST_FALSE_PASS, TEST_ALWAYS_PASS, TEST_ALWAYS_FAIL block; TEST_THEORY_FLAKY is advisory only)
+- Add Codex skills rollout plan
+- *(dolt)* Document bd v1.0.0 auto-start and update red flags
 
-- *(architecture)* Add 2026-04-14 session documents: bowser comparison, scenario-generator refactor, just+HOP 4-layer architecture, Claude+Codex+pi orchestration, Shikigami vs AFK Dispatcher split, bead generation plan
+### 🧪 Testing
+
+- *(CCP-a81)* Red — regression scenario for canonical-catalog and integration-verification gap
+
+### ⚙️ Miscellaneous Tasks
+
+- Bump version to 2026.04.29
+## [2026.04.28] - 2026-04-15
+
+### 🐛 Bug Fixes
+
+- *(CCP-nxy)* Guard idle detection against active Claude thinking markers
+- *(CCP-nxy)* Position-based idle detection, guard against stale terminal history
+- *(CCP-nxy)* Check 2 preceding lines for thinking markers, not just 1
+
+### 💼 Other
+
+- Worktree-bead-CCP-nxy
+
+### ⚙️ Miscellaneous Tasks
+
+- Update changelog
+- Bump version to 2026.04.28
+## [2026.04.27] - 2026-04-15
+
+### 🚀 Features
+
+- *(CCP-2a2)* Add Phase 2.6 Module Impact Analysis to bead-orchestrator
+
+### 🐛 Bug Fixes
+
+- *(CCP-2a2)* Promote Module Impact/Existing Patterns to first-class sections in Codex template; add new-file fallback to Phase 2.6
+- *(wave-orchestrator)* Detect dead cmux panes via error pattern
+- *(quick-fix)* Trigger session-close via Agent tool, not cmux send
+
+### 💼 Other
+
+- Worktree-bead-CCP-2a2
+
+### 📚 Documentation
+
+- Add project-context.md and refresh README for 8-plugin bundle layout
+
+### ⚙️ Miscellaneous Tasks
+
+- *(CCP-qo0)* Set project-context skill model to inherit
+- *(beads-workflow)* Clarify cmux surface detection in quick-fix agent
+- Update changelog
+- Update changelog
+- Bump version to 2026.04.27
+## [2026.04.26] - 2026-04-15
+
+### 💼 Other
+
+- Worktree-bead-CCP-qo0
+
+### ⚙️ Miscellaneous Tasks
+
+- Update changelog
+- Bump version to 2026.04.26
+## [2026.04.25] - 2026-04-15
+
+### 🚀 Features
+
+- *(CCP-qo0)* Green — /project-context skill with output template and plugin registration
+- *(CCP-1ul)* Inject project architecture context block into subagent prompt
+
+### 🐛 Bug Fixes
+
+- *(CCP-1ul)* Add arch context to codex template, use json field for design
+
+### 💼 Other
+
+- Worktree-bead-CCP-1ul
+
+### 🧪 Testing
+
+- *(CCP-qo0)* Red — structural tests for /project-context skill
+
+### ⚙️ Miscellaneous Tasks
+
+- Update changelog
+- Bump version to 2026.04.25
+## [2026.04.24] - 2026-04-15
+
+### 🐛 Bug Fixes
+
+- *(CCP-asr)* Replace blind background wait with Monitor-based event loop
+- *(CCP-asr)* Address Codex review regressions in codex-watch.sh
+- *(CCP-asr)* Remove mktemp dep from poll loop to fix locked-down env crash
+- *(CCP-asr)* Restore actionable error reason in CODEX_WATCH_ERROR
+
+### 💼 Other
+
+- Worktree-bead-CCP-asr
+
+### ⚙️ Miscellaneous Tasks
+
+- Update changelog
+- Bump version to 2026.04.24
+## [2026.04.23] - 2026-04-15
+
+### 🐛 Bug Fixes
+
+- *(beads-workflow)* Self-locate metrics lib without CLAUDE_PLUGIN_ROOT
+
+### ⚙️ Miscellaneous Tasks
+
+- Bump version to 2026.04.23
+## [2026.04.22] - 2026-04-15
+
+### 📚 Documentation
+
+- *(cmux-reviewer)* Add test-code finding policy for iter 2+
+
+### ⚙️ Miscellaneous Tasks
+
+- Update changelog
+- Bump version to 2026.04.22
+## [2026.04.21] - 2026-04-14
+
+### 🐛 Bug Fixes
+
+- *(CCP-8t0)* Add mcp__open-brain__* tools to agent allowlists
+
+### ⚙️ Miscellaneous Tasks
+
+- Update changelog
+## [2026.04.20] - 2026-04-14
+
+### 🐛 Bug Fixes
+
+- *(session-close)* Add MCP tool names to agent tools: allowlist
+
+### 📚 Documentation
+
+- *(mira-aidbox)* Document /fhir-only rule and aidbox-format NPE bug
+
+### ⚙️ Miscellaneous Tasks
+
+- Update changelog
+- Bump version to 2026.04.20
+## [2026.04.19] - 2026-04-14
+
+### 📚 Documentation
+
+- Add 2026-04-14 architecture session documents
+
+### ⚙️ Miscellaneous Tasks
+
+- Update changelog
+- Bump version to 2026.04.19
+## [2026.04.18] - 2026-04-14
+
+### 📚 Documentation
+
+- *(home-infra)* Document LXC 119 kaji GitHub Actions runner
+
+### ⚙️ Miscellaneous Tasks
+
+- Bump version to 2026.04.18
+## [2026.04.17] - 2026-04-13
+
+### 🐛 Bug Fixes
+
+- *(session-close)* Create version tag after bump commit, not before
+
+### ⚙️ Miscellaneous Tasks
+
+- Bump version to 2026.04.16
+- Bump version to 2026.04.17
+## [2026.04.16] - 2026-04-13
+
+### 🚀 Features
+
+- *(beads-workflow)* Add smart bead creation skill with type coaching and feature scenario gate
+## [2026.04.15] - 2026-04-13
+
+### 🐛 Bug Fixes
+
+- *(bead-orchestrator)* Enforce hard stop on REROUTE_QUICK_FIX with no escape hatch
+
+### ⚙️ Miscellaneous Tasks
+
+- Bump version to 2026.04.15
+## [2026.04.14] - 2026-04-13
 
 ### 🚀 Features
 
@@ -205,541 +965,190 @@ Evidence gate: Waves 4a/4b/5 closed 4 single-pane runs cleanly (Codex adversaria
 
 - *(bead-workflow)* Establish opus/sonnet/codex tier architecture
 
-### Bug Fixes
+### ⚙️ Miscellaneous Tasks
 
-- *(session-close)* Add MCP tool names to agent `tools:` allowlist — `mcpServers:` loads the server but each tool (e.g. `mcp__open-brain__save_memory`) must also appear in `tools:` or the subagent cannot call it
-- *(agent-allowlists)* Extend MCP tool allowlist fix to doc-changelog-updater, bead-orchestrator, test-engineer, and integration-test-runner agents (CCP-8t0)
-# Changelog
+- Update changelog
+- Bump version to 2026.04.14
+## [2026.04.13] - 2026-04-12
 
-All notable changes to the Claude Code Plugins collection.
+### 🚀 Features
 
-Each skill is versioned independently. Versions are assigned when skills are released.
+- *(wave-orchestrator)* Add effort estimation for unset beads in Phase 1
 
-The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
-and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+### ⚙️ Miscellaneous Tasks
 
-## 2026.04.13 — 2026-04-12
+- Bump version to 2026.04.12
+- Update changelog
+- Bump version to 2026.04.13
+## [2026.04.12] - 2026-04-12
 
-### Added
+### 🚀 Features
 
-- **beads-workflow/wave-orchestrator**: Effort estimation for unset beads in Phase 1 Dispatch Mode Classification. When a bead has no effort set, haiku subagents are spawned in parallel to estimate effort before classifying dispatch mode (quick vs full). Estimated effort is written back via `bd update --metadata` and shown in the Wave Table with a `*` marker. The dispatch mode table no longer allows `empty` in the `full` row — estimation is now enforced.
+- *(beads-workflow)* Add quick-fix agent for lightweight XS/S bead orchestration
 
-## 2026.04.12 — 2026-04-12
+### ⚙️ Miscellaneous Tasks
 
-### Added
+- Bump version to 2026.04.11
+- Update changelog
+## [2026.04.11] - 2026-04-12
 
-- **beads-workflow/quick-fix**: New lightweight agent for XS/S beads (bugs, chores, tasks). 4-phase design (Claim/Implement/Review/Handoff) vs 13-phase full orchestrator. Single-pane, max 2 review iterations, guard rail refuses M+ effort or feature-type beads.
-- **beads-workflow/wave-orchestrator**: `--quick <id>` parameter in wave-dispatch.sh routes individual beads to `cld -bq`. Mixed waves (full + quick beads) supported. Added dispatch mode classification table and Mode column in Wave Table to skill.md.
-- **core/skills/beads**: Auto-routing based on effort+type in SKILL.md. New `--full` and `--quick` override flags.
+### 🐛 Bug Fixes
 
-## 2026.04.11 — 2026-04-12
+- *(cmux)* Replace literal \n with send-key enter pattern across all agents
 
-### Fixed
+### ⚙️ Miscellaneous Tasks
 
-- **beads-workflow/cmux**: Replace `\n` in double-quoted bash strings with the reliable two-command pattern (`cmux send "text" && cmux send-key enter`) across all 7 occurrences in bead-orchestrator, cmux-reviewer, error-recovery, and wave-dispatch.sh. The `\n` in bash double-quotes is NOT a newline character — it was sent literally to the pane, so Enter was never pressed and the receiving pane never processed the input.
+- Bump version to 2026.04.10
+- Update changelog
+## [2026.04.10] - 2026-04-12
 
-## 2026.04.9 — 2026-04-12
+### 🚀 Features
 
-### Added
+- *(wave-orchestrator)* Add Phase 1.5b architecture review gate (CCP-b96)
+- *(plugins)* Add version field to all plugin.json and extend version.sh for multi-plugin sync
+## [2026.04.9] - 2026-04-12
 
-- **beads-workflow**: Multi-model orchestration strategy (CCP-80r) — model-strategy.yml with fixed per-phase model assignments (Opus orchestrator, Codex implementation, Sonnet fix), structured Codex briefing template, metrics.db extended with 6 new columns (wave_id, model_impl, model_review, phase2_triggered, phase2_findings, phase2_critical), wave-dispatch writes wave_id, bead-metrics supports wave queries
-- **beads-workflow**: Test quality gates, scope analysis, and learnings report in bead-orchestrator Phase 4
+### 🚀 Features
 
-## 2026.04.8 — 2026-04-12
+- *(beads-workflow)* Add test quality gates, scope analysis, and learnings report
+- *(beads-workflow)* Implement multi-model orchestration strategy (CCP-80r)
 
-### Fixed
+### ⚙️ Miscellaneous Tasks
 
-- **beads-workflow/cmux-reviewer**: Replace two-call `send` + `send-key enter` pattern with
-  atomic `send "text\n"` plus a 2-second retry fallback at all 3 cmux send sites (re-review
-  trigger, fix prompt delivery, session-close trigger). Eliminates the race condition where
-  the enter keypress was processed before the text rendered in the target surface input buffer,
-  causing ~50% of reviewer-to-impl transitions to silently fail during wave orchestration.
+- Update changelog
+- Bump version to 2026.04.9
+## [2026.04.8] - 2026-04-12
 
-## 2026.04.7 — 2026-04-11
+### 🐛 Bug Fixes
 
-### Fixed
+- *(cmux-reviewer)* Drop hard 30-line fix-prompt cap
+- *(cmux-reviewer)* Use single-call send+newline with retry to fix race condition
 
-- **beads-workflow/cmux-reviewer**: Route all Codex review calls through direct Bash invocation
-  of `codex-companion.mjs` instead of `Skill("codex:adversarial-review", ...)` and
-  `Skill("codex:review", ...)`. The openai-codex slash-commands set `disable-model-invocation:
-  true`, which causes Skill() to be rejected when invoked from any agent. All three review
-  calls (adversarial iter 1, adversarial iter 2, neutral iter 3) now use
-  `node "$CODEX_COMPANION" <subcommand> --background --base <sha> --scope branch`.
-  Phase 1 Setup gains a runtime discovery step for `codex-companion.mjs` and aborts clearly
-  if the openai-codex plugin is not installed.
+### 📚 Documentation
 
-## 2026.04.6 — 2026-04-11
+- *(cmux-reviewer)* Strip historical rationale from LEARN bullet
 
-### Fixed
+### ⚙️ Miscellaneous Tasks
 
-- **beads-workflow**: Bundle `orchestrator/` Python library as `beads-workflow/lib/orchestrator/`
-  so Phase 3.6 Token Capture, the bead-metrics skill, and the retro workflow work without
-  requiring the `/Users/malte/code/claude` legacy path on the host machine.
-  All three import sites now use `os.path.join(os.environ['CLAUDE_PLUGIN_ROOT'], 'lib')`
-  instead of a hardcoded absolute path.
-- **beads-workflow/gate.py**: Drop hardcoded `malte.skills.council` import. The regex-based
-  severity classifier (`_classify_severity`) is now the primary implementation — no coupling
-  to the host's `~/.claude` tree.
+- Update changelog
+- Bump version to 2026.04.8
+## [2026.04.7] - 2026-04-11
 
-### Chore
+### 🐛 Bug Fixes
 
-- Remove stray `~/.claude` harness-test files (`validator/`, `tests/`, `docs/`, `tools/`,
-  `conftest.py`, `pyproject.toml`, `uv.lock`) that had drifted into this plugin repo.
+- *(beads-workflow)* Route cmux-reviewer through codex-companion runtime
 
-## 2026.04.5 — 2026-04-11
+### ⚙️ Miscellaneous Tasks
 
-### Changed
+- Update changelog
+- Bump version to 2026.04.7
+## [2026.04.6] - 2026-04-11
 
-- **beads-workflow/cmux-reviewer**: Replace flat adversarial-on-every-iteration loop with a
-  three-stage escalation ladder (challenge → adversarial-verify → neutral sanity check).
-  Adds bead-scope classification rules (REGRESSION / PRE_EXISTING / OUT_OF_SCOPE) so only
-  genuine regressions become fix-injection candidates. Adds an oscillation detector that stops
-  the loop when the same file+symbol is flagged across consecutive iterations (design signal,
-  not a fix-refinement cycle) and escalates to the user. Hard stop at iteration 3 — no iter 4
-  ever, even on user request.
+### 🐛 Bug Fixes
 
-### Fixed
-
-- **beads-workflow**: Use fully qualified plugin namespace for all `subagent_type` references.
-  Short names like `verification-agent`, `uat-validator`, `doc-changelog-updater`,
-  `integration-test-runner`, `test-engineer`, and `plan-reviewer` were not resolving correctly
-  without their plugin prefix. All references now use `plugin:agent` format (e.g.
-  `beads-workflow:verification-agent`, `dev-tools:uat-validator`).
-
-## 2025-10-22
-
-### bash-best-practices v1.2.0
-
-#### Changed
-- Simplified skill description for better clarity and conciseness
-- Enhanced reference guide links with more descriptive annotations:
-  - Added "Edge cases, 4 pitfalls, 3 variations" note for strict mode guide
-  - Added "Slicing, associative arrays, 6 reusable patterns, 5 specific pitfalls" note for arrays guide
-  - Added "100+ item checklist across 10 categories" note for code review checklist
-- Streamlined SKILL.md examples for better readability:
-  - Simplified array indexing comparison (removed verbose code blocks)
-  - Condensed strict mode explanation
-  - Consolidated code review section with clearer focus on comprehensive checklist
-- Updated lint-and-index.sh to use Python-based analyzer (`analyze-shell-functions.py`)
-- Added uv dependency check to lint-and-index.sh
-- Reorganized example files: moved example-extract.json to `references/examples/`
-
-#### Removed
-- Removed `assets/example-extract.json` (moved to references/examples/)
-
-## 2025-10-21
-
-### bash-best-practices v1.1.0
-
-#### Added
-- Tree-sitter-based function analyzer (`scripts/analyze-shell-functions.py`)
-  - Accurate AST parsing using tree-sitter (replaces regex-based approach)
-  - Handles heredocs with braces correctly (previously failed with regex parser)
-  - Supports both bash (.sh, .bash) and zsh (.zsh) files
-  - Auto-installs dependencies via uv (tree-sitter, tree-sitter-bash)
-  - PEP 723 inline script dependencies for zero-config usage
-  - Tested on real codebases: 708 PowerShell functions, 326 macOS functions, 125 VM functions
-  - Output format matches PowerShell extract.json for consistency
-  - Fixed purpose extraction bug (skips shebangs, filters inline code comments)
-- Comprehensive extract.json reference (`references/20-function-discovery-extract-json.md`)
-  - Complete guide on when to use, setup, location best practices
-  - All jq query patterns (semantic search, category browsing, parameter inspection)
-  - Code commenting best practices for maximum discoverability
-  - Agent workflow integration patterns
-  - Pre-commit and CI/CD integration examples
-
-#### Changed
-- Updated SKILL.md with tree-sitter documentation and rationale for extract.json approach
-- Function discovery workflow now recommends tree-sitter analyzer
-- Added "When to Use extract.json" section with clear decision criteria
-- Added agent workflow guidance (generate at session start or when function not found)
-- Emphasized semantic search and precise extraction benefits
-
-#### Removed
-- `scripts/analyze-shell-functions.sh` (regex-based analyzer - replaced by tree-sitter version)
-- `scripts/analyze-shell-functions-wrapper.sh` (no longer needed)
-
-### zsh-best-practices v1.4.0
-
-#### Added
-- Tree-sitter-based function analyzer (`scripts/analyze-shell-functions.py`)
-  - Same analyzer as bash-best-practices (handles both bash and zsh)
-  - Supports .zsh, .sh, .bash files
-  - Tested on real ZSH codebases (326 macOS functions)
-- Comprehensive extract.json reference (`references/20-function-discovery-extract-json.md`)
-  - Shared with bash-best-practices for consistency
-  - Complete guide on setup, jq patterns, commenting best practices
-
-#### Changed
-- Updated SKILL.md with function discovery workflow
-- Added agent guidance for when to generate extract.json
-- Added quick start examples and jq query patterns
-
-## 2025-10-20
-
-### bash-best-practices v1.0.0
-
-Initial release of the bash-best-practices skill providing comprehensive Bash scripting guidance with integrated linting and function discovery.
-
-#### Added
-- Complete Bash scripting guide (SKILL.md)
-  - Function discovery workflow using metadata extraction
-  - Lint-and-index pattern (always couple ShellCheck with metadata regeneration)
-  - Quick decision tree pointing to 20 reference documents
-  - Cross-platform focus (macOS, Linux, WSL)
-  - Recommended script template with strict mode
-  - Common pitfalls and solutions
-- Function metadata generator (`scripts/analyze-shell-functions.sh`)
-  - Extracts function names, locations (file:line), parameters
-  - Infers function purpose from comments or naming patterns
-  - Categorizes functions (display, core, test, export, install, service, helper)
-  - Outputs extract.json for fast semantic search with jq
-  - Adapted from ZSH version for Bash compatibility
-- Combined workflow script (`scripts/lint-and-index.sh`)
-  - Runs ShellCheck for linting
-  - Regenerates extract.json for function metadata
-  - Ensures metadata stays synchronized with code changes
-  - Supports auto-fix mode and severity filtering
-- ShellCheck configuration (`.shellcheckrc`)
-  - Pragmatic defaults aligned with skill guidelines
-  - Disables SC1090/SC1091 for dynamic sourcing
-  - Enables additional checks for better quality
-- Asset files
-  - `shellcheck-suppression-guide.md` - When and how to suppress warnings
-  - `tool-integration-guide.md` - Detailed workflow documentation comparing old (grep) vs new (metadata) approach
-- 20 comprehensive reference documents covering all aspects of Bash scripting
-
-#### Key Features
-- **Metadata-first workflow**: Generate extract.json once, query with jq for instant function discovery
-- **Token-efficient**: Read only needed functions using exact line numbers from metadata
-- **Always synchronized**: Lint-and-index pattern prevents stale metadata
-- **Cross-platform**: Works on macOS, Linux, and WSL
-- **Semantic search**: Find functions by purpose, category, or parameters (not just name)
-
-#### Updated
-- **zsh-best-practices**: Added scope clarification - when to use ZSH vs Bash
-
-### branch-synchronizer v1.0.0
-
-Initial release of the branch-synchronizer skill providing intelligent branch synchronization with conflict-aware rebasing.
-
-#### Added
-- Core synchronization workflow
-  - Fetch latest from remote branches and main
-  - Auto-stash uncommitted changes before rebase
-  - Intelligent rebase onto latest main/develop
-  - Conflict detection with context-aware handling
-  - Auto-restore stashed changes after successful rebase
-- Dual execution modes
-  - **Agent Mode**: Auto-abort on conflicts, preserve state, return exit code 1 for agent handling
-  - **Interactive Mode**: Guide user through conflict resolution with helpful commands and continuation support
-- Branch discovery system
-  - Find branches by ticket pattern (PROJ-*, TICKET-*, etc.)
-  - Detect if branch already merged to main (prevents unnecessary syncs)
-  - Handle multiple matching branches (selects most recent by commit date)
-  - Uses ticket patterns from `jira-analyzer.json` (project-local or global)
-- Safety features
-  - Never auto-push (requires manual review after rebase)
-  - Preserve uncommitted changes with auto-stash
-  - Validate branch existence before operations
-  - Comprehensive error messages with actionable guidance
-- Script architecture
-  - `sync-branch.zsh` - Main entry point with CLI interface
-  - `lib/config-functions.zsh` - Configuration hierarchy (project-local → global)
-  - `lib/branch-functions.zsh` - Branch discovery and merge detection
-  - `lib/sync-functions.zsh` - Core sync and rebase operations
-- Enhanced error messages with context
-  - Path validation with current directory and tips
-  - Git repository checks with initialization guidance
-  - Pattern matching errors with available ticket formats
-  - Detached HEAD recovery steps
-  - Branch listing with creation commands
-  - Fetch/pull failures with diagnostic steps
-- ZSH best practices implementation
-  - Explicit global variable scoping with `typeset -g`
-  - Strict mode throughout (`emulate -LR zsh`, `ERR_EXIT`, `NO_UNSET`, `PIPE_FAIL`)
-  - Proper emulation scoping (`emulate -L` in libraries)
-  - Safe JSON construction with `jq -n`
-  - Cleanup traps for resource management
-- Comprehensive documentation
-  - SKILL.md with imperative voice, concise structure
-  - references/usage-guide.md - 500+ lines of examples, workflows, and patterns
-  - references/api-reference.md - Complete script API and JSON output format
-  - references/integration-guide.md - CI/CD, git hooks, IDE integration patterns
-  - references/troubleshooting.md - Common issues and solutions
-
-**Design Philosophy**:
-- Project-agnostic (works with any git repository)
-- Context-aware conflict handling (agent vs interactive)
-- Safety-first (never auto-push, validate before operations)
-- User-friendly error messages with recovery steps
-
-**Status**: Production ready with comprehensive documentation and full ZSH best practices compliance
-
----
-
-### zsh-best-practices v1.3.0
-
-Enhanced type patterns and syntax validation capabilities.
-
-#### Added
-- **`allowed_tools` metadata** for ZSH syntax validation
-  - Added `allowed_tools: Bash(zsh -n *)` to YAML frontmatter
-  - Enables automatic syntax checking of ZSH scripts
-- **Integer boolean pattern** as idiomatic ZSH approach (02-typeset-and-scoping.md)
-  - Documented `typeset -i flag=0` pattern with `(( ))` arithmetic tests
-  - Explained why integers are more idiomatic than string booleans in ZSH
-  - Added comparison examples (`(( found ))` vs `[[ "$found" == "true" ]]`)
-  - Convention: 0 = false, 1 (or non-zero) = true
-- **Explicit array declaration** best practice (02-typeset-and-scoping.md)
-  - Documented pattern: `typeset -a arr` then `arr=()` (separate type from init)
-  - Benefits: clarity, documentation, consistency with typed declarations
-  - Example with loop population pattern
-- **String substring extraction** with 1-based indexing (04-array-indexing.md)
-  - Documented ZSH-native `${text[1,5]}` syntax (1-based, consistent with arrays)
-  - Compared with Bash-style `${text:0:5}` syntax (0-based, inconsistent)
-  - Recommended ZSH-native syntax for consistency with array indexing
-  - Real-world examples with date parsing
-
-#### Changed
-- Enhanced references/02-typeset-and-scoping.md with integer boolean and explicit array patterns
-- Enhanced references/04-array-indexing.md with string substring extraction guidance
-- SKILL.md frontmatter now includes allowed_tools metadata
-
-**Status**: Enhanced with idiomatic patterns and syntax validation support
-
----
-
-### zsh-best-practices v1.2.0
-
-Updated naming conventions to follow industry standards (POSIX, Google Shell Style Guide, Oh My Zsh) instead of custom conventions.
-
-#### Changed
-- **Variable naming conventions** updated to industry standards:
-  - Regular variables: `lowercase_snake_case` (was `Mixed_Snake_Case`)
-  - Constants & exports: `UPPER_SNAKE_CASE` (unchanged)
-  - Private variables: `_leading_underscore` (unchanged)
-  - Removed non-standard `CamelCase` recommendation for local variables
-- **Function naming conventions** updated to industry standards:
-  - Public functions: `lowercase_with_underscores` (was `lowerfirst_Snake_Case`)
-  - Private functions: `_lowercase_with_underscores` (was `_lowerfirst_Snake_Case`)
-- Updated SKILL.md examples to use industry-standard naming
-  - Script template now uses `script_dir`, `tmp_dir` instead of `ScriptDir`, `TmpDir`
-  - Added rule: "If it's your variable, lowercase it. If you export it or it's a constant, uppercase it."
-- Updated references/01-naming-conventions.md with comprehensive industry standard documentation
-  - Added POSIX standard references
-  - Added Google Shell Style Guide references
-  - Removed custom `Mixed_Snake_Case` convention
-  - Enhanced examples with real-world patterns
-
-**Context**: Previous conventions were based on custom patterns. New conventions match 99% of shell scripts in the wild (Linux kernel, Oh My Zsh, Google's codebase).
-
-**Impact**: Skills developed using this guide now follow widely-recognized conventions, making them more recognizable to other developers.
-
----
-
-### git-worktree-tools v1.0.0
-
-Initial release of the git-worktree-tools skill providing git worktree lifecycle management with project-aware configuration syncing.
-
-#### Added
-- Core worktree lifecycle scripts
-  - `create-worktree.zsh` - Create worktrees with automatic branch handling and config sync
-  - `validate-worktree.zsh` - Check worktree state (VALID, INVALID, NOT_FOUND)
-  - `remove-worktree.zsh` - Clean up worktrees with uncommitted change detection
-  - `sync-configs.zsh` - Sync `.claude/`, `CLAUDE.local.md`, `.env` from main repo
-- Library functions for custom integrations
-  - `worktree-functions.zsh` - Core worktree operations (status checks, branch detection, listing)
-  - `config-sync.zsh` - Configuration synchronization functions
-  - `branch-utils.zsh` - Branch name parsing and ticket extraction
-- Ticket extraction from branch names
-  - Supports multiple ticket patterns: PROJ-*, TICKET-*, and generic PROJECT-123 format
-  - Automatic extraction with `extract_ticket_number()` function
-  - Branch name validation and generation utilities
-- Black box operation design
-  - All operations run from outside worktree directories
-  - Avoids permission issues and maintains clear separation
-  - No cd into worktree directories (safety-first approach)
-- Configuration synchronization
-  - Uses rsync for `.claude/` directory sync with `--delete-after`
-  - Copies `CLAUDE.local.md` and `.env` if present
-  - Skips missing files (not treated as errors)
-- JSON output for programmatic integration
-  - All scripts return structured JSON with status, paths, and metadata
-  - Exit codes: 0 for success, 1 for errors
-  - Quiet mode for scripting (`--quiet` flag)
-- Comprehensive documentation
-  - SKILL.md with overview, quick start, common workflow example
-  - references/usage-guide.md with 750+ lines of examples and patterns
-  - Complete script documentation with help messages
-  - Library function reference with signatures
-
-**Design Philosophy**:
-- Worktrees created in sibling directory (`project.worktrees/NAME/`)
-- Validation-first approach (always check state before operating)
-- Project-aware (automatically syncs configurations)
-- Branch-aware (extracts ticket numbers from branch names)
-- Permission safe (operates from outside to avoid permission issues)
-
-#### Fixed
-- ZSH strict mode compatibility issues discovered during testing
-  - Reserved variable name `status` (read-only in ZSH) renamed to `worktree_status`
-  - Invalid trap signal `RETURN` (bash idiom) replaced with ZSH `always` block
-  - All scripts now fully compatible with ZSH strict mode
-
-**Status**: Production ready with comprehensive documentation and testing complete
-
----
-
-### zsh-best-practices v1.1.0
-
-Enhanced ZSH best practices skill with critical lessons learned from real-world usage.
-
-#### Added
-- **Reserved variable names documentation** (Critical Issue #6)
-  - Documents ZSH read-only variables that cannot be assigned in strict mode
-  - Common reserved names: `status`, `pipestatus`, `ERRNO`, `signals`, etc.
-  - Detection patterns for code review
-  - Added to critical issues checklist
-  - Real-world example: `typeset status=` fails in strict mode
-- **`always` block pattern for function-level cleanup**
-  - ZSH-specific alternative to `trap` for function scope
-  - Works reliably in all ZSH modes including strict mode
-  - Pattern comparison table: `trap` vs `always` blocks
-  - When to use each pattern (script-level vs function-level)
-  - Common Bash idiom mistake: `trap ... RETURN` doesn't work in ZSH
-  - Complete examples with temp file cleanup
-
-#### Changed
-- Updated SKILL.md common pitfalls section
-  - Added Pitfall #5: Reserved Variable Names
-  - Added Pitfall #6: Using `trap RETURN` (Bash idiom)
-  - Updated code review section with new critical checks
-- Enhanced 10-code-review-checklist.md
-  - Added Critical Issue #6: Reserved/Read-Only Variable Names
-  - Renumbered subsequent sections (7-12)
-  - Updated quick reference with new checks
-- Enhanced 09-common-patterns.md
-  - Added "Function-Level Cleanup with `always` Block" section
-  - Comparison table for `trap` vs `always` usage
-  - Updated summary to mention both cleanup patterns
-
-**Status**: Enhanced with real-world testing insights
-
----
-
-### git-operations v1.0.0
-
-Initial release of the git-operations skill providing safe git operations with styleable commit messages and comprehensive safety checks.
-
-#### Added
-- Safe commit operations with Git Safety Protocol enforcement
-  - Authorship verification before amending commits
-  - Push status checks to prevent rewriting public history
-  - Comprehensive pre-commit validation
-- Styleable commit messages with 6 built-in styles:
-  - `conventional` - Standard format (feat:, fix:, docs:, etc.) [DEFAULT]
-  - `pirate` - "Arr! Hoisted the new feature..."
-  - `snarky` - "Obviously this needed attention..."
-  - `emoji` - ✨ feat: with emoji prefixes
-  - `minimal` - Plain messages without type prefixes
-  - `corporate` - [SCOPE] Category: Description format
-- Configuration via CLAUDE.md/CLAUDE.local.md
-  - `Commit style:` - Select commit message style
-  - `Commit attribution:` - Control attribution footers (none/claude/custom)
-  - Project-local config overrides user-wide config
-- Branch protection system
-  - Blocks force-push to main/master (always)
-  - Allows force-push to feature branches with warnings
-  - Uses `--force-with-lease` for safer force-pushes
-- Pre-commit hook handling
-  - Smart amend logic for hook-modified files
-  - Safety checks: authorship + push status
-  - Falls back to new commit when amend is unsafe
-- Push safety checks
-  - Repository, remote, and branch validation
-  - Upstream tracking verification
-  - Ahead/behind status checks
-  - Detached HEAD detection
-- Single entry point design
-  - `git-ops.zsh` script for all operations
-  - Modular library structure (lib/commit-helpers.zsh, lib/safety-checks.zsh, lib/style-engine.zsh)
-  - Clear error messages with actionable guidance
-- Comprehensive documentation
-  - SKILL.md with usage examples and integration patterns
-  - references/commit-styles.md - Complete style library and transformations
-  - references/safety-protocol.md - Detailed safety rules and decision trees
-
-**Status**: Production ready with comprehensive documentation
-
----
-
-### powershell-pragmatic v1.0.0
-
-Initial release of the powershell-pragmatic skill providing pragmatic PowerShell coding patterns.
-
-#### Added
-- Pragmatic PowerShell coding guide
-- Production-ready PowerShell patterns
-- Error handling and logging strategies
-- PSScriptAnalyzer integration
-- Reusability and modularity patterns
-- ASCII-only output requirements for user-facing text
-
-**Status**: Complete reference documentation
-
----
-
-### zsh-best-practices v1.0.0
-
-Initial release providing comprehensive ZSH scripting guide for macOS.
-
-#### Added
-- Comprehensive ZSH scripting guide for macOS
-- 10 comprehensive reference guides:
-  - 01-naming-conventions.md
-  - 02-typeset-and-scoping.md
-  - 03-word-splitting-and-quoting.md
-  - 04-array-indexing.md
-  - 05-strict-mode-and-options.md
-  - 06-json-processing.md
-  - 07-environment-variables.md
-  - 08-macos-specifics.md
-  - 09-common-patterns.md
-  - 10-code-review-checklist.md
-- Critical differences from Bash documentation
-- JSON processing best practices (avoiding jq pitfalls)
-- macOS-specific considerations (BSD vs GNU tools)
-
-**Status**: Complete reference documentation
-
----
-
-### skill-tester v1.0.0
-
-Initial release providing meta skill for testing and validating skills under development.
-
-#### Added
-- Meta skill for testing and validating skills under development
-- Automated skill installation to .claude/skills/ (install-skill-for-testing.zsh)
-- Skill validation tool (validate-skill.py)
-- Testing workflow documentation
-- Claude Code restart guidance
-- Project structure understanding
-
-**Status**: Functional and ready for use
-
----
-
-### youtube-music-updater v1.0.0
-
-Initial release providing YouTube Music desktop app update automation.
-
-#### Added
-- Update YouTube Music desktop app from GitHub releases
-- Version checking and comparison
-- App restart and quarantine attribute removal (macOS)
-- Handles pear-devs GitHub releases
-- macOS focused
-
-**Status**: Functional for macOS
+- *(beads-workflow)* Bundle orchestrator library into plugin
+
+### ⚙️ Miscellaneous Tasks
+
+- Update changelog
+- Bump version to 2026.04.6
+## [2026.04.5] - 2026-04-11
+
+### 📚 Documentation
+
+- *(beads-workflow)* Add three-stage escalation ladder to cmux-reviewer
+
+### ⚙️ Miscellaneous Tasks
+
+- Bump version to 2026.04.5
+## [2026.04.4] - 2026-04-11
+
+### 🐛 Bug Fixes
+
+- *(beads-workflow)* Use fully qualified plugin namespace for subagent_type references
+
+### ⚙️ Miscellaneous Tasks
+
+- Bump version to 2026.04.3
+- Update changelog
+- Bump version to 2026.04.4
+## [2026.04.3] - 2026-04-11
+
+### 🚀 Features
+
+- *(session-close)* Sync plugin.json version when bumping VERSION file
+
+### ⚙️ Miscellaneous Tasks
+
+- Bump version to 2026.04.2
+- *(plugins)* Remove version field from plugin.json and VERSION file
+## [2026.04.2] - 2026-04-11
+
+### 🚀 Features
+
+- *(hooks)* Migrate hooks to plugin namespaces and update cmux-reviewer
+
+### ⚙️ Miscellaneous Tasks
+
+- Bump version to 2026.04.1
+## [2026.04.1] - 2026-04-11
+
+### 🚀 Features
+
+- *(agents)* Migrate all agents from malte/agents to plugin namespaces
+
+### 🐛 Bug Fixes
+
+- *(session-close)* Migrate handler scripts and update path reference
+- *(session-close)* Update HANDLERS_DIR path to plugin cache location
+
+### ⚙️ Miscellaneous Tasks
+
+- Bump version to 2026.04.0
+## [2026.04.0] - 2026-04-11
+
+### 🚀 Features
+
+- Add reference-file-compactor skill
+- Add plugin-tester for local plugin development workflow
+- Add plugin-developer plugin with marketplace-manager skill
+- Add hook-creator skill for plugin-developer
+- Add slash-command-creator skill to plugin-developer
+- Add agent-creator skill for plugin-developer
+- Add reference files and automation scripts to command-creator
+- Add timing-matcher skill for Timing app export processing
+- Add playwright-mcp plugin for browser automation
+- Configure repository as official Claude Code marketplace
+- Add /install-plugin command to plugin-developer
+- Update /install-plugin to handle complete plugin unpacking
+- Add prompt-library-tools plugin for Obsidian prompt extraction
+- Add skill-forge plugin for skill quality scoring, auditing, and refactoring
+- Restructure marketplace into 8 thematic plugin bundles
+- *(dev-tools)* Add prd-generator, pester-test-engineer, feedback-extractor, spellcheck agents
+- *(beads)* Set up CCP issue tracking and improve dolt new-project docs
+
+### 🐛 Bug Fixes
+
+- Ignore .claude symlink in addition to directory
+- Remove invalid 'category' field from all plugin.json files
+
+### 🚜 Refactor
+
+- Restructure reference-file-compactor as Claude Code plugin
+- Replace bash script with Python for plugin installation
+- Migrate bash/zsh scripts to Python for better portability
+- Adopt pragmatic Python dependency approach
+- Rename slash-command-creator to command-creator
+- Streamline command-creator skill (28% reduction)
+- Convert standalone skills to proper plugin structure
+- *(command-creator)* Use model family names instead of version numbers
+
+### 📚 Documentation
+
+- Document plugin skills discovery bug and workarounds
+- *(sync-cache)* Clarify manual vs automated plugin cache sync
+
+### ⚙️ Miscellaneous Tasks
+
+- Remove duplicate .claude/ entry from gitignore
+- Add sync-cache.sh script for manual plugin cache sync
