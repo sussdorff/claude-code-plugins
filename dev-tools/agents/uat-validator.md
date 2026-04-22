@@ -271,3 +271,20 @@ Minimum requirement: at least one smoke test or one UAT scenario must have been 
 - **Zero scenarios = not a pass**: If no commands were executed, the result is BLOCKED — not PASS.
 - **Derive scenarios from bead_description, not from source code**: Read the acceptance criteria, then test those criteria directly against the running artifact.
 - **Dev server cleanup**: Always stop background processes when done. Use `kill $DEV_SERVER_PID` or `pkill -f <command>`.
+
+Before returning your final result, include a `### Debrief` section documenting key decisions,
+challenges, surprising findings, and follow-up items.
+
+### Debrief
+
+#### Key Decisions
+- <decisions made>
+
+#### Challenges Encountered
+- <challenges>
+
+#### Surprising Findings
+- <surprises>
+
+#### Follow-up Items
+- <follow-ups>

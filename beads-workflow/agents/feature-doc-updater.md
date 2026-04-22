@@ -244,3 +244,20 @@ After making edits:
 - If unsure where a feature belongs, add it to the most logical existing section
 - Pencil designs (.pen) over screenshots — reference exported PNGs
 - Feature docs are also the MIRA support agent's knowledge base — write accordingly
+
+Before returning your final result, include a `### Debrief` section documenting key decisions,
+challenges, surprising findings, and follow-up items.
+
+### Debrief
+
+#### Key Decisions
+- <decisions made>
+
+#### Challenges Encountered
+- <challenges>
+
+#### Surprising Findings
+- <surprises>
+
+#### Follow-up Items
+- <follow-ups>

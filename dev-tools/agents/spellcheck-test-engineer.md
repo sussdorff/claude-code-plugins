@@ -570,3 +570,20 @@ End
 - **CRITICAL**: Read existing test patterns before creating new tests
 - **CRITICAL**: Verify platform compatibility (macOS dev vs Linux CI)
 - **CRITICAL**: Test with target shell and working directory
+
+Before returning your final result, include a `### Debrief` section documenting key decisions,
+challenges, surprising findings, and follow-up items.
+
+### Debrief
+
+#### Key Decisions
+- <decisions made>
+
+#### Challenges Encountered
+- <challenges>
+
+#### Surprising Findings
+- <surprises>
+
+#### Follow-up Items
+- <follow-ups>

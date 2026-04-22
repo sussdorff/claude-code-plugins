@@ -135,3 +135,4 @@ grep -q "## Independent Review" <plan-file>
 - DO NOT expand the scope beyond the ticket/issue
 - ONLY append review to the plan document
 - Keep review concise and actionable
+

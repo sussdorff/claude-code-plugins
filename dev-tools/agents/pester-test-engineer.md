@@ -880,3 +880,20 @@ Consult these references when you need detailed information:
 - `references/pester-code-patterns.md` - Project-specific patterns, testing strategies, anti-patterns
 
 Read references on-demand when you need deeper knowledge in specific areas.
+
+Before returning your final result, include a `### Debrief` section documenting key decisions,
+challenges, surprising findings, and follow-up items.
+
+### Debrief
+
+#### Key Decisions
+- <decisions made>
+
+#### Challenges Encountered
+- <challenges>
+
+#### Surprising Findings
+- <surprises>
+
+#### Follow-up Items
+- <follow-ups>

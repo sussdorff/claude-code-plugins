@@ -642,12 +642,9 @@ insert_agent_call(run_id, bead_id, phase_label='review', agent_label='review-opu
 
 ### Phase 7: Codex Adversarial (codex via codex-exec.sh)
 
-Get the diff from the implementation commits:
-```bash
-DIFF=$(git diff <pre-impl-sha>...HEAD)
-```
-
-Run adversarial review via codex-exec.sh:
+Run adversarial review via codex-exec.sh. Pass `--diff-range` so the script measures the diff
+and resolves `{{DIFF}}` automatically — inline for small diffs (≤ 2 files, ≤ 256 KB), self-collect
+guidance for large ones.
 
 > **BLOCKING RULE:** Run codex-exec.sh **synchronously** — NEVER use `run_in_background: true`
 > or TaskCreate for this call. The script manages its own 300s internal timeout. Use Bash
@@ -656,11 +653,12 @@ Run adversarial review via codex-exec.sh:
 
 ```bash
 RUN_ID=<run_id> BEAD_ID=<bead_id> PHASE_LABEL=codex-adversarial ITERATION=1 \
-  beads-workflow/scripts/codex-exec.sh "Review this diff for regressions and bugs:
+  beads-workflow/scripts/codex-exec.sh --diff-range <pre-impl-sha>...HEAD \
+  "Review this diff for regressions and bugs:
 
 ## Bead: <BEAD_ID>
 ## Diff:
-$DIFF
+{{DIFF}}
 
 ## Acceptance Criteria:
 <AK list>
@@ -705,8 +703,12 @@ At the end, log token usage via insert_agent_call(run_id=..., phase_label='codex
 **Step 2: Codex neutral re-check** (synchronous — same Bash timeout rule as Phase 7):
 ```bash
 RUN_ID=<run_id> BEAD_ID=<bead_id> PHASE_LABEL=codex-fix-check ITERATION=1 \
-  beads-workflow/scripts/codex-exec.sh "Verify these fixes resolve the reported regressions:
-<git diff of Phase 8 fix commits>
+  beads-workflow/scripts/codex-exec.sh --diff-range <fix-commit-parent-sha>...HEAD \
+  "Verify these fixes resolve the reported regressions:
+
+## Diff of fixes:
+{{DIFF}}
+
 Original findings: <Phase 7 REGRESSION lines>
 Report: VERIFIED or STILL-BROKEN:<finding>"
 ```

@@ -196,3 +196,20 @@ Before returning your final response, save a session summary via `mcp__open-brai
 - **metadata**: `{"agent_type": "integration-test-runner"}`
 
 Skip if all tests passed with no notable findings.
+
+Before returning your final result, include a `### Debrief` section documenting key decisions,
+challenges, surprising findings, and follow-up items.
+
+### Debrief
+
+#### Key Decisions
+- <decisions made>
+
+#### Challenges Encountered
+- <challenges>
+
+#### Surprising Findings
+- <surprises>
+
+#### Follow-up Items
+- <follow-ups>

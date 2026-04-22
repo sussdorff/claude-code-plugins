@@ -194,3 +194,4 @@ Example from MIRA:
 - Never start or stop servers
 - One session per invocation — use the provided session name
 - Close the browser session at the end: `playwright-cli -s <name> close`
+

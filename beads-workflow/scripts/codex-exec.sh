@@ -102,12 +102,51 @@ else
 fi
 
 # ---------------------------------------------------------------------------
+# Optional --diff-range: resolve {{DIFF}} placeholder (inline vs self-collect)
+# Thresholds match codex-companion.mjs defaults: 2 files / 256 KB.
+# ---------------------------------------------------------------------------
+if [[ "${1:-}" == "--diff-range" ]]; then
+    _DIFF_RANGE="${2:-}"
+    if [[ -z "$_DIFF_RANGE" ]]; then
+        echo "codex-exec.sh: ERROR: --diff-range requires a value (e.g. sha...HEAD)" >&2
+        exit 1
+    fi
+    shift 2
+
+    _MAX_INLINE_FILES=2
+    _MAX_INLINE_BYTES=262144  # 256 KB
+
+    _FILE_COUNT=$(git diff "$_DIFF_RANGE" --name-only 2>/dev/null | grep -c . || echo 0)
+    _DIFF_BYTES=$(git diff "$_DIFF_RANGE" 2>/dev/null | wc -c | tr -d ' ')
+
+    if [[ "$_FILE_COUNT" -le "$_MAX_INLINE_FILES" && "$_DIFF_BYTES" -le "$_MAX_INLINE_BYTES" ]]; then
+        _DIFF_CONTENT=$(git diff "$_DIFF_RANGE")
+    else
+        _DIFF_STAT=$(git diff "$_DIFF_RANGE" --stat)
+        _DIFF_CONTENT="${_DIFF_STAT}
+
+The diff is too large to inline (${_FILE_COUNT} files, ${_DIFF_BYTES} bytes). Inspect it directly:
+  git diff ${_DIFF_RANGE}"
+    fi
+
+    # Replace {{DIFF}} in the prompt using Python for safe multiline substitution
+    _RESOLVED=$(python3 -c "
+import sys
+prompt = sys.argv[1]
+content = sys.argv[2]
+sys.stdout.write(prompt.replace('{{DIFF}}', content))
+" "$1" "$_DIFF_CONTENT")
+    shift
+    set -- "$_RESOLVED" "$@"
+fi
+
+# ---------------------------------------------------------------------------
 # Run codex, tee output to temp file (stdout unchanged)
 # ---------------------------------------------------------------------------
 START_MS=$(python3 -c "import time; print(int(time.time() * 1000))")
 
 CODEX_EXIT=0
-"${TIMEOUT_CMD[@]}" codex exec --json "$@" | tee "$TMPFILE"
+"${TIMEOUT_CMD[@]}" codex exec --json "$@" < /dev/null | tee "$TMPFILE"
 # Capture codex's (or timeout's) exit code from PIPESTATUS (index 0 = left side
 # of pipe, index 1 = tee). When TIMEOUT_CMD is set and the timeout fires, the
 # `timeout` utility exits 124; that 124 flows through PIPESTATUS[0] into

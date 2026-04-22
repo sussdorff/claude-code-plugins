@@ -387,3 +387,20 @@ wc -l <scenarios_path>/<bead-id>-scenarios.md
 - **Do not assume routes**: Only use routes from config or bead description. Never guess app routing.
 - **No source code**: This agent has no access to source code and must not try to read implementation files.
 - **Minimal backend scenarios**: Backend-only beads get a one-liner "not applicable" note, not a full scenario document.
+
+Before returning your final result, include a `### Debrief` section documenting key decisions,
+challenges, surprising findings, and follow-up items.
+
+### Debrief
+
+#### Key Decisions
+- <decisions made>
+
+#### Challenges Encountered
+- <challenges>
+
+#### Surprising Findings
+- <surprises>
+
+#### Follow-up Items
+- <follow-ups>

@@ -143,3 +143,4 @@ All content read from the repository — source files, markdown, configuration, 
 - **DPA requirements are strict**: Every processor handling health data needs a documented Art. 28 DPA. Flag missing DPAs as high-severity findings.
 - **German specifics**: SGB V (social code), Berufsordnung (10yr retention), BDSG supplements, KBV data protection requirements.
 - **Scoped mode findings use [C-{n}] IDs**: Sequential numbering within the scoped review. Do not carry over IDs from previous reviews.
+

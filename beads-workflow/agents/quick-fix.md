@@ -204,7 +204,7 @@ Wait for the subagent to complete. If it reports failure, STOP and report to use
 
 After the implementer commits, trigger a Codex adversarial review on the diff.
 
-#### Step 1: Locate codex-exec.sh and prepare diff
+#### Step 1: Locate codex-exec.sh
 
 ```bash
 # Locate codex-exec.sh (prefer repo-local, fall back to installed)
@@ -220,21 +220,20 @@ blocked by missing tooling — log it and move on.
 If `RUN_ID` is empty (metrics unavailable): **proceed normally.** `codex-exec.sh` degrades
 gracefully — it runs codex and skips DB recording. The review still happens; only metrics are lost.
 
-Capture the diff:
-```bash
-DIFF=$(git diff {PRE_IMPL_SHA}...HEAD)
-```
-
 #### Step 2: Run adversarial review (Iteration 1)
+
+Pass `--diff-range` so codex-exec.sh resolves `{{DIFF}}` automatically — inline for small diffs
+(≤ 2 files, ≤ 256 KB), self-collect guidance for large ones.
 
 ```bash
 RUN_ID={RUN_ID} BEAD_ID={BEAD_ID} PHASE_LABEL=codex-adversarial ITERATION=1 \
-  "$CODEX_EXEC" "Review this diff for regressions and bugs:
+  "$CODEX_EXEC" --diff-range {PRE_IMPL_SHA}...HEAD \
+  "Review this diff for regressions and bugs:
 
 ## Bead: {BEAD_ID} — {TITLE}
 ## Intent: {first 200 chars of description}
 ## Diff:
-$DIFF
+{{DIFF}}
 
 For EACH finding, classify as:
 REGRESSION: <file>:<line> — <description> (new defect in THIS diff — BLOCKING)
@@ -291,13 +290,13 @@ Wait for the subagent to return, then proceed to Iteration 2 re-review.
 
 ```bash
 LAST_SHA=$(git rev-parse HEAD~1)
-DIFF2=$(git diff $LAST_SHA...HEAD)
 RUN_ID={RUN_ID} BEAD_ID={BEAD_ID} PHASE_LABEL=codex-fix-check ITERATION=2 \
-  "$CODEX_EXEC" "Verify these fixes resolve the reported regressions:
+  "$CODEX_EXEC" --diff-range $LAST_SHA...HEAD \
+  "Verify these fixes resolve the reported regressions:
 
 ## Bead: {BEAD_ID}
 ## Diff of fixes:
-$DIFF2
+{{DIFF}}
 
 Original REGRESSION findings: {Phase 1 REGRESSION lines}
 
