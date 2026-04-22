@@ -980,49 +980,71 @@ Merge all accumulated debriefs and write the handoff file so that `session-close
 the aggregated data in Step 11. This is the SOLE handoff mechanism — return-payload is
 structurally impossible because session-close runs as a downstream subagent.
 
+**Key principle:** Never interpolate raw debrief text into shell code. Always go through
+`json.dumps` / a temp file. Raw debrief items may contain apostrophes, backslashes, or
+newlines that would corrupt shell substitution or Python string literals.
+
 ```bash
-# Write DEBRIEF_AGGREGATE as JSON to a temp file (avoids shell expansion of debrief content)
-DEBRIEF_TMP=$(mktemp)
-# The orchestrator writes the in-context DEBRIEF_AGGREGATE list as JSON to the temp file.
-# Use Python to serialize — never interpolate raw debrief text into shell arguments.
+# Step 1: Serialize DEBRIEF_AGGREGATE to a temp file using Python.
+# The orchestrator writes this from its in-context list — never via shell substitution.
+# DEBRIEF_AGGREGATE is the Python list of parsed debrief dicts held in LLM context.
+# Use json.dumps() to encode it — the result is safe for any subsequent Python reader.
+DEBRIEF_JSON_FILE=$(mktemp)
 python3 - <<'PYEOF'
-import json, os, sys
-# DEBRIEF_AGGREGATE is the list of dicts accumulated across phases.
-# The orchestrator substitutes the actual serialized list here via json.dumps — never raw text.
-debriefs = <DEBRIEF_AGGREGATE_JSON>  # replace with: json.loads('<json_encoded_list>')
+import json, os
+# The orchestrator populates `debriefs` with the validated, json.dumps-encoded list.
+# Replace the [] below with the actual Python list literal produced by json.loads(json.dumps(DEBRIEF_AGGREGATE)).
+# If DEBRIEF_AGGREGATE is empty, leave debriefs = [] as-is.
+debriefs = []  # <-- orchestrator populates this with validated JSON-safe data
+with open(os.environ['DEBRIEF_JSON_FILE'], 'w') as f:
+    json.dump(debriefs, f, ensure_ascii=False)
+PYEOF
+
+# Step 2: Aggregate and write the handoff file, reading input from the temp file.
+python3 - <<'PYEOF'
+import json, os
+debrief_json_file = os.environ['DEBRIEF_JSON_FILE']
+with open(debrief_json_file) as f:
+    debriefs = json.load(f)
 merged = {'key_decisions': [], 'challenges_encountered': [], 'surprising_findings': [], 'follow_up_items': []}
 for d in debriefs:
     for k in merged:
         merged[k].extend(d.get(k, []))
-handoff = {'bead_id': '<BEAD_ID>', 'aggregated_debrief': merged}
-path = os.path.join(os.environ.get('REPO_ROOT', '.'), '.worktree-handoff.json')
+handoff = {'bead_id': os.environ.get('BEAD_ID', ''), 'aggregated_debrief': merged}
+repo_root = os.environ.get('REPO_ROOT', '.')
+path = os.path.join(repo_root, '.worktree-handoff.json')
 with open(path, 'w') as f:
     json.dump(handoff, f, ensure_ascii=False, indent=2)
 print(f'Handoff written to {path}')
 PYEOF
+rm -f "$DEBRIEF_JSON_FILE"
 ```
 
-**How to substitute `DEBRIEF_AGGREGATE` safely:** Before running the block above, use Python to
-serialize your in-context list:
+**How to substitute `DEBRIEF_AGGREGATE` safely:** Before running Step 1 above, produce the
+JSON-safe Python list literal using `json.dumps` in your orchestrator context:
 
 ```python
 import json
-# In your orchestrator context — produce the JSON string:
+# In your orchestrator context — produce the JSON-encoded string:
 debrief_json = json.dumps(DEBRIEF_AGGREGATE)  # list of parsed debrief dicts
+# Then pass it as: debriefs = json.loads('<debrief_json>')
+# where <debrief_json> is replaced with the actual json.dumps output.
 ```
 
-Then replace `<DEBRIEF_AGGREGATE_JSON>` with the result of `json.loads('<debrief_json>')` so that
-the Python script receives properly typed data and no raw debrief text ever passes through shell
-expansion. JSON uses `"` quotes and escapes special characters — it is safe to embed in a
-single-quoted heredoc (`<<'PYEOF'`).
+Replace the `debriefs = []` placeholder in Step 1 with:
+`debriefs = json.loads('<debrief_json>')` where `<debrief_json>` is the output of
+`json.dumps(DEBRIEF_AGGREGATE)`. JSON uses `"` quotes and escapes special characters —
+it is safe to embed in a single-quoted heredoc (`<<'PYEOF'`). Never put raw debrief
+text into shell code.
 
-If `DEBRIEF_AGGREGATE` is empty, write `debriefs = []` directly.
+If `DEBRIEF_AGGREGATE` is empty, write `debriefs = []` directly (as shown in the template).
 
 If `DEBRIEF_AGGREGATE` is empty (no subagents produced debriefs), write the file anyway with
 empty lists — `session-close` will fall back to synthesizing from session context.
 
 **Note:** `.worktree-handoff.json` is a transient IPC file — it must never be committed.
-It is gitignored (see `.gitignore`). `session-close` Step 11 deletes it after reading.
+It is gitignored (see `.gitignore`). It persists until the worktree is removed — do NOT
+delete it in Step 11, so that `--debrief-only` retries can re-read it.
 
 ---
 
