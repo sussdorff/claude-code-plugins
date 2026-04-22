@@ -182,6 +182,32 @@ if [[ "$ALL_CLOSED" == "true" && "$ALL_IDLE" == "true" ]]; then
   COMPLETE=true
 fi
 
+# Metric-aggregation sanity check: bead_runs rows with this wave_id should equal BEAD_COUNT
+METRICS_DB="${HOME}/.claude/metrics.db"
+BEAD_RUNS_COUNT=0
+METRICS_SANITY="skipped"
+if [[ -f "$METRICS_DB" && "$WAVE_ID" != "unknown" ]]; then
+  # Validate WAVE_ID is safe to interpolate into SQL (no single-quote injection)
+  if [[ ! "$WAVE_ID" =~ ^[A-Za-z0-9_-]+$ ]]; then
+    METRICS_SANITY="skipped: invalid wave_id"
+  else
+    SQLITE_STDERR=$(sqlite3 "$METRICS_DB" \
+      "SELECT COUNT(*) FROM bead_runs WHERE wave_id = '${WAVE_ID}'" 2>&1 1>/dev/null || true)
+    BEAD_RUNS_COUNT=$(sqlite3 "$METRICS_DB" \
+      "SELECT COUNT(*) FROM bead_runs WHERE wave_id = '${WAVE_ID}'" 2>/dev/null || echo "")
+    if [[ -n "$SQLITE_STDERR" ]]; then
+      METRICS_SANITY="error: $(echo "$SQLITE_STDERR" | head -1)"
+    elif [[ -z "$BEAD_RUNS_COUNT" ]]; then
+      METRICS_SANITY="error: sqlite3 returned empty"
+    elif [[ "$BEAD_RUNS_COUNT" -eq "$BEAD_COUNT" ]]; then
+      METRICS_SANITY="ok"
+    else
+      METRICS_SANITY="mismatch: expected ${BEAD_COUNT} bead_runs rows, got ${BEAD_RUNS_COUNT}"
+      echo "WARN: metrics sanity mismatch for wave ${WAVE_ID}: expected ${BEAD_COUNT} rows, got ${BEAD_RUNS_COUNT}" >&2
+    fi
+  fi
+fi
+
 jq -n \
   --argjson complete "$COMPLETE" \
   --argjson all_beads_closed "$ALL_CLOSED" \
@@ -189,13 +215,17 @@ jq -n \
   --argjson stragglers "$STRAGGLERS" \
   --argjson follow_up_beads "$FOLLOW_UPS" \
   --argjson stalls "${STALLS}" \
+  --arg metrics_sanity "$METRICS_SANITY" \
+  --argjson bead_runs_count "${BEAD_RUNS_COUNT:-0}" \
   '{
     complete: $complete,
     all_beads_closed: $all_beads_closed,
     all_surfaces_idle: $all_surfaces_idle,
     stragglers: $stragglers,
     unclosed_follow_ups: $follow_up_beads,
-    stalls: $stalls
+    stalls: $stalls,
+    metrics_sanity: $metrics_sanity,
+    bead_runs_count: $bead_runs_count
   }'
 
 if [[ "$COMPLETE" == "true" ]]; then

@@ -157,7 +157,8 @@ Gather minimal context:
    if [[ ! -f "$METRICS_START" ]]; then
      METRICS_START=$(find ~/.claude/plugins -name metrics-start.sh -type f 2>/dev/null | sort -r | head -1)
    fi
-   RUN_ID=$("$METRICS_START" "<bead_id>" "" "quick-fix")
+   RUN_ID=$("$METRICS_START" "<bead_id>" "${WAVE_ID:-}" "quick-fix")
+   export CCP_ORCHESTRATOR_RUN_ID="$RUN_ID"  # Prevents SubagentStop hook from double-writing ad-hoc rows
    echo "$RUN_ID"
    ```
    Store the printed value as `RUN_ID` in your context. If the script is not found, set `RUN_ID=""` — codex-exec.sh degrades gracefully when `RUN_ID` is unset.

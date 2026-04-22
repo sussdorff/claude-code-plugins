@@ -3,6 +3,8 @@
 ### Added
 
 - *(CCP-hf1)* Add **/vision-author** skill with 7-question guided dialogue producing structured vision.md — enforces present-tense sections via tense-gate, rejects STUB/TBD/blank entries with bead-creation routing, auto-generates genesis ADR, supports --refresh mode for re-authoring with conformance scanning
+- *(CCP-6up.3)* Add **validate-skill.py** Enforcer-Reactive for script-first authoring — flags executable bash/python blocks and verbal multi-step pipelines in skill bodies with --strict mode (exit 0/1/2); wired into skill-auditor for per-skill auditing and integrated into skill creation path
+- *(CCP-a67)* Add **/vision-review** skill for cadence-triggered vision health assessment with per-principle Y/N dialog, council integration (degraded mode fallback), draft ADR generation (superseding by rule_id), health score computation (<80% triggers `/vision-author --refresh` suggestion), `trinity_role: enforcer-reactive`
 
 ### Changed
 
@@ -16,6 +18,14 @@
 ### Refactored
 
 - *(beads-workflow)* Extract inline metrics bash+Python from agent instructions into metrics-start.sh and metrics-rollup.sh; both non-fatal on failure; 8 new tests (78 total)
+
+## [2026.04.81] - 2026-04-22
+
+### Fixed
+
+- *(open-brain-7lz)* wave-dispatch.sh now propagates WAVE_ID into bead_runs.wave_id so Phase 7 token-usage breakdowns can be aggregated by wave
+- *(wave-completion)* metrics sanity check defaults and safety hardened — prevents false-positive failures when bead_runs rows are missing
+- *(bead-orchestrator)* document codex-exec.sh BLOCKING RULE: must run synchronously (never run_in_background), use Bash timeout 360000ms
 
 ## [2026.04.76] - 2026-04-22
 
