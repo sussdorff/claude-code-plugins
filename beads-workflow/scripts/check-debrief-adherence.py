@@ -244,7 +244,7 @@ def check_agents_dir(
 
     agent_files = find_agent_files(search_root)
     if exclude_pattern:
-        agent_files = [f for f in agent_files if exclude_pattern not in str(f)]
+        agent_files = [f for f in agent_files if exclude_pattern not in str(f.relative_to(search_root))]
     violations: list[dict] = []
 
     for md_file in agent_files:
