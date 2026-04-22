@@ -195,6 +195,16 @@ Select the 1–2 lowest-scoring dimensions. These are the only sections to rewri
 
 Load the quality and tier-budget standards files (Claude harness paths above) before writing any changes.
 
+### Step 4a — Validate before rewriting
+
+Run the standalone validator to establish a baseline of existing violations:
+
+```bash
+python3 <path-to>/meta/skills/skill-auditor/scripts/validate-skill.py <skill-dir>
+```
+
+Record any EXTRACTABLE_CODE findings — they will be resolved in Step 4.
+
 ### Step 4 — Surgical rewrite
 
 Rewrite ONLY the sections that correspond to the weak dimensions:
@@ -209,6 +219,16 @@ Rewrite ONLY the sections that correspond to the weak dimensions:
 | Writing Style / Token Efficiency (EXTRACTABLE_CODE) | Extract inline code or verbal pipelines to a script in `scripts/`. Replace the code block or verbal steps with a single `$SCRIPT` call. Choose the output contract based on complexity: (a) **bare value** — single output, no meaningful failure modes (just print it); (b) **JSON** — multiple fields or distinguishable failure modes (`{"status":"ok\|warning\|error","data":{...},"message":"..."}` on one line). Add `$SCRIPT` to the Resources section. |
 
 Do not rewrite sections that scored well.
+
+### Step 4b — Validate after rewriting
+
+After applying the rewrite, confirm no EXTRACTABLE_CODE remains:
+
+```bash
+python3 <path-to>/meta/skills/skill-auditor/scripts/validate-skill.py <skill-dir>
+```
+
+Exit 0 = clean. If not exit 0, address remaining findings before proceeding.
 
 ### Step 5 — Before/After Benchmark
 
@@ -265,7 +285,10 @@ Changes made:
 ## Resources
 
 - `scripts/scan-skills.sh` — Discover all skills, measure tokens/lines (alongside the skill trampoline)
+- `scripts/validate-skill.py` — Standalone per-skill EXTRACTABLE_CODE validator (single skill, fast, no fleet scan needed)
+- `references/skill-script-first.md` — Skill-authoring guidance for the script-first rule (exceptions, output contracts, usage)
 - `~/.claude/standards/skills/quality.md` — Authoritative quality standard
 - `~/.claude/standards/skills/token-budget-tiers.md` — Token budget tier definitions and overage remediation
+- `core/contracts/execution-result.schema.json` — Canonical execution-result contract for multi-field script outputs
 - Eval-viewer: `malte/plugins/marketplaces/claude-plugins-official/plugins/skill-creator/skills/skill-creator/eval-viewer/generate_review.py`
 - Skills directory (Claude harness): `~/.claude/skills/`
