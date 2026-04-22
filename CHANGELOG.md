@@ -1,5 +1,10 @@
 ## [Unreleased]
 
+### Added
+
+- *(CCP-6up.3)* Add **validate-skill.py** Enforcer-Reactive for script-first authoring — flags executable bash/python blocks and verbal multi-step pipelines in skill bodies with --strict mode (exit 0/1/2); wired into skill-auditor for per-skill auditing and integrated into skill creation path
+- *(CCP-a67)* Add **/vision-review** skill for cadence-triggered vision health assessment with per-principle Y/N dialog, council integration (degraded mode fallback), draft ADR generation (superseding by rule_id), and health score computation (<80% triggers `/vision-author --refresh` suggestion)
+
 ### Changed
 
 - *(CCP-9yd)* Port **session-close** agent to Codex format (TOML agents, gap documentation, E2E evidence)
