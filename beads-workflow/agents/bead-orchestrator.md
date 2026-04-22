@@ -593,7 +593,14 @@ Commit: `fix(<bead-id>): address review findings iteration 1`
 - Downgrade Quality grade: A→B, B→C.
 - Increment `auto_decisions`:
   ```bash
-  python3 -c "import sys; sys.path.insert(0, 'beads-workflow/lib/orchestrator'); from metrics import increment_auto_decisions; increment_auto_decisions('<run_id>')"
+  python3 -c "
+import sys
+from pathlib import Path
+repo = next((p for p in [Path('.').resolve()] + list(Path('.').resolve().parents) if (p / 'beads-workflow' / 'lib' / 'orchestrator').exists()), Path('.').resolve())
+sys.path.insert(0, str(repo / 'beads-workflow' / 'lib' / 'orchestrator'))
+from metrics import increment_auto_decisions
+increment_auto_decisions('<run_id>')
+"
   ```
 
 **5. Parse and log:**
@@ -691,7 +698,14 @@ Report: VERIFIED or STILL-BROKEN:<finding>"
   ```
 - Increment `auto_decisions` (same as Phase 6):
   ```bash
-  python3 -c "import sys; sys.path.insert(0, 'beads-workflow/lib/orchestrator'); from metrics import increment_auto_decisions; increment_auto_decisions('<run_id>')"
+  python3 -c "
+import sys
+from pathlib import Path
+repo = next((p for p in [Path('.').resolve()] + list(Path('.').resolve().parents) if (p / 'beads-workflow' / 'lib' / 'orchestrator').exists()), Path('.').resolve())
+sys.path.insert(0, str(repo / 'beads-workflow' / 'lib' / 'orchestrator'))
+from metrics import increment_auto_decisions
+increment_auto_decisions('<run_id>')
+"
   ```
 
 → **Record phase_summary**: regressions fixed, re-check result (VERIFIED or STILL-BROKEN + auto-accept).

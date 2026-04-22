@@ -27,9 +27,9 @@ import os
 import re
 import subprocess
 import sys
-import tempfile
 import time
 from pathlib import Path
+from typing import Any
 
 
 # ---------------------------------------------------------------------------
@@ -45,29 +45,12 @@ def _find_wave_completion() -> Path | None:
         if p.exists():
             return p
 
-    # Search ~/.claude tree
-    result = subprocess.run(
-        ["find", str(Path.home() / ".claude"), "-name", "wave-completion.sh"],
-        capture_output=True,
-        text=True,
-    )
-    for line in result.stdout.splitlines():
-        p = Path(line.strip())
-        if p.exists():
-            return p
-
-    # Fallback: local directory tree
-    result = subprocess.run(
-        ["find", ".", "-name", "wave-completion.sh"],
-        capture_output=True,
-        text=True,
-    )
-    for line in result.stdout.splitlines():
-        p = Path(line.strip())
-        if p.exists():
-            return p
-
-    return None
+    # Search ~/.claude tree first
+    completions = list((Path.home() / ".claude").rglob("wave-completion.sh"))
+    if not completions:
+        # Fallback: local directory tree
+        completions = list(Path(".").rglob("wave-completion.sh"))
+    return completions[0] if completions else None
 
 
 # ---------------------------------------------------------------------------
@@ -75,17 +58,17 @@ def _find_wave_completion() -> Path | None:
 # ---------------------------------------------------------------------------
 
 
-def _verdict_complete(polls: int) -> dict:
+def _verdict_complete(polls: int, elapsed_minutes: int) -> dict[str, Any]:
     return {
         "status": "complete",
         "summary": {
             "polls_run": polls,
-            "elapsed_minutes": "?",
+            "elapsed_minutes": elapsed_minutes,
         },
     }
 
 
-def _verdict_intervention(reason: str, bead_id: str | None, details: str) -> dict:
+def _verdict_intervention(reason: str, bead_id: str | None, details: str) -> dict[str, Any]:
     return {
         "status": "needs_intervention",
         "reason": reason,
@@ -104,7 +87,7 @@ def poll(
     stuck_hours: float,
     review_max: int,
     poll_interval: int,
-) -> dict:
+) -> dict[str, Any]:
     """Run the polling loop and return the terminal verdict dict."""
 
     # Validate config path
@@ -115,8 +98,8 @@ def poll(
 
     # Load config once to get bead list
     try:
-        config_data: dict = json.loads(wave_config.read_text())
-        beads: list[dict] = config_data.get("beads", [])
+        config_data: dict[str, Any] = json.loads(wave_config.read_text())
+        beads: list[dict[str, Any]] = config_data.get("beads", [])
     except (json.JSONDecodeError, OSError) as exc:
         return _verdict_intervention(
             "ambiguous", None, f"Failed to parse wave config: {exc}"
@@ -130,14 +113,12 @@ def poll(
         )
 
     polls = 0
+    start = time.monotonic()
 
     while True:
         polls += 1
 
         # Run wave-completion.sh
-        with tempfile.NamedTemporaryFile(mode="w", suffix=".err", delete=False) as errfile:
-            errfile_path = errfile.name
-
         try:
             result = subprocess.run(
                 ["bash", str(completion_script), str(wave_config)],
@@ -151,11 +132,6 @@ def poll(
             return _verdict_intervention(
                 "ambiguous", None, f"Failed to run wave-completion.sh: {exc}"
             )
-        finally:
-            try:
-                Path(errfile_path).unlink(missing_ok=True)
-            except OSError:
-                pass
 
         # exit code 2 = error
         if exit_code == 2:
@@ -177,7 +153,7 @@ def poll(
 
         # complete=true
         if completion.get("complete", False):
-            return _verdict_complete(polls)
+            return _verdict_complete(polls, int((time.monotonic() - start) / 60))
 
         # Check stalls array
         stalls: list[dict] = completion.get("stalls", [])
@@ -203,9 +179,11 @@ def poll(
                 )
                 m = re.search(r"Updated:\s+(\d{4}-\d{2}-\d{2})", bd_result.stdout)
                 if m:
-                    updated = datetime.datetime.strptime(m.group(1), "%Y-%m-%d")
+                    updated = datetime.datetime.strptime(m.group(1), "%Y-%m-%d").replace(
+                        tzinfo=datetime.timezone.utc
+                    )
                     elapsed_h = (
-                        datetime.datetime.utcnow() - updated
+                        datetime.datetime.now(datetime.timezone.utc) - updated
                     ).total_seconds() / 3600
                     if elapsed_h >= stuck_hours:
                         return _verdict_intervention(
@@ -216,8 +194,9 @@ def poll(
                                 f"(threshold: {stuck_hours}h). Surface idle."
                             ),
                         )
-            except OSError:
-                pass  # bd not available — skip stuck-by-hours check
+            except OSError as exc:
+                print(f"warn: bd show failed for {bead_id}: {exc}", file=sys.stderr)
+                continue  # bd not available — skip stuck-by-hours check
 
         # Check pane scrollback for error / review-loop signals
         for bead in beads:

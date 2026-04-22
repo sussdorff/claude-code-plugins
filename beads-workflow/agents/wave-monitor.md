@@ -177,11 +177,17 @@ STUCK_HOURS=$(echo "$INPUT" | python3 -c "import sys,json; d=json.load(sys.stdin
 REVIEW_MAX=$(echo "$INPUT" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('review_loop_max_iterations', 3))")
 POLL_SEC=$(echo "$INPUT" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('poll_interval_seconds', 270))")
 
-# Discover wave-poll.py
-SCRIPT=$(find ~/.claude -name "wave-poll.py" 2>/dev/null | head -1)
-SCRIPT="${SCRIPT:-$(find . -name "wave-poll.py" 2>/dev/null | head -1)}"
+# Discover wave-poll.py via pathlib (worktree-safe)
+SCRIPT=$(python3 -c "
+from pathlib import Path
+hits = list((Path.home() / '.claude').rglob('wave-poll.py'))
+if not hits:
+    hits = list(Path('.').rglob('wave-poll.py'))
+print(hits[0] if hits else '')
+")
 
 # Delegate all polling logic to the helper and print its verdict
+# wave-poll.py handles wave-completion.sh discovery internally
 python3 "$SCRIPT" \
   --config "$WAVE_CONFIG" \
   --stuck-hours "$STUCK_HOURS" \
@@ -249,3 +255,7 @@ Documents what was extracted, what was classified as ALLOWED, and why.
 | `core/agents/session-close.md` | Line 210 | `python3 -c "import os; print(os.path.relpath...)"` | Single-value, no branching/failure contract → bare stdout output, no execution-result envelope needed |
 | `meta/agents/learning-extractor.md` | Lines 261–272 | Multi-line `python3` state update for `processing-state.json` | Ad-hoc instructional fragment, not a harness workflow. Stateful side-effect with no caller-facing output contract; extraction adds no value |
 | `core/agents/session-close-handlers/phase-b-close-beads.sh` | Whole file | Shell script | Shell script file, NOT an agent prompt — out of scope per bead definition |
+| `wave-monitor.md` `## Implementation` | 4 x `python3 -c` (arg parse) | Single-field JSON field extraction from `$ARGUMENTS` (wave_config_path, stuck_threshold_hours, review_loop_max_iterations, poll_interval_seconds) | ALLOWED: single-value extraction, no branching, no failure contract. Thin dispatch wrapper only — all logic delegates to wave-poll.py |
+| `core/skills/dolt/SKILL.md` | Lines 352–359 | `python3 -c` updating `metadata.json` dolt_database field | ALLOWED: instructional recovery snippet in a troubleshooting guide. One-shot JSON field rewrite, no caller-facing output contract; not part of a harness workflow |
+| `core/skills/dolt/SKILL.md` | Lines 386–391 | `python3 -c` cleaning `metadata.json` to keep only dolt_database/project_id | ALLOWED: same rationale as above — instructional troubleshooting fragment. Single operation, no branching |
+| `wave-poll.py` JSON verdict output format | wave-completion/needs_intervention envelope | Pre-existing caller contract with wave-orchestrator (complete/needs_intervention) | AK4-exempt: pre-existing caller contract with wave-orchestrator — AK4 does NOT retroactively require rewriting an established inter-component contract |

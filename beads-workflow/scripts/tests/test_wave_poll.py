@@ -204,5 +204,140 @@ def test_cli_args_parsed(tmp_path: Path) -> None:
     assert verdict["status"] == "complete"
 
 
+def test_complete_elapsed_minutes_is_integer(tmp_path: Path) -> None:
+    """The complete verdict must include an integer elapsed_minutes field (not '?')."""
+    config = _make_wave_config(tmp_path)
+    script = _make_mock_completion(
+        tmp_path, "elapsed",
+        json.dumps({"complete": True, "stragglers": [], "stalls": []}),
+        0,
+    )
+    rc, verdict = _run_poll(tmp_path, config, script)
+    assert rc == 0
+    assert verdict is not None
+    assert verdict["status"] == "complete"
+    em = verdict["summary"]["elapsed_minutes"]
+    assert isinstance(em, int), f"elapsed_minutes should be int, got {type(em).__name__}: {em!r}"
+
+
+def test_stuck_by_hours(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """wave-poll.py returns stuck when bd show reports an old Updated date."""
+    # Wave completes=False with one in_progress straggler, no stalls
+    config = _make_wave_config(tmp_path, beads=[{"id": "TEST-bbb", "surface": "surface:1"}])
+    completion_output = json.dumps({
+        "complete": False,
+        "all_beads_closed": False,
+        "all_surfaces_idle": False,
+        "stragglers": [{"id": "TEST-bbb", "bd_status": "in_progress", "surface_idle": True}],
+        "unclosed_follow_ups": [],
+        "stalls": [],
+    })
+    completion_script = _make_mock_completion(tmp_path, "stuck-hours", completion_output, 0)
+
+    # Mock bd binary: outputs "Updated: 2020-01-01" (far in the past)
+    mock_bd = tmp_path / "bd"
+    mock_bd.write_text("#!/usr/bin/env bash\necho 'Updated: 2020-01-01'\n")
+    mock_bd.chmod(mock_bd.stat().st_mode | stat.S_IEXEC | stat.S_IXGRP | stat.S_IXOTH)
+
+    # Mock cmux so pane checks are silent (returns empty)
+    mock_cmux = tmp_path / "cmux"
+    mock_cmux.write_text("#!/usr/bin/env bash\nexit 0\n")
+    mock_cmux.chmod(mock_cmux.stat().st_mode | stat.S_IEXEC | stat.S_IXGRP | stat.S_IXOTH)
+
+    original_path = os.environ.get("PATH", "")
+    monkeypatch.setenv("PATH", f"{tmp_path}:{original_path}")
+
+    rc, verdict = _run_poll(
+        tmp_path, config, completion_script,
+        extra_args=["--stuck-hours", "1"],
+    )
+    assert rc == 0
+    assert verdict is not None
+    assert verdict["status"] == "needs_intervention"
+    assert verdict["reason"] == "stuck"
+    assert verdict["bead_id"] == "TEST-bbb"
+
+
+def test_pane_error(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """wave-poll.py returns pane-error when cmux read-screen returns an error signal."""
+    config = _make_wave_config(tmp_path, beads=[{"id": "TEST-ccc", "surface": "surface:2"}])
+    # wave-completion reports nothing terminal
+    completion_output = json.dumps({
+        "complete": False,
+        "all_beads_closed": False,
+        "all_surfaces_idle": False,
+        "stragglers": [],
+        "unclosed_follow_ups": [],
+        "stalls": [],
+    })
+    completion_script = _make_mock_completion(tmp_path, "pane-err", completion_output, 0)
+
+    # Mock cmux: read-screen --lines returns an error line
+    mock_cmux = tmp_path / "cmux"
+    mock_cmux.write_text(
+        "#!/usr/bin/env bash\n"
+        "# Return error output for read-screen calls (but not --scrollback)\n"
+        'if [[ "$*" == *"--scrollback"* ]]; then\n'
+        "  echo ''\n"
+        "else\n"
+        "  echo 'fatal: something went wrong'\n"
+        "fi\n"
+        "exit 0\n"
+    )
+    mock_cmux.chmod(mock_cmux.stat().st_mode | stat.S_IEXEC | stat.S_IXGRP | stat.S_IXOTH)
+
+    original_path = os.environ.get("PATH", "")
+    monkeypatch.setenv("PATH", f"{tmp_path}:{original_path}")
+
+    rc, verdict = _run_poll(tmp_path, config, completion_script)
+    assert rc == 0
+    assert verdict is not None
+    assert verdict["status"] == "needs_intervention"
+    assert verdict["reason"] == "pane-error"
+    assert verdict["bead_id"] == "TEST-ccc"
+
+
+def test_review_loop(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """wave-poll.py returns review-loop when scrollback has >= review_max review iterations."""
+    config = _make_wave_config(tmp_path, beads=[{"id": "TEST-ddd", "surface": "surface:3"}])
+    completion_output = json.dumps({
+        "complete": False,
+        "all_beads_closed": False,
+        "all_surfaces_idle": False,
+        "stragglers": [],
+        "unclosed_follow_ups": [],
+        "stalls": [],
+    })
+    completion_script = _make_mock_completion(tmp_path, "review-loop", completion_output, 0)
+
+    # Mock cmux: tail read returns empty (no error), scrollback returns 3 review iteration lines
+    mock_cmux = tmp_path / "cmux"
+    mock_cmux.write_text(
+        "#!/usr/bin/env bash\n"
+        'if [[ "$*" == *"--scrollback"* ]]; then\n'
+        "  echo 'Review iteration 1'\n"
+        "  echo 'Review iteration 2'\n"
+        "  echo 'Review iteration 3'\n"
+        "else\n"
+        "  echo ''\n"
+        "fi\n"
+        "exit 0\n"
+    )
+    mock_cmux.chmod(mock_cmux.stat().st_mode | stat.S_IEXEC | stat.S_IXGRP | stat.S_IXOTH)
+
+    original_path = os.environ.get("PATH", "")
+    monkeypatch.setenv("PATH", f"{tmp_path}:{original_path}")
+
+    rc, verdict = _run_poll(
+        tmp_path, config, completion_script,
+        extra_args=["--review-max", "3"],
+    )
+    assert rc == 0
+    assert verdict is not None
+    assert verdict["status"] == "needs_intervention"
+    assert verdict["reason"] == "review-loop"
+    assert verdict["bead_id"] == "TEST-ddd"
+
+
 if __name__ == "__main__":
     sys.exit(pytest.main([__file__, "-v"]))
