@@ -1,5 +1,9 @@
 ## [Unreleased]
 
+### Added
+
+- *(CCP-hf1)* Add **/vision-author** skill with 7-question guided dialogue producing structured vision.md — enforces present-tense sections via tense-gate, rejects STUB/TBD/blank entries with bead-creation routing, auto-generates genesis ADR, supports --refresh mode for re-authoring with conformance scanning
+
 ### Changed
 
 - *(CCP-9yd)* Port **session-close** agent to Codex format (TOML agents, gap documentation, E2E evidence)
