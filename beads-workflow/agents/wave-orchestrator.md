@@ -883,7 +883,8 @@ and block until it returns a terminal verdict. This parks the orchestrator's con
 during the monitoring window — cost-efficient for multi-hour waves.
 
 **Cost model:** Haiku at <$0.001/call vs Opus at $0.06+/call for the same check.
-Delegating to wave-monitor saves ~88 orchestrator context re-reads on a 4-hour wave (~$5).
+1 Haiku invocation total — bash sleep loops don't re-read context, so cost is fixed
+regardless of poll count. Polling every 60s on a 4-hour wave = 240 polls, all free.
 
 ### Invoking wave-monitor
 
@@ -894,7 +895,7 @@ monitor_result = Agent(
         "wave_config_path": "/tmp/wave-config.json",
         "stuck_threshold_hours": 4,
         "review_loop_max_iterations": 3,
-        "poll_interval_seconds": 270
+        "poll_interval_seconds": 60
     })
 )
 verdict = json.loads(monitor_result)
@@ -905,8 +906,9 @@ The `wave_config_path` is the JSON file output by `wave-dispatch.sh` (saved to
 `/tmp/wave-<wave_id>.json` or the path you provided to wave-dispatch.sh output redirect).
 
 The parent orchestrator parks (context NOT re-read) until wave-monitor returns.
-wave-monitor uses `bash sleep 270` between polls — not ScheduleWakeup — so the
-blocking Agent() call stays open for the full monitoring window.
+wave-monitor uses `bash sleep 60` between polls — not ScheduleWakeup — so the
+blocking Agent() call stays open for the full monitoring window. (60s is safe because
+bash sleep keeps the agent alive; no context re-read between polls unlike ScheduleWakeup.)
 
 ### Branching on wave-monitor verdict
 
@@ -1075,7 +1077,7 @@ monitor_result = Agent(
         "wave_config_path": "/tmp/wave-config.json",  # may be updated
         "stuck_threshold_hours": 4,
         "review_loop_max_iterations": 5,  # may be adjusted
-        "poll_interval_seconds": 270
+        "poll_interval_seconds": 60
     })
 )
 ```

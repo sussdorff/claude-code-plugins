@@ -2,7 +2,7 @@
 name: wave-monitor
 description: >-
   Long-lived Haiku subagent that polls wave completion status on behalf of the
-  wave-orchestrator. Runs wave-completion.sh every 270 seconds using bash sleep,
+  wave-orchestrator. Runs wave-completion.sh every 60 seconds using bash sleep,
   keeping the parent Agent() call blocked (parked) for the entire monitoring
   window. Returns a structured JSON verdict when the wave reaches a terminal
   state. Triggers on: wave monitor, poll wave, watch wave, monitor wave progress.
@@ -14,11 +14,15 @@ model: haiku
 
 Long-lived polling agent for wave completion. The parent wave-orchestrator spawns
 this agent ONCE per wave and blocks on the Agent() call until wave-monitor returns
-a terminal verdict. Because this agent uses `bash sleep 270` between polls (not
+a terminal verdict. Because this agent uses `bash sleep 60` between polls (not
 ScheduleWakeup), the parent context stays parked — it is NOT re-read on every tick.
 
 **Cost model:** Haiku at <$0.001/call vs Opus at $0.06+/call for the same check.
-On a 4-hour wave with 270s intervals this saves ~88 Opus calls (~$5).
+1 Haiku invocation total (bash sleep loops are free — no LLM re-read between polls).
+
+**Poll interval note:** The 5-min cache TTL limit applies to ScheduleWakeup (which
+re-enters the agent and re-reads full context). bash sleep keeps the agent alive —
+no context re-read between polls, so shorter intervals (60s) are safe and cheap.
 
 ## Input Contract
 
@@ -29,7 +33,7 @@ The agent receives a JSON object as its prompt. Required fields:
   "wave_config_path": "/absolute/path/to/wave-config.json",
   "stuck_threshold_hours": 4,
   "review_loop_max_iterations": 3,
-  "poll_interval_seconds": 270
+  "poll_interval_seconds": 60
 }
 ```
 
@@ -38,7 +42,7 @@ The agent receives a JSON object as its prompt. Required fields:
 | `wave_config_path` | string | (required) | Absolute path to wave config JSON |
 | `stuck_threshold_hours` | number | `4` | Hours before a bead in_progress → stuck |
 | `review_loop_max_iterations` | number | `3` | Codex review iterations before review-loop verdict |
-| `poll_interval_seconds` | number | `270` | Seconds to sleep between polls (default 270 ≤ 5-min cache TTL) |
+| `poll_interval_seconds` | number | `60` | Seconds to sleep between polls. bash sleep keeps agent alive (no context re-read), so 60s is safe. |
 
 Wave config JSON shape (as written by wave-dispatch.sh):
 
@@ -175,7 +179,7 @@ INPUT="$ARGUMENTS"
 WAVE_CONFIG=$(echo "$INPUT" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d['wave_config_path'])")
 STUCK_HOURS=$(echo "$INPUT" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('stuck_threshold_hours', 4))")
 REVIEW_MAX=$(echo "$INPUT" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('review_loop_max_iterations', 3))")
-POLL_SEC=$(echo "$INPUT" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('poll_interval_seconds', 270))")
+POLL_SEC=$(echo "$INPUT" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('poll_interval_seconds', 60))")
 
 # Discover wave-poll.py via pathlib (worktree-safe)
 SCRIPT=$(python3 -c "
@@ -223,7 +227,7 @@ result = Agent(
         "wave_config_path": "/tmp/wave-abc123.json",
         "stuck_threshold_hours": 4,
         "review_loop_max_iterations": 3,
-        "poll_interval_seconds": 270
+        "poll_interval_seconds": 60
     })
 )
 verdict = json.loads(result)
