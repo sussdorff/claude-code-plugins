@@ -60,7 +60,7 @@ Score against five dimensions:
 
 | Dimension | Weight | Key Criteria |
 |-----------|--------|-------------|
-| Description Quality | 28 pts | Trigger phrases, format, efficiency (150-250 chars optimal) |
+| Description Quality | 28 pts | Trigger phrases, format, efficiency (150-250 chars optimal, **≤1024 chars hard limit — Codex CLI rejects longer**) |
 | Content Structure | 25 pts | Section order, word count, "When to Use" section |
 | Progressive Disclosure | 20 pts | SKILL.md < 500 lines, references/ split, clear pointers |
 | Writing Style | 15 pts | Imperative form, concrete language, no filler |
@@ -75,6 +75,12 @@ Score against five dimensions:
 ```
 TIER VIOLATION: {skill-name} is {tier}-tier but uses {N} tokens (budget: {limit})
 ```
+
+**Description hard-limit violations** are BLOCKING findings (Codex CLI refuses to load the skill). Measure the `description` field value (not including the `description: ` prefix) in bytes/chars:
+```
+DESCRIPTION OVERFLOW: {skill-name} description is {N} chars (hard limit: 1024 — Codex CLI will reject)
+```
+Any skill exceeding 1024 chars must be flagged regardless of score — it cannot be loaded by Codex CLI at all.
 
 ### 4. Assign Grades
 
@@ -97,6 +103,9 @@ TIER VIOLATION: {skill-name} is {tier}-tier but uses {N} tokens (budget: {limit}
 
 ### Tier Violations
 - {skill-name}: TIER VIOLATION — {tier}-tier but uses {N} tokens (budget: {limit})
+
+### Description Hard-Limit Violations (BLOCKING — Codex CLI rejects)
+- {skill-name}: DESCRIPTION OVERFLOW — {N} chars (hard limit: 1024)
 
 ### Fleet Summary
 - Total skills: {n}

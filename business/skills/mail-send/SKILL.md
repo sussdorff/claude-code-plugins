@@ -93,11 +93,63 @@ end tell
 APPLESCRIPT
 ```
 
+## Long Bodies and Umlauts / Special Characters (MANDATORY PATTERN)
+
+**Problem:** Apple Mail via AppleScript is extremely sensitive to:
+
+1. **Encoding:** `read POSIX file "..."` defaults to MacRoman. UTF-8 bytes get
+   interpreted as multi-byte glyphs, producing garbled output like `√§` for `ä`,
+   `‚Äî` for `—`, or `"` for `„`. German text, em-dashes, curly quotes, and
+   bullets (•) all break this way.
+2. **Inline heredoc quoting:** Large bodies with German punctuation or nested
+   quotes frequently trip the AppleScript parser with cryptic errors like
+   `syntax error: Unknown token found.` Line-length and quote-escaping are both
+   fragile.
+
+**Mandatory pattern for any body with umlauts, em-dashes, curly quotes, or > ~20 lines:**
+
+Step 1 — write the body to a UTF-8 file via the `Write` tool (never via
+`echo > file` in Bash, which may drop encoding):
+
+```
+Write → /tmp/mail-body.txt  (UTF-8, full email body)
+```
+
+Step 2 — run AppleScript that reads the file with the explicit UTF-8 class
+via a separate `.applescript` file (heredoc + AppleScript heredoc + UTF-8
+marker don't coexist reliably):
+
+```bash
+cat << 'EOF' > /tmp/create-draft.applescript
+tell application "Mail"
+    activate
+    set mailContent to read POSIX file "/tmp/mail-body.txt" as «class utf8»
+    set newMessage to make new outgoing message with properties {subject:"Subject with Umlauts ÄÖÜ", content:mailContent, visible:true, sender:"malte.sussdorff@cognovis.de"}
+    tell newMessage
+        make new to recipient at end of to recipients with properties {address:"recipient@example.com"}
+    end tell
+end tell
+EOF
+osascript /tmp/create-draft.applescript
+```
+
+**The `as «class utf8»` clause is non-optional** — omitting it produces the
+MacRoman-interpretation garbage. The guillemets around `class utf8` are part of
+the AppleScript syntax (option-backslash / option-shift-backslash on a German
+keyboard, or pasted literally).
+
+**Expected output:** `osascript` returns the string `missing value` on success.
+This is not an error — AppleScript's `make` returns a message reference, which
+`osascript` prints as `missing value` when returned to the shell.
+
 ## Rules
 
 - Always use `visible:true` — creates a visible draft for user review, never auto-sends
 - File paths must be absolute POSIX paths (e.g. `/Users/malte/Documents/file.pdf`)
 - Never use relative paths in the `file name` property
+- For bodies with German text, em-dashes, curly quotes, bullets, or > ~20 lines:
+  **always use the file + UTF-8 pattern above**. Inline heredoc bodies are only
+  safe for short ASCII-only content (subject confirmations, one-liners).
 
 ## DO NOT
 
@@ -105,3 +157,7 @@ APPLESCRIPT
 - Do NOT auto-send emails — always create a visible draft for user review
 - Do NOT use Fastmail MCP `send_email` for emails with attachments (no attachment support)
 - Do NOT use relative file paths in the attachment `file name` property
+- Do NOT inline long bodies with umlauts in a Bash heredoc — AppleScript will mangle
+  the encoding. Use the file + `read as «class utf8»` pattern.
+- Do NOT use `read POSIX file "..."` without the `as «class utf8»` clause when the
+  body contains non-ASCII characters.
