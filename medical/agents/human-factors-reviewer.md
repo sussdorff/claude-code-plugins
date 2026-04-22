@@ -170,3 +170,20 @@ Each maps to a section of the style guide:
 - **Session timeout is a privacy requirement**: PHI on unattended screens violates GDPR and BSI C5. No timeout = high severity finding.
 - **Scoped mode is fast**: In scoped mode, only review files that are actually UI components. Backend files, configs, tests — skip them. Return findings-only.
 - **Not assessable is honest**: If you can't determine WCAG contrast from CSS variables alone, say so. Don't guess at compliance.
+
+Before returning your final result, include a `### Debrief` section documenting key decisions,
+challenges, surprising findings, and follow-up items.
+
+### Debrief
+
+#### Key Decisions
+- <decisions made>
+
+#### Challenges Encountered
+- <challenges>
+
+#### Surprising Findings
+- <surprises>
+
+#### Follow-up Items
+- <follow-ups>

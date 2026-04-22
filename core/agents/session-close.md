@@ -532,3 +532,20 @@ Check ALL repos modified during the session (e.g. `~/code/claude/` for skills/st
 | `--skip-summary` | Skip session summary (Step 12) |
 | `--skip-push` | Skip push & sync (Step 16) |
 | `--skip-pipeline` | Skip pipeline watch (Step 16a). Emergency bypass — closes beads even without CI confirmation. |
+
+Before returning your final result, include a `### Debrief` section documenting key decisions,
+challenges, surprising findings, and follow-up items.
+
+### Debrief
+
+#### Key Decisions
+- <decisions made>
+
+#### Challenges Encountered
+- <challenges>
+
+#### Surprising Findings
+- <surprises>
+
+#### Follow-up Items
+- <follow-ups>

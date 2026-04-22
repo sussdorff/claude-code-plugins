@@ -292,3 +292,20 @@ Changes made:
 - `core/contracts/execution-result.schema.json` — Canonical execution-result contract for multi-field script outputs
 - Eval-viewer: `malte/plugins/marketplaces/claude-plugins-official/plugins/skill-creator/skills/skill-creator/eval-viewer/generate_review.py`
 - Skills directory (Claude harness): `~/.claude/skills/`
+
+Before returning your final result, include a `### Debrief` section documenting key decisions,
+challenges, surprising findings, and follow-up items.
+
+### Debrief
+
+#### Key Decisions
+- <decisions made>
+
+#### Challenges Encountered
+- <challenges>
+
+#### Surprising Findings
+- <surprises>
+
+#### Follow-up Items
+- <follow-ups>

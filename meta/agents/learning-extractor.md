@@ -326,3 +326,20 @@ They are queryable via `mcp__open-brain__search` with `type='learning'`.
 
 - `~/.claude/learnings/schemas/processing-state.schema.json` — for processing-state.json validation
 - Memory entries are schemaless in open-brain; the `metadata` fields listed in Step 5 are the canonical shape.
+
+Before returning your final result, include a `### Debrief` section documenting key decisions,
+challenges, surprising findings, and follow-up items.
+
+### Debrief
+
+#### Key Decisions
+- <decisions made>
+
+#### Challenges Encountered
+- <challenges>
+
+#### Surprising Findings
+- <surprises>
+
+#### Follow-up Items
+- <follow-ups>

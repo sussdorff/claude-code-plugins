@@ -139,6 +139,23 @@ uv run bandit -r src/ -ll 2>&1
 - **Missing constraint file**: If no constraint_file is provided, run the default security baseline from python/security-defaults standard and report as BASELINE_ONLY.
 - **Code quality findings are WARN-only**: Never produce FAIL for code quality alone — it is advisory guidance for the developer. Only security and SLO violations should produce FAIL and block release.
 
+Before returning your final result, include a `### Debrief` section documenting key decisions,
+challenges, surprising findings, and follow-up items.
+
+### Debrief
+
+#### Key Decisions
+- <decisions made>
+
+#### Challenges Encountered
+- <challenges>
+
+#### Surprising Findings
+- <surprises>
+
+#### Follow-up Items
+- <follow-ups>
+
 ## Handoff Format
 
 ```markdown

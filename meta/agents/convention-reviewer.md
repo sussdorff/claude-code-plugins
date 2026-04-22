@@ -227,3 +227,20 @@ Can be triggered by:
 2. **Standards capture team knowledge** - Not textbook basics
 3. **Anti-patterns become beads** - Don't enshrine workarounds
 4. **When in doubt, skip** - The human can always ask for more detail
+
+Before returning your final result, include a `### Debrief` section documenting key decisions,
+challenges, surprising findings, and follow-up items.
+
+### Debrief
+
+#### Key Decisions
+- <decisions made>
+
+#### Challenges Encountered
+- <challenges>
+
+#### Surprising Findings
+- <surprises>
+
+#### Follow-up Items
+- <follow-ups>

@@ -309,3 +309,20 @@ Validate outputs against schemas in `.claude/learnings/schemas/`:
 - `patterns.schema.json`
 - `skill-improvements.schema.json`
 - `processing-state.schema.json`
+
+Before returning your final result, include a `### Debrief` section documenting key decisions,
+challenges, surprising findings, and follow-up items.
+
+### Debrief
+
+#### Key Decisions
+- <decisions made>
+
+#### Challenges Encountered
+- <challenges>
+
+#### Surprising Findings
+- <surprises>
+
+#### Follow-up Items
+- <follow-ups>

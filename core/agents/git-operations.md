@@ -336,3 +336,20 @@ glab mr merge 1234 \
 - `--remove-source-branch` cleans up after merge
 - Always set `GITLAB_HOST` for glab commands
 - Commit messages should be descriptive and follow conventions
+
+Before returning your final result, include a `### Debrief` section documenting key decisions,
+challenges, surprising findings, and follow-up items.
+
+### Debrief
+
+#### Key Decisions
+- <decisions made>
+
+#### Challenges Encountered
+- <challenges>
+
+#### Surprising Findings
+- <surprises>
+
+#### Follow-up Items
+- <follow-ups>

@@ -153,3 +153,20 @@ When encountering issues:
 ## Remember
 
 Your role is to execute tests systematically, collect evidence, and report results in machine-readable JSON format that the orchestrator can parse and verify.
+
+Before returning your final result, include a `### Debrief` section documenting key decisions,
+challenges, surprising findings, and follow-up items.
+
+### Debrief
+
+#### Key Decisions
+- <decisions made>
+
+#### Challenges Encountered
+- <challenges>
+
+#### Surprising Findings
+- <surprises>
+
+#### Follow-up Items
+- <follow-ups>

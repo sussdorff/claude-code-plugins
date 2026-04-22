@@ -338,3 +338,20 @@ Analyze each file:
 - Markdown files also have date field to update
 - VM files use shell comment style for versions
 - Some files may have multiple version formats (check all)
+
+Before returning your final result, include a `### Debrief` section documenting key decisions,
+challenges, surprising findings, and follow-up items.
+
+### Debrief
+
+#### Key Decisions
+- <decisions made>
+
+#### Challenges Encountered
+- <challenges>
+
+#### Surprising Findings
+- <surprises>
+
+#### Follow-up Items
+- <follow-ups>

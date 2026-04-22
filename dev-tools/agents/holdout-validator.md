@@ -109,6 +109,23 @@ python3 -c "import <artifact_module>" 2>&1
 - **Exit code matters**: A runner exit code of 0 with zero tests run is NOT a pass. Verify test count > 0.
 - **One run, full output**: Do not cherry-pick passing scenarios. Run all holdout tests in one command.
 
+Before returning your final result, include a `### Debrief` section documenting key decisions,
+challenges, surprising findings, and follow-up items.
+
+### Debrief
+
+#### Key Decisions
+- <decisions made>
+
+#### Challenges Encountered
+- <challenges>
+
+#### Surprising Findings
+- <surprises>
+
+#### Follow-up Items
+- <follow-ups>
+
 ## Handoff Format
 
 ```markdown

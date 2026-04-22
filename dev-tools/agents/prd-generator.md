@@ -485,3 +485,20 @@ Ready to begin implementation!
 - PRDs are development documents, not user-facing
 - Focus on "what needs to be done" and "how to test it"
 - Leave detailed code decisions to developers - provide guidance, not prescriptions
+
+Before returning your final result, include a `### Debrief` section documenting key decisions,
+challenges, surprising findings, and follow-up items.
+
+### Debrief
+
+#### Key Decisions
+- <decisions made>
+
+#### Challenges Encountered
+- <challenges>
+
+#### Surprising Findings
+- <surprises>
+
+#### Follow-up Items
+- <follow-ups>

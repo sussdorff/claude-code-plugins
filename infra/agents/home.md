@@ -242,3 +242,20 @@ For command details beyond this prompt, load the specific skill:
 - **ccu-cli** -- Device pairing, Direktverknuepfungen, link configuration
 - **local-vm** -- Parallels network troubleshooting, SSH config metadata parser
 - **home-infra** -- New VM setup scripts, NetBird reverse proxy, ScanSnap integration
+
+Before returning your final result, include a `### Debrief` section documenting key decisions,
+challenges, surprising findings, and follow-up items.
+
+### Debrief
+
+#### Key Decisions
+- <decisions made>
+
+#### Challenges Encountered
+- <challenges>
+
+#### Surprising Findings
+- <surprises>
+
+#### Follow-up Items
+- <follow-ups>

@@ -194,3 +194,20 @@ Example from MIRA:
 - Never start or stop servers
 - One session per invocation — use the provided session name
 - Close the browser session at the end: `playwright-cli -s <name> close`
+
+Before returning your final result, include a `### Debrief` section documenting key decisions,
+challenges, surprising findings, and follow-up items.
+
+### Debrief
+
+#### Key Decisions
+- <decisions made>
+
+#### Challenges Encountered
+- <challenges>
+
+#### Surprising Findings
+- <surprises>
+
+#### Follow-up Items
+- <follow-ups>
