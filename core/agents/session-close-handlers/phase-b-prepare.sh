@@ -57,7 +57,7 @@ done
 # ---------------------------------------------------------------------------
 REPO_ROOT="$(git rev-parse --show-toplevel 2>/dev/null || echo "")"
 if [[ -z "$REPO_ROOT" ]]; then
-  echo '{"error":"not_in_git_repo"}' >&1
+  echo '{"error":"not_in_git_repo"}' >&2
   exit 1
 fi
 
@@ -140,8 +140,8 @@ echo "==> Step 2: Plan cleanup" >&2
 if [[ -d "$PLANS_DIR" ]]; then
   while IFS= read -r -d '' plan_file; do
     base=$(basename "$plan_file")
-    # Bead ID pattern: one or more lowercase letters, dash, 3+ alphanumeric chars
-    if [[ "$base" =~ ^[a-z]+-[a-z0-9]{3,}$ ]]; then
+    # Bead ID pattern: one or more letters (any case), dash, 3+ alphanumeric chars
+    if [[ "$base" =~ ^[A-Za-z]+-[A-Za-z0-9]{3,}$ ]]; then
       bead_status=$(bd show "$base" --json 2>/dev/null | python3 -c \
         "import sys,json; d=json.load(sys.stdin); print(d[0].get('status','unknown'))" \
         2>/dev/null || echo "unknown")
@@ -207,7 +207,7 @@ else
   if [[ -d "$REPO_ROOT/frontend" ]]; then
     FRONTEND_OUT=$(cd "$REPO_ROOT/frontend" && bun audit --severity high 2>/dev/null || true)
   fi
-  ALL_AUDIT="$AUDIT_OUT $FRONTEND_OUT"
+  ALL_AUDIT=$(printf '%s\n%s' "$AUDIT_OUT" "$FRONTEND_OUT")
 
   if echo "$ALL_AUDIT" | grep -qi "critical"; then
     BUN_AUDIT_STATUS="critical"
@@ -241,7 +241,7 @@ else
     RANGE="HEAD~10..HEAD"
   fi
   CODE_COUNT=$(git -C "$REPO_ROOT" diff --name-only "$RANGE" 2>/dev/null \
-    | grep -cEvE '\.(md|txt|json|yml|yaml|toml|lock)$' || true)
+    | grep -cvE '\.(md|txt|json|yml|yaml|toml|lock)$' || true)
   SIMPLIFY_CHANGED="$CODE_COUNT"
   if [[ "$CODE_COUNT" -gt 0 ]]; then
     SIMPLIFY_STATUS="advisory"

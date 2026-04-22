@@ -67,7 +67,7 @@ done
 # ---------------------------------------------------------------------------
 REPO_ROOT="$(git rev-parse --show-toplevel 2>/dev/null || echo "")"
 if [[ -z "$REPO_ROOT" ]]; then
-  echo '{"error":"not_in_git_repo"}' >&1
+  echo '{"error":"not_in_git_repo"}' >&2
   exit 1
 fi
 
@@ -75,7 +75,11 @@ HANDLERS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 # Detect worktree: common git dir lives in the main repo
 GIT_COMMON_DIR="$(git rev-parse --git-common-dir 2>/dev/null || echo "")"
-MAIN_REPO_DETECTED="$(echo "$GIT_COMMON_DIR" | sed 's|/\.git$||')"
+MAIN_REPO_DETECTED=""
+if [[ -n "$GIT_COMMON_DIR" ]]; then
+  GIT_COMMON_DIR="$(realpath "$GIT_COMMON_DIR" 2>/dev/null || echo "$GIT_COMMON_DIR")"
+  MAIN_REPO_DETECTED="${GIT_COMMON_DIR%/.git}"
+fi
 IN_WORKTREE=false
 if [[ -n "$MAIN_REPO_DETECTED" && "$MAIN_REPO_DETECTED" != "$REPO_ROOT" ]]; then
   IN_WORKTREE=true
@@ -229,6 +233,22 @@ if [[ "$IN_WORKTREE" == "true" && "$BRANCH" != "main" && -n "$MAIN_REPO" ]]; the
     error_args|*)
       MERGE_FEATURE_STATUS="failed"
       MERGE_FEATURE_DETAIL="${MF_RAW:-unknown}"
+      # Unknown/error status from merge-feature — emit partial JSON and abort
+      jq -cn \
+        --argjson killed "$(printf '%s\n' "${KILL_PROCS_KILLED[@]+"${KILL_PROCS_KILLED[@]}"}" | jq -R . | jq -s . || echo '[]')" \
+        --arg kps "$KILL_PROCS_STATUS" \
+        --arg sms "$SECOND_MERGE_STATUS" --arg smd "$SECOND_MERGE_DETAIL" \
+        --arg mfs "$MERGE_FEATURE_STATUS" --arg mfd "$MERGE_FEATURE_DETAIL" \
+        '{
+          kill_procs: {status:$kps, killed:$killed},
+          second_merge: {status:$sms, detail:$smd},
+          merge_feature: {status:$mfs, detail:$mfd},
+          version: {status:"not_attempted", tag:"", version:""},
+          push: {status:"not_attempted", detail:""},
+          pipeline: {status:"not_attempted", run_url:""},
+          plugin_cache: {status:"not_attempted", detail:""}
+        }'
+      exit 2
       ;;
   esac
 else
@@ -248,28 +268,54 @@ echo "    merge-feature status: $MERGE_FEATURE_STATUS" >&2
 # ---------------------------------------------------------------------------
 echo "==> Step 15b: Version bump" >&2
 
-VER_OUT=$(bash "$HANDLERS_DIR/version.sh" ${DRY_RUN:+--dry-run} 2>&1) || VER_EXIT=$?
-VER_EXIT=${VER_EXIT:-0}
+TAG_PUSHED=false
 
-if [[ "$VER_EXIT" -eq 0 ]]; then
-  TAG_PENDING=$(echo "$VER_OUT" | grep '^TAG_PENDING=' | cut -d= -f2 || echo "")
-  TAG_MESSAGE=$(echo "$VER_OUT" | grep '^TAG_MESSAGE=' | cut -d= -f2- || echo "")
-  VERSION_TAG="$TAG_PENDING"
-  VERSION_VER=$(echo "$TAG_PENDING" | sed 's/^v//')
-
-  if [[ "$DRY_RUN" == "false" && -n "$TAG_PENDING" ]]; then
-    # Commit version bump (version.sh has already staged VERSION + plugin.json files)
-    git -C "$GIT_WORK_DIR" commit -m "chore: bump version to $VERSION_VER" 2>/dev/null || true
-    # Create the tag
-    git -C "$GIT_WORK_DIR" tag -a "$TAG_PENDING" -m "${TAG_MESSAGE:-Release $VERSION_VER}" 2>/dev/null || true
-    echo "    version $VERSION_VER tagged as $TAG_PENDING" >&2
-  elif [[ "$DRY_RUN" == "true" ]]; then
-    echo "    [dry-run] would bump to $VERSION_VER, tag $TAG_PENDING" >&2
-  fi
+# Idempotency: if HEAD is already tagged, reuse that tag instead of bumping again
+EXISTING_TAG=$(git -C "$GIT_WORK_DIR" tag --points-at HEAD 2>/dev/null | head -1)
+if [[ -n "$EXISTING_TAG" ]]; then
+  VERSION_TAG="$EXISTING_TAG"
+  VERSION_VER=$(echo "$EXISTING_TAG" | sed 's/^v//')
   VERSION_STATUS="ok"
+  echo "    HEAD already tagged as $EXISTING_TAG — skipping version bump" >&2
 else
-  VERSION_STATUS="failed"
-  echo "    version.sh exited $VER_EXIT" >&2
+  VER_OUT=$(bash "$HANDLERS_DIR/version.sh" ${DRY_RUN:+--dry-run} 2>&1) || VER_EXIT=$?
+  VER_EXIT=${VER_EXIT:-0}
+
+  if [[ "$VER_EXIT" -eq 0 ]]; then
+    TAG_PENDING=$(echo "$VER_OUT" | grep '^TAG_PENDING=' | cut -d= -f2 || echo "")
+    TAG_MESSAGE=$(echo "$VER_OUT" | grep '^TAG_MESSAGE=' | cut -d= -f2- || echo "")
+    VERSION_TAG="$TAG_PENDING"
+    VERSION_VER=$(echo "$TAG_PENDING" | sed 's/^v//')
+
+    if [[ "$DRY_RUN" == "false" && -n "$TAG_PENDING" ]]; then
+      # Commit version bump (version.sh has already staged VERSION + plugin.json files)
+      COMMIT_OUT=$(git -C "$GIT_WORK_DIR" commit -m "chore: bump version to $VERSION_VER" 2>&1) || COMMIT_EXIT=$?
+      COMMIT_EXIT=${COMMIT_EXIT:-0}
+      if [[ "$COMMIT_EXIT" -ne 0 ]]; then
+        VERSION_STATUS="failed"
+        echo "    version commit failed (exit $COMMIT_EXIT): $COMMIT_OUT" >&2
+      else
+        # Create the tag
+        TAG_OUT=$(git -C "$GIT_WORK_DIR" tag -a "$TAG_PENDING" -m "${TAG_MESSAGE:-Release $VERSION_VER}" 2>&1) || TAG_EXIT=$?
+        TAG_EXIT=${TAG_EXIT:-0}
+        if [[ "$TAG_EXIT" -ne 0 ]]; then
+          VERSION_STATUS="failed"
+          echo "    version tag failed (exit $TAG_EXIT): $TAG_OUT" >&2
+        else
+          VERSION_STATUS="ok"
+          echo "    version $VERSION_VER tagged as $TAG_PENDING" >&2
+        fi
+      fi
+    elif [[ "$DRY_RUN" == "true" ]]; then
+      VERSION_STATUS="ok"
+      echo "    [dry-run] would bump to $VERSION_VER, tag $TAG_PENDING" >&2
+    else
+      VERSION_STATUS="ok"
+    fi
+  else
+    VERSION_STATUS="failed"
+    echo "    version.sh exited $VER_EXIT" >&2
+  fi
 fi
 echo "    version status: $VERSION_STATUS (tag: ${VERSION_TAG:-none})" >&2
 
@@ -325,9 +371,13 @@ else
 
     # Push tag if we have one
     if [[ -n "$VERSION_TAG" ]]; then
-      git -C "$GIT_WORK_DIR" push origin "$VERSION_TAG" 2>/dev/null && \
-        echo "    pushed tag $VERSION_TAG" >&2 || \
+      if git -C "$GIT_WORK_DIR" push origin "$VERSION_TAG" 2>/dev/null; then
+        TAG_PUSHED=true
+        echo "    pushed tag $VERSION_TAG" >&2
+      else
+        TAG_PUSHED=false
         echo "    tag push failed (non-blocking)" >&2
+      fi
     fi
   else
     PUSH_STATUS="failed"
@@ -442,6 +492,7 @@ jq -cn \
   --arg mfs "$MERGE_FEATURE_STATUS" --arg mfd "$MERGE_FEATURE_DETAIL" \
   --arg vs "$VERSION_STATUS" --arg vt "$VERSION_TAG" --arg vv "$VERSION_VER" \
   --arg ps "$PUSH_STATUS" --arg pd "$PUSH_DETAIL" \
+  --argjson tp "$TAG_PUSHED" \
   --arg pls "$PIPELINE_STATUS" --arg plu "$PIPELINE_RUN_URL" \
   --arg pcs "$PLUGIN_CACHE_STATUS" --arg pcd "$PLUGIN_CACHE_DETAIL" \
   '{
@@ -449,7 +500,7 @@ jq -cn \
     second_merge: {status: $sms, detail: $smd},
     merge_feature: {status: $mfs, detail: $mfd},
     version: {status: $vs, tag: $vt, version: $vv},
-    push: {status: $ps, detail: $pd},
+    push: {status: $ps, detail: $pd, tag_pushed: $tp},
     pipeline: {status: $pls, run_url: $plu},
     plugin_cache: {status: $pcs, detail: $pcd}
   }'

@@ -80,6 +80,10 @@
         "detail": {
           "type": "string",
           "description": "Error output on failure, flag reason on skip"
+        },
+        "tag_pushed": {
+          "type": "boolean",
+          "description": "true if the version tag was pushed to origin successfully, false otherwise"
         }
       }
     },

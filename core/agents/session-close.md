@@ -339,19 +339,24 @@ Assemble the session state as JSON and render it via the handler:
 # Build state JSON from parsed phase handler outputs, e.g.:
 # - PREPARE_JSON: output of phase-b-prepare.sh
 # - SHIP_JSON: output of phase-b-ship.sh
-STATE_JSON=$(python3 -c "
-import json, sys
-prepare = json.loads('''$PREPARE_JSON''')
-ship    = json.loads('''$SHIP_JSON''')
+STATE_JSON=$(PREPARE_JSON="$PREPARE_JSON" SHIP_JSON="$SHIP_JSON" \
+  COMMIT_SHA="$COMMIT_SHA" COMMIT_MSG="$COMMIT_MSG" \
+  LEARNINGS_EXTRACTED="${LEARNINGS_EXTRACTED:-false}" \
+  SESSION_SUMMARY_SAVED="${SESSION_SUMMARY_SAVED:-false}" \
+  TURN_LOG_STATUS="${TURN_LOG_STATUS:-skipped_no_file}" \
+  python3 - <<'PYEOF'
+import json, os
+prepare = json.loads(os.environ['PREPARE_JSON'])
+ship    = json.loads(os.environ['SHIP_JSON'])
 print(json.dumps({
-  'commit_sha':             '$COMMIT_SHA',
-  'commit_msg':             '$COMMIT_MSG',
+  'commit_sha':             os.environ.get('COMMIT_SHA', ''),
+  'commit_msg':             os.environ.get('COMMIT_MSG', ''),
   'version_tag':            ship.get('version', {}).get('tag', ''),
   'changelog_updated':      prepare.get('changelog', {}).get('status') == 'updated',
   'doc_gaps':               prepare.get('docs_check', {}).get('gaps', []),
-  'learnings_extracted':    ${LEARNINGS_EXTRACTED:-false},
-  'session_summary_saved':  ${SESSION_SUMMARY_SAVED:-false},
-  'turn_log_status':        '${TURN_LOG_STATUS:-skipped_no_file}',
+  'learnings_extracted':    os.environ.get('LEARNINGS_EXTRACTED', 'false') == 'true',
+  'session_summary_saved':  os.environ.get('SESSION_SUMMARY_SAVED', 'false') == 'true',
+  'turn_log_status':        os.environ.get('TURN_LOG_STATUS', 'skipped_no_file'),
   'merge_from_main_first':  prepare.get('first_merge', {}).get('status', 'skipped'),
   'merge_from_main_second': ship.get('second_merge', {}).get('status', 'skipped'),
   'worktree_merged':        ship.get('merge_feature', {}).get('status') == 'ok',
@@ -359,7 +364,8 @@ print(json.dumps({
   'pipeline_status':        ship.get('pipeline', {}).get('status', 'skipped_dry_run'),
   'pipeline_run_url':       ship.get('pipeline', {}).get('run_url', '')
 }))
-")
+PYEOF
+)
 echo "$STATE_JSON" | python3 "$HANDLERS_DIR/render-summary.py"
 ```
 

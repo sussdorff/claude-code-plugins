@@ -45,7 +45,7 @@ done
 # Environment
 # ---------------------------------------------------------------------------
 if ! command -v bd &>/dev/null; then
-  echo '{"error":"bd_not_found","closed":[],"missing_reason":[],"dolt_sync":{"status":"skipped","detail":"bd not found"},"metrics_ingest":{"status":"skipped","detail":"bd not found"}}' >&1
+  echo '{"error":"bd_not_found","closed":[],"close_failed":[],"missing_reason":[],"dolt_sync":{"status":"skipped","detail":"bd not found"},"metrics_ingest":{"status":"skipped","detail":"bd not found"}}' >&2
   exit 0
 fi
 
@@ -55,8 +55,9 @@ PLUGIN_LIB="${CLAUDE_PLUGIN_ROOT:-${REPO_ROOT:-$HOME/code/claude-code-plugins}/b
 # ---------------------------------------------------------------------------
 # Result accumulators
 # ---------------------------------------------------------------------------
-CLOSED_BEADS=()       # JSON objects: {id, type, title, close_reason}
-MISSING_REASON=()     # bead IDs that need a close reason
+CLOSED_BEADS=()        # JSON objects: {id, type, title, close_reason}
+CLOSE_FAILED_BEADS=()  # JSON objects: {id, type, title, close_reason} — bd close failed
+MISSING_REASON=()      # bead IDs that need a close reason
 
 # ---------------------------------------------------------------------------
 # Find in-progress beads
@@ -70,7 +71,7 @@ IN_PROGRESS_COUNT=$(echo "$IN_PROGRESS_JSON" | python3 -c \
 echo "    found $IN_PROGRESS_COUNT in-progress bead(s)" >&2
 
 if [[ "$IN_PROGRESS_COUNT" -eq 0 ]]; then
-  echo '{"closed":[],"missing_reason":[],"dolt_sync":{"status":"skipped","detail":"no in-progress beads"},"metrics_ingest":{"status":"skipped","detail":"no beads to close"}}' >&1
+  echo '{"closed":[],"close_failed":[],"missing_reason":[],"dolt_sync":{"status":"skipped","detail":"no in-progress beads"},"metrics_ingest":{"status":"skipped","detail":"no beads to close"}}'
   exit 0
 fi
 
@@ -119,8 +120,8 @@ for bead_id in $BEAD_IDS; do
       echo "    $bead_id: closed" >&2
       CLOSED_BEADS+=("{\"id\":$(printf '%s' "$bead_id" | python3 -c 'import sys,json; print(json.dumps(sys.stdin.read()))'),\"type\":$BEAD_TYPE_JSON,\"title\":$BEAD_TITLE_JSON,\"close_reason\":$CLOSE_REASON_JSON}")
     else
-      echo "    $bead_id: bd close failed (may already be closed)" >&2
-      CLOSED_BEADS+=("{\"id\":$(printf '%s' "$bead_id" | python3 -c 'import sys,json; print(json.dumps(sys.stdin.read()))'),\"type\":$BEAD_TYPE_JSON,\"title\":$BEAD_TITLE_JSON,\"close_reason\":$CLOSE_REASON_JSON}")
+      echo "    $bead_id: bd close failed" >&2
+      CLOSE_FAILED_BEADS+=("{\"id\":$(printf '%s' "$bead_id" | python3 -c 'import sys,json; print(json.dumps(sys.stdin.read()))'),\"type\":$BEAD_TYPE_JSON,\"title\":$BEAD_TITLE_JSON,\"close_reason\":$CLOSE_REASON_JSON}")
     fi
   fi
 done
@@ -136,12 +137,18 @@ if [[ "${#MISSING_REASON[@]}" -gt 0 ]]; then
   if [[ "${#CLOSED_BEADS[@]}" -gt 0 ]]; then
     CLOSED_JSON="[$(IFS=','; echo "${CLOSED_BEADS[*]}")]"
   fi
+  CLOSE_FAILED_JSON="[]"
+  if [[ "${#CLOSE_FAILED_BEADS[@]}" -gt 0 ]]; then
+    CLOSE_FAILED_JSON="[$(IFS=','; echo "${CLOSE_FAILED_BEADS[*]}")]"
+  fi
 
   jq -cn \
     --argjson closed "$CLOSED_JSON" \
+    --argjson close_failed "$CLOSE_FAILED_JSON" \
     --argjson missing "$MISSING_JSON" \
     '{
       closed: $closed,
+      close_failed: $close_failed,
       missing_reason: $missing,
       dolt_sync: {status: "skipped", detail: "missing close reasons — sync deferred"},
       metrics_ingest: {status: "skipped", detail: "missing close reasons — ingest deferred"}
@@ -158,25 +165,31 @@ METRICS_STATUS="skipped"
 METRICS_DETAIL="no plugin lib"
 
 if [[ -d "$PLUGIN_LIB" && "$DRY_RUN" == "false" ]]; then
-  SINCE=$(date -v-7d +%Y%m%d 2>/dev/null || date -d '-7 days' +%Y%m%d 2>/dev/null || echo "")
-  INGEST_ERRORS=0
-
-  for bead_json in "${CLOSED_BEADS[@]+"${CLOSED_BEADS[@]}"}"; do
-    bead_id=$(echo "$bead_json" | python3 -c "import sys,json; print(json.loads(sys.stdin.read())['id'])" 2>/dev/null || echo "")
-    [[ -z "$bead_id" ]] && continue
-
-    python3 "$PLUGIN_LIB/ingest_ccusage.py" --bead "$bead_id" --since "${SINCE:-}" 2>/dev/null || \
-      { echo "    ccusage ingest failed for $bead_id (non-blocking)" >&2; (( INGEST_ERRORS++ )) || true; }
-    python3 "$PLUGIN_LIB/ingest_codex.py" --bead "$bead_id" --since "${SINCE:-}" 2>/dev/null || \
-      { echo "    codex ingest failed for $bead_id (non-blocking)" >&2; (( INGEST_ERRORS++ )) || true; }
-  done
-
-  if [[ "$INGEST_ERRORS" -eq 0 ]]; then
-    METRICS_STATUS="ok"
-    METRICS_DETAIL="${#CLOSED_BEADS[@]} bead(s) ingested"
+  SINCE=$(date -v-7d +%Y%m%d 2>/dev/null || date -d '-7 days' +%Y%m%d 2>/dev/null || date -d '7 days ago' +%Y%m%d 2>/dev/null || echo "")
+  if [[ -z "$SINCE" ]]; then
+    METRICS_STATUS="skipped"
+    METRICS_DETAIL="cannot compute date range"
+    echo "    skipped metrics ingest: cannot compute date range" >&2
   else
-    METRICS_STATUS="partial"
-    METRICS_DETAIL="$INGEST_ERRORS ingest error(s) (non-blocking)"
+    INGEST_ERRORS=0
+
+    for bead_json in "${CLOSED_BEADS[@]+"${CLOSED_BEADS[@]}"}"; do
+      bead_id=$(echo "$bead_json" | python3 -c "import sys,json; print(json.loads(sys.stdin.read())['id'])" 2>/dev/null || echo "")
+      [[ -z "$bead_id" ]] && continue
+
+      python3 "$PLUGIN_LIB/ingest_ccusage.py" --bead "$bead_id" --since "$SINCE" 2>/dev/null || \
+        { echo "    ccusage ingest failed for $bead_id (non-blocking)" >&2; (( INGEST_ERRORS++ )) || true; }
+      python3 "$PLUGIN_LIB/ingest_codex.py" --bead "$bead_id" --since "$SINCE" 2>/dev/null || \
+        { echo "    codex ingest failed for $bead_id (non-blocking)" >&2; (( INGEST_ERRORS++ )) || true; }
+    done
+
+    if [[ "$INGEST_ERRORS" -eq 0 ]]; then
+      METRICS_STATUS="ok"
+      METRICS_DETAIL="${#CLOSED_BEADS[@]} bead(s) ingested"
+    else
+      METRICS_STATUS="partial"
+      METRICS_DETAIL="$INGEST_ERRORS ingest error(s) (non-blocking)"
+    fi
   fi
 elif [[ "$DRY_RUN" == "true" ]]; then
   METRICS_STATUS="skipped"
@@ -220,16 +233,23 @@ if [[ "${#CLOSED_BEADS[@]}" -gt 0 ]]; then
   CLOSED_JSON="[$(IFS=','; echo "${CLOSED_BEADS[*]}")]"
 fi
 
+CLOSE_FAILED_JSON="[]"
+if [[ "${#CLOSE_FAILED_BEADS[@]}" -gt 0 ]]; then
+  CLOSE_FAILED_JSON="[$(IFS=','; echo "${CLOSE_FAILED_BEADS[*]}")]"
+fi
+
 MISSING_JSON="[]"
 # (MISSING_REASON is empty here — we returned early above if non-empty)
 
 jq -cn \
   --argjson closed "$CLOSED_JSON" \
+  --argjson close_failed "$CLOSE_FAILED_JSON" \
   --argjson missing "$MISSING_JSON" \
   --arg ds "$DOLT_STATUS" --arg dd "$DOLT_DETAIL" \
   --arg ms "$METRICS_STATUS" --arg md "$METRICS_DETAIL" \
   '{
     closed: $closed,
+    close_failed: $close_failed,
     missing_reason: $missing,
     dolt_sync: {status: $ds, detail: $dd},
     metrics_ingest: {status: $ms, detail: $md}

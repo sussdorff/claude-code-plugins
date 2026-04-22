@@ -3,7 +3,7 @@
   "title": "phase-b-close-beads output",
   "description": "JSON emitted by phase-b-close-beads.sh (Step 16b). Harvests close reasons, closes in-progress beads, ingests metrics, and syncs Dolt. Exit 3 = one or more beads missing a close reason (partial JSON with missing_reason list). Exit 0 = all beads closed (or no in-progress beads). The closed list is used by Step 17 (What's New synthesis) without extra bd show calls.",
   "type": "object",
-  "required": ["closed", "missing_reason", "dolt_sync", "metrics_ingest"],
+  "required": ["closed", "close_failed", "missing_reason", "dolt_sync", "metrics_ingest"],
   "properties": {
     "closed": {
       "type": "array",
@@ -28,6 +28,20 @@
             "type": "string",
             "description": "1-line close reason harvested from bead notes"
           }
+        }
+      }
+    },
+    "close_failed": {
+      "type": "array",
+      "description": "Beads for which bd close returned non-zero. These beads were NOT closed — caller should investigate and retry.",
+      "items": {
+        "type": "object",
+        "required": ["id", "type", "title", "close_reason"],
+        "properties": {
+          "id": {"type": "string"},
+          "type": {"type": "string"},
+          "title": {"type": "string"},
+          "close_reason": {"type": "string"}
         }
       }
     },
