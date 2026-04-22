@@ -1,5 +1,9 @@
 ## [Unreleased]
 
+### Added
+
+- *(CCP-a67)* Add **/vision-review** skill for cadence-triggered vision health assessment with per-principle Y/N dialog, council integration (degraded mode fallback), draft ADR generation (superseding by rule_id), health score computation (<80% triggers `/vision-author --refresh` suggestion), `trinity_role: enforcer-reactive`
+
 ### Changed
 
 - *(CCP-9yd)* Port **session-close** agent to Codex format (TOML agents, gap documentation, E2E evidence)
