@@ -53,21 +53,25 @@ class SkillValidator:
         self.body = ""
         self.display_name = ""
 
-    def validate(self) -> bool:
+    def validate(self) -> tuple[bool, bool]:
         """
         Run all validations.
 
         Returns:
-            True if no BLOCKING findings (and no advisory in strict mode).
+            (ok, load_failed) where:
+            - load_failed is True if the skill could not be loaded (fatal error)
+            - ok is True if no BLOCKING findings (and no advisory in strict mode)
         """
         if not self._load_skill():
-            return False
+            return False, True
 
         self._check_extractable_code()
 
         if self.strict:
-            return len(self.blocking) == 0 and len(self.advisory) == 0
-        return len(self.blocking) == 0
+            ok = len(self.blocking) == 0 and len(self.advisory) == 0
+        else:
+            ok = len(self.blocking) == 0
+        return ok, False
 
     def _load_skill(self) -> bool:
         """Resolve and load SKILL.md. Returns False on fatal errors."""
@@ -92,6 +96,9 @@ class SkillValidator:
         except Exception as exc:
             print(f"Error: Failed to read {path}: {exc}", file=sys.stderr)
             return False
+
+        # Normalize line endings and strip BOM so frontmatter detection is reliable
+        content = content.lstrip("﻿").replace("\r\n", "\n")
 
         # Strip YAML frontmatter (--- ... ---)
         if content.startswith("---\n"):
@@ -165,8 +172,8 @@ class SkillValidator:
         """
         # Patterns where we count ALL occurrences (e.g. multiple |)
         multi_count_patterns = [
-            r"\|",          # pipe operator (count each)
-            r"\$\(",        # command substitution
+            r"(?<!\|)\|(?!\|)",  # pipe operator — exclude || (logical OR)
+            r"\$\(",             # command substitution
         ]
         # Patterns where presence alone counts (count once per tool)
         presence_patterns = [
@@ -187,7 +194,8 @@ class SkillValidator:
         ]
         # Flag if 3+ pipeline markers total (pipes + tools),
         # which catches both single-line chained pipelines and multi-step blocks.
-        return hits >= 3
+        # Also flag lighter blocks if they span 4+ real lines and have 2+ hits.
+        return hits >= 3 or (len(real_lines) >= 4 and hits >= 2)
 
     def _looks_like_verbal_pipeline(self, body: str) -> bool:
         """
@@ -252,20 +260,12 @@ Exit codes:
 
     validator = SkillValidator(args.skill_path, strict=args.strict)
 
-    # _load_skill exits 2 on fatal error via stderr; validate() returns False
-    # but we still need to distinguish load failure from finding failure
-    if not validator._load_skill():
+    ok, load_failed = validator.validate()
+    if load_failed:
         sys.exit(2)
 
-    validator._check_extractable_code()
     validator.print_report()
-
-    if validator.strict:
-        has_failure = bool(validator.blocking or validator.advisory)
-    else:
-        has_failure = bool(validator.blocking)
-
-    sys.exit(1 if has_failure else 0)
+    sys.exit(0 if ok else 1)
 
 
 if __name__ == "__main__":

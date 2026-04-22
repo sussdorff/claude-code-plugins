@@ -195,7 +195,7 @@ Select the 1–2 lowest-scoring dimensions. These are the only sections to rewri
 
 Load the quality and tier-budget standards files (Claude harness paths above) before writing any changes.
 
-### Step 4a — Validate before rewriting
+### Step 3b — Pre-rewrite validation
 
 Run the standalone validator to establish a baseline of existing violations:
 
@@ -220,7 +220,7 @@ Rewrite ONLY the sections that correspond to the weak dimensions:
 
 Do not rewrite sections that scored well.
 
-### Step 4b — Validate after rewriting
+### Step 5 — Post-rewrite validation
 
 After applying the rewrite, confirm no EXTRACTABLE_CODE remains:
 
@@ -230,7 +230,7 @@ python3 <path-to>/meta/skills/skill-auditor/scripts/validate-skill.py <skill-dir
 
 Exit 0 = clean. If not exit 0, address remaining findings before proceeding.
 
-### Step 5 — Before/After Benchmark
+### Step 6 — Before/After Benchmark
 
 1. Save original: `cp SKILL.md workspace/{skill-name}/{skill-name}-before.md`
 2. Run 2–3 representative test scenarios using the skill (subagent runs) with the original SKILL.md; store outputs in `workspace/{skill-name}/before/run-N/outputs/`
@@ -259,7 +259,7 @@ Exit 0 = clean. If not exit 0, address remaining findings before proceeding.
    ```
 6. Open the generated HTML report and review the side-by-side output diff
 
-### Step 6 — Improvement summary
+### Step 7 — Improvement summary
 
 Report:
 ```

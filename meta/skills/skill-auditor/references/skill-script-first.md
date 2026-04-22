@@ -132,6 +132,14 @@ The agent checks `status` without parsing free-form text, eliminating
 See `core/contracts/execution-result.schema.json` for the full schema and field
 definitions.
 
+## Skill Creation Checklist
+
+When creating a new skill:
+1. Draft `SKILL.md` with frontmatter and body — keep executable logic OUT of the body.
+2. Run `validate-skill.py` before first commit: `python3 meta/skills/skill-auditor/scripts/validate-skill.py <skill-dir>`
+3. Fix any BLOCKING findings by extracting logic to `scripts/`.
+4. Commit only when validator exits 0 (or exit 0 with advisory-only findings if acceptable).
+
 ## Wiring into Skill Authoring
 
 When creating a new skill or rewriting an existing one:
