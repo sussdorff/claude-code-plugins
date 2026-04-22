@@ -287,12 +287,15 @@ Skip if `--skip-debrief`.
 HANDOFF="$REPO_ROOT/.worktree-handoff.json"
 if [[ -f "$HANDOFF" ]]; then
   python3 -c "import json,sys; d=json.load(open(sys.argv[1])); print(json.dumps(d['aggregated_debrief'], ensure_ascii=False))" "$HANDOFF"
+  # Delete the handoff file after consuming it — prevents accidental git commit
+  rm -f "$HANDOFF"
 fi
 ```
 
 - If found: use `aggregated_debrief` from the handoff file as the seed data for the debrief.
   Merge it with any additional `### Debrief` blocks found in the immediate session context
   (e.g. a quick-fix agent's own debrief that ran within this session-close invocation).
+  The handoff file is deleted immediately after reading to prevent it from being accidentally committed.
 - If not found: synthesize from session context as before (graceful fallback — collect any
   `### Debrief` blocks present in the session).
 

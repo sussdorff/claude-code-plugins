@@ -22,3 +22,7 @@ __pycache__/
 *.db
 .beads-credential-key
 issues.jsonl
+
+# Worktree IPC files (transient, must never be committed)
+.worktree-handoff.json
+.worktree-turns.jsonl

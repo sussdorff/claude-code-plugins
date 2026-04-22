@@ -122,7 +122,9 @@ After receiving any subagent result, pipe the output through `parse_debrief.py` 
 the parsed data in an in-context `DEBRIEF_AGGREGATE` list (list of parsed debrief JSON dicts).
 
 ```bash
-echo "<subagent output>" | python3 beads-workflow/lib/orchestrator/parse_debrief.py
+python3 beads-workflow/lib/orchestrator/parse_debrief.py <<'DEBRIEF_EOF'
+<subagent output verbatim>
+DEBRIEF_EOF
 ```
 
 - Exit code 0 → append the parsed JSON object to `DEBRIEF_AGGREGATE`
@@ -979,23 +981,48 @@ the aggregated data in Step 11. This is the SOLE handoff mechanism — return-pa
 structurally impossible because session-close runs as a downstream subagent.
 
 ```bash
-python3 -c "
+# Write DEBRIEF_AGGREGATE as JSON to a temp file (avoids shell expansion of debrief content)
+DEBRIEF_TMP=$(mktemp)
+# The orchestrator writes the in-context DEBRIEF_AGGREGATE list as JSON to the temp file.
+# Use Python to serialize — never interpolate raw debrief text into shell arguments.
+python3 - <<'PYEOF'
 import json, os, sys
-# DEBRIEF_AGGREGATE is the list of dicts you accumulated
-debriefs = <DEBRIEF_AGGREGATE>  # the orchestrator substitutes actual data
+# DEBRIEF_AGGREGATE is the list of dicts accumulated across phases.
+# The orchestrator substitutes the actual serialized list here via json.dumps — never raw text.
+debriefs = <DEBRIEF_AGGREGATE_JSON>  # replace with: json.loads('<json_encoded_list>')
 merged = {'key_decisions': [], 'challenges_encountered': [], 'surprising_findings': [], 'follow_up_items': []}
 for d in debriefs:
     for k in merged:
         merged[k].extend(d.get(k, []))
 handoff = {'bead_id': '<BEAD_ID>', 'aggregated_debrief': merged}
 path = os.path.join(os.environ.get('REPO_ROOT', '.'), '.worktree-handoff.json')
-with open(path, 'w') as f: json.dump(handoff, f, ensure_ascii=False, indent=2)
+with open(path, 'w') as f:
+    json.dump(handoff, f, ensure_ascii=False, indent=2)
 print(f'Handoff written to {path}')
-"
+PYEOF
 ```
+
+**How to substitute `DEBRIEF_AGGREGATE` safely:** Before running the block above, use Python to
+serialize your in-context list:
+
+```python
+import json
+# In your orchestrator context — produce the JSON string:
+debrief_json = json.dumps(DEBRIEF_AGGREGATE)  # list of parsed debrief dicts
+```
+
+Then replace `<DEBRIEF_AGGREGATE_JSON>` with the result of `json.loads('<debrief_json>')` so that
+the Python script receives properly typed data and no raw debrief text ever passes through shell
+expansion. JSON uses `"` quotes and escapes special characters — it is safe to embed in a
+single-quoted heredoc (`<<'PYEOF'`).
+
+If `DEBRIEF_AGGREGATE` is empty, write `debriefs = []` directly.
 
 If `DEBRIEF_AGGREGATE` is empty (no subagents produced debriefs), write the file anyway with
 empty lists — `session-close` will fall back to synthesizing from session context.
+
+**Note:** `.worktree-handoff.json` is a transient IPC file — it must never be committed.
+It is gitignored (see `.gitignore`). `session-close` Step 11 deletes it after reading.
 
 ---
 
