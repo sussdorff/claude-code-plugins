@@ -165,123 +165,28 @@ END LOOP
 
 ## Implementation
 
+> **Extracted to helper:** All polling logic lives in
+> `beads-workflow/scripts/wave-poll.py`. This section is now a thin
+> dispatch wrapper — see `wave-poll.py` for the full implementation.
+
 ```bash
-#!/usr/bin/env bash
-# Parse input JSON from $ARGUMENTS (passed as inline JSON string)
-# Defaults applied if fields are absent
-
+# Parse input JSON
 INPUT="$ARGUMENTS"
-
 WAVE_CONFIG=$(echo "$INPUT" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d['wave_config_path'])")
 STUCK_HOURS=$(echo "$INPUT" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('stuck_threshold_hours', 4))")
 REVIEW_MAX=$(echo "$INPUT" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('review_loop_max_iterations', 3))")
 POLL_SEC=$(echo "$INPUT" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('poll_interval_seconds', 270))")
 
-if [[ ! -f "$WAVE_CONFIG" ]]; then
-  python3 -c "import json; print(json.dumps({'status':'needs_intervention','reason':'ambiguous','bead_id':None,'details':'wave_config_path not found: $WAVE_CONFIG'}))"
-  exit 0
-fi
+# Discover wave-poll.py
+SCRIPT=$(find ~/.claude -name "wave-poll.py" 2>/dev/null | head -1)
+SCRIPT="${SCRIPT:-$(find . -name "wave-poll.py" 2>/dev/null | head -1)}"
 
-# Find wave-completion.sh relative to this agent (or from skills dir)
-SCRIPT_DIR=$(find ~/.claude -name "wave-completion.sh" 2>/dev/null | head -1)
-SCRIPT_DIR="${SCRIPT_DIR:-$(find . -name "wave-completion.sh" 2>/dev/null | head -1)}"
-
-POLLS=0
-
-while true; do
-  POLLS=$((POLLS + 1))
-
-  STDERR_FILE=$(mktemp)
-  STDOUT=$(bash "$SCRIPT_DIR" "$WAVE_CONFIG" 2>"$STDERR_FILE") || EXIT_CODE=$?
-  EXIT_CODE="${EXIT_CODE:-0}"
-  STDERR_CONTENT=$(cat "$STDERR_FILE")
-  rm -f "$STDERR_FILE"
-
-  # exit code 2 = error
-  if [[ "$EXIT_CODE" == "2" ]]; then
-    python3 -c "import json; print(json.dumps({'status':'needs_intervention','reason':'ambiguous','bead_id':None,'details':'wave-completion.sh exited 2. stderr: $STDERR_CONTENT'}))"
-    exit 0
-  fi
-
-  # Validate JSON
-  if ! echo "$STDOUT" | python3 -c "import sys,json; json.load(sys.stdin)" 2>/dev/null; then
-    python3 -c "import json; print(json.dumps({'status':'needs_intervention','reason':'ambiguous','bead_id':None,'details':'wave-completion.sh output not valid JSON'}))"
-    exit 0
-  fi
-
-  COMPLETE=$(echo "$STDOUT" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('complete', False))")
-  if [[ "$COMPLETE" == "True" ]]; then
-    ELAPSED=$(echo "$STDOUT" | python3 -c "import sys,json; d=json.load(sys.stdin); print('?')" 2>/dev/null || echo "?")
-    python3 -c "import json; print(json.dumps({'status':'complete','summary':{'polls_run':$POLLS,'elapsed_minutes':'?'}}))"
-    exit 0
-  fi
-
-  # Check for stuck beads (stalls array)
-  STALL_ID=$(echo "$STDOUT" | python3 -c "
-import sys, json
-d = json.load(sys.stdin)
-stalls = d.get('stalls', [])
-if stalls:
-    print(stalls[0]['id'])
-" 2>/dev/null || true)
-  if [[ -n "$STALL_ID" ]]; then
-    python3 -c "import json; print(json.dumps({'status':'needs_intervention','reason':'stuck','bead_id':'$STALL_ID','details':'Stall detected by wave-completion.sh'}))"
-    exit 0
-  fi
-
-  # Check stragglers for stuck-by-hours
-  STUCK_ID=$(echo "$STDOUT" | python3 -c "
-import sys, json, subprocess, datetime, re
-d = json.load(sys.stdin)
-stuck_hours = $STUCK_HOURS
-for s in d.get('stragglers', []):
-    if s.get('bd_status') == 'in_progress':
-        result = subprocess.run(['bd', 'show', s['id']], capture_output=True, text=True)
-        # Try to find updated_at from bd show output
-        m = re.search(r'Updated: (\d{4}-\d{2}-\d{2})', result.stdout)
-        if m:
-            updated = datetime.datetime.strptime(m.group(1), '%Y-%m-%d')
-            elapsed_h = (datetime.datetime.utcnow() - updated).total_seconds() / 3600
-            if elapsed_h >= stuck_hours:
-                print(f\"{s['id']}:{elapsed_h:.1f}\")
-                break
-" 2>/dev/null || true)
-  if [[ -n "$STUCK_ID" ]]; then
-    BEAD_PART="${STUCK_ID%%:*}"
-    ELAPSED_PART="${STUCK_ID##*:}"
-    python3 -c "import json; print(json.dumps({'status':'needs_intervention','reason':'stuck','bead_id':'$BEAD_PART','details':'Bead in_progress for ${ELAPSED_PART}h (threshold: ${STUCK_HOURS}h). Surface idle.'}))"
-    exit 0
-  fi
-
-  # Check pane scrollback for error / review-loop signals
-  BEAD_COUNT=$(python3 -c "import sys,json; print(json.load(open('$WAVE_CONFIG'))['beads'].__len__())")
-  for i in $(seq 0 $((BEAD_COUNT - 1))); do
-    SURFACE=$(python3 -c "import json; d=json.load(open('$WAVE_CONFIG')); print(d['beads'][$i]['surface'])")
-    BEAD_ID=$(python3 -c "import json; d=json.load(open('$WAVE_CONFIG')); print(d['beads'][$i]['id'])")
-
-    TAIL=$(cmux read-screen --surface "$SURFACE" --lines 10 2>&1 || true)
-
-    # Pane error check
-    if echo "$TAIL" | grep -qiE "error|panic|fatal|traceback|ECONNREFUSED|ENOENT" 2>/dev/null; then
-      if ! echo "$TAIL" | grep -qE "invalid_params|not a terminal|Surface.*not found"; then
-        DETAIL=$(echo "$TAIL" | grep -iE "error|panic|fatal|traceback|ECONNREFUSED|ENOENT" | tail -1 | head -c 120)
-        python3 -c "import json; print(json.dumps({'status':'needs_intervention','reason':'pane-error','bead_id':'$BEAD_ID','details':'$DETAIL'}))"
-        exit 0
-      fi
-    fi
-
-    # Review-loop check
-    SCROLLBACK=$(cmux read-screen --surface "$SURFACE" --scrollback --lines 100 2>&1 || true)
-    REVIEW_COUNT=$(echo "$SCROLLBACK" | grep -cE "Review iteration [0-9]+|Codex review iteration [0-9]+" 2>/dev/null || echo "0")
-    if [[ "${REVIEW_COUNT:-0}" -ge "$REVIEW_MAX" ]]; then
-      python3 -c "import json; print(json.dumps({'status':'needs_intervention','reason':'review-loop','bead_id':'$BEAD_ID','details':'Detected $REVIEW_COUNT review iterations (threshold: $REVIEW_MAX)'}))"
-      exit 0
-    fi
-  done
-
-  # Non-terminal — sleep and poll again
-  bash -c "sleep $POLL_SEC"
-done
+# Delegate all polling logic to the helper and print its verdict
+python3 "$SCRIPT" \
+  --config "$WAVE_CONFIG" \
+  --stuck-hours "$STUCK_HOURS" \
+  --review-max "$REVIEW_MAX" \
+  --poll-interval "$POLL_SEC"
 ```
 
 ## Escalation Heuristics
@@ -325,3 +230,22 @@ are handled by the parent — wave-monitor never remediates, only observes and r
 - **bash sleep for polling** — keeps subagent alive between checks.
 - **Intervention returns** — wave-monitor does not retry or fix. It returns the verdict
   and the parent decides remediation strategy.
+
+## Fleet Inventory (CCP-6up.5)
+
+Documents what was extracted, what was classified as ALLOWED, and why.
+
+### Extracted to helper
+
+| Agent / Skill | Location in prompt | Extracted to | Classification |
+|---|---|---|---|
+| `wave-monitor.md` `## Implementation` (115 lines bash) | Lines 168–285 (pre-refactor) | `beads-workflow/scripts/wave-poll.py` | EXTRACT — deterministic workflow logic with multiple exit paths, non-trivial JSON parsing, cmux calls |
+| `bead-orchestrator.md` Phase 6 + Phase 8 `auto_decisions` SQL snippet | Two identical `python3 -c "import sqlite3..."` blocks | `increment_auto_decisions()` in `beads-workflow/lib/orchestrator/metrics.py` | EXTRACT — duplicated SQL; belongs in the metrics library alongside `start_run`, `rollup_run` |
+
+### Classified as ALLOWED (embedded snippet permitted)
+
+| Agent / File | Location | Snippet | Reason ALLOWED |
+|---|---|---|---|
+| `core/agents/session-close.md` | Line 210 | `python3 -c "import os; print(os.path.relpath...)"` | Single-value, no branching/failure contract → bare stdout output, no execution-result envelope needed |
+| `meta/agents/learning-extractor.md` | Lines 261–272 | Multi-line `python3` state update for `processing-state.json` | Ad-hoc instructional fragment, not a harness workflow. Stateful side-effect with no caller-facing output contract; extraction adds no value |
+| `core/agents/session-close-handlers/phase-b-close-beads.sh` | Whole file | Shell script | Shell script file, NOT an agent prompt — out of scope per bead definition |

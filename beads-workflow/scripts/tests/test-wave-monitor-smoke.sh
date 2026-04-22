@@ -1,14 +1,14 @@
 #!/usr/bin/env bash
-# test-wave-monitor-smoke.sh — Smoke test for wave-monitor verdict routing
+# test-wave-monitor-smoke.sh — Smoke test for wave-monitor verdict routing via wave-poll.py
 #
-# Tests that the wave-monitor agent's routing logic produces the correct verdict
-# for each of the 5 terminal outcomes, using mocked wave-completion.sh output.
+# Tests that wave-poll.py produces the correct verdict for each terminal outcome
+# using mocked wave-completion.sh output injected via WAVE_COMPLETION_OVERRIDE.
 #
-# Does NOT spawn the actual agent (would require claude CLI) — instead exercises
-# the verdict-routing logic in isolation using mock scripts and config files.
+# Replaces inline routing logic with direct delegation to wave-poll.py,
+# so the smoke test exercises the actual helper rather than duplicating it.
 #
 # Usage: bash test-wave-monitor-smoke.sh
-# Exit: 0 if all 5 verdicts produce expected output, 1 on failure
+# Exit: 0 if all verdicts produce expected output, 1 on failure
 
 set -euo pipefail
 
@@ -17,6 +17,15 @@ PASS=0
 FAIL=0
 
 trap 'rm -rf "$TMPDIR_TEST"' EXIT
+
+# Locate wave-poll.py
+WAVE_POLL=$(find ~/.claude -name "wave-poll.py" 2>/dev/null | head -1)
+WAVE_POLL="${WAVE_POLL:-$(find . -name "wave-poll.py" 2>/dev/null | head -1)}"
+
+if [[ -z "$WAVE_POLL" ]]; then
+  echo "FATAL: wave-poll.py not found in ~/.claude or local tree"
+  exit 1
+fi
 
 # Minimal wave config for testing
 WAVE_CONFIG="$TMPDIR_TEST/wave-config.json"
@@ -47,39 +56,22 @@ exit $mock_completion_exit
 MOCK
   chmod +x "$mock_script"
 
-  # Inline routing logic matching wave-monitor's implementation
-  local EXIT_CODE
-  local STDOUT
-  STDOUT=$(bash "$mock_script" "$WAVE_CONFIG" 2>/dev/null) || EXIT_CODE=$?
-  EXIT_CODE="${EXIT_CODE:-0}"
+  # Invoke wave-poll.py with the mock script injected via env override
+  local verdict
+  verdict=$(
+    WAVE_COMPLETION_OVERRIDE="$mock_script" \
+    python3 "$WAVE_POLL" \
+      --config "$WAVE_CONFIG" \
+      --poll-interval 0 \
+      --stuck-hours 4 \
+      --review-max 3 \
+    2>/dev/null
+  ) || true
 
-  local verdict_status=""
-  local verdict_reason=""
-
-  if [[ "$EXIT_CODE" == "2" ]]; then
-    verdict_status="needs_intervention"
-    verdict_reason="ambiguous"
-  elif ! echo "$STDOUT" | python3 -c "import sys,json; json.load(sys.stdin)" 2>/dev/null; then
-    verdict_status="needs_intervention"
-    verdict_reason="ambiguous"
-  else
-    COMPLETE=$(echo "$STDOUT" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('complete', False))")
-    if [[ "$COMPLETE" == "True" ]]; then
-      verdict_status="complete"
-    else
-      STALL_ID=$(echo "$STDOUT" | python3 -c "
-import sys, json
-d = json.load(sys.stdin)
-stalls = d.get('stalls', [])
-if stalls:
-    print(stalls[0]['id'])
-" 2>/dev/null || true)
-      if [[ -n "$STALL_ID" ]]; then
-        verdict_status="needs_intervention"
-        verdict_reason="stuck"
-      fi
-    fi
-  fi
+  local verdict_status
+  local verdict_reason
+  verdict_status=$(echo "$verdict" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('status',''))" 2>/dev/null || echo "")
+  verdict_reason=$(echo "$verdict" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('reason',''))" 2>/dev/null || echo "")
 
   # Evaluate
   if [[ "$verdict_status" == "$expected_status" ]]; then
@@ -101,9 +93,8 @@ _run_verdict "complete" 0 \
   '{"complete":true,"all_beads_closed":true,"all_surfaces_idle":true,"stragglers":[],"unclosed_follow_ups":[],"stalls":[]}' \
   "complete"
 
-# ── Verdict 2: needs_intervention/pane-error (simulated via ambiguous path) ──
+# ── Verdict 2: needs_intervention/pane-error ────────────────────────────────
 # pane-error is detected via cmux read-screen, not wave-completion.sh output.
-# We verify the ambiguous path as a proxy — actual pane-error requires cmux.
 echo "SKIP [pane-error]: requires live cmux surface (exercised in integration test)"
 
 # ── Verdict 3: needs_intervention/stuck (via stalls array) ──────────────────
@@ -113,7 +104,6 @@ _run_verdict "stuck-via-stalls" 1 \
 
 # ── Verdict 4: needs_intervention/review-loop ───────────────────────────────
 # review-loop is detected via cmux scrollback pattern matching.
-# Verified via the routing table in wave-monitor.md § Escalation Heuristics.
 echo "SKIP [review-loop]: requires live cmux surface (exercised in integration test)"
 
 # ── Verdict 5: needs_intervention/ambiguous (exit code 2) ───────────────────

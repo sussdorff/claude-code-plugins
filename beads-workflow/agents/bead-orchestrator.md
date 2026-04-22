@@ -591,15 +591,9 @@ Commit: `fix(<bead-id>): address review findings iteration 1`
   bd update <id> --append-notes="DECISION: auto-accept review at iter 1, reviewer reco: <Quality grade>"
   ```
 - Downgrade Quality grade: A→B, B→C.
-- Increment `auto_decisions` via SQL:
+- Increment `auto_decisions`:
   ```bash
-  python3 -c "
-  import sqlite3; from pathlib import Path
-  db = Path.home() / '.claude' / 'metrics.db'
-  conn = sqlite3.connect(str(db))
-  conn.execute('UPDATE bead_runs SET auto_decisions = auto_decisions + 1 WHERE run_id = ?', ('<run_id>',))
-  conn.commit()
-  "
+  python3 -c "import sys; sys.path.insert(0, 'beads-workflow/lib/orchestrator'); from metrics import increment_auto_decisions; increment_auto_decisions('<run_id>')"
   ```
 
 **5. Parse and log:**
@@ -695,7 +689,10 @@ Report: VERIFIED or STILL-BROKEN:<finding>"
   ```bash
   bd update <id> --append-notes="DECISION: auto-accept codex at iter 1, still-broken after fix"
   ```
-- Increment `auto_decisions` via SQL (same as Phase 6).
+- Increment `auto_decisions` (same as Phase 6):
+  ```bash
+  python3 -c "import sys; sys.path.insert(0, 'beads-workflow/lib/orchestrator'); from metrics import increment_auto_decisions; increment_auto_decisions('<run_id>')"
+  ```
 
 → **Record phase_summary**: regressions fixed, re-check result (VERIFIED or STILL-BROKEN + auto-accept).
 
