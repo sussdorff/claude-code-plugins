@@ -647,8 +647,11 @@ and resolves `{{DIFF}}` automatically — inline for small diffs (≤ 2 files, �
 guidance for large ones.
 
 > **BLOCKING RULE:** Run codex-exec.sh **synchronously** — NEVER use `run_in_background: true`
-> or TaskCreate for this call. The script manages its own 300s internal timeout. Use Bash
-> with `timeout: 360000` (6 minutes in ms) to allow the full Codex run to complete.
+> or TaskCreate for this call. The script manages its own internal timeout (default: 300s,
+> override via `CODEX_EXEC_TIMEOUT=<seconds>`). Use Bash with `timeout: 360000` (6 minutes in ms)
+> to allow the full Codex run to complete. If Codex exits 124 (timeout) without findings, the
+> prompt is likely too large — raise `CODEX_EXEC_TIMEOUT` and/or lower `CODEX_EXEC_MAX_PROMPT_CHARS`
+> (default: 32000 chars) to trigger earlier truncation.
 > Pattern `sleep N && cat <output>` is blocked by hooks — it will never work.
 
 ```bash

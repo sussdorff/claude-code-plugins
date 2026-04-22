@@ -268,6 +268,36 @@ This project uses the **Architecture Trinity** model to classify architectural t
 | **makeIdHelper** | Enforcer-Proactive | Generates typed ID accessor functions — the generated API only accepts the correct type; passing a raw string is a compile-time error. |
 | **no-raw-id-concat** | Enforcer-Reactive | An ESLint rule that flags raw string concatenation of IDs. Catches violations in existing code during lint/CI. |
 
+## Codex / codex-exec.sh
+
+All Codex adversarial reviews run through `beads-workflow/scripts/codex-exec.sh`.
+
+### Timeout Threshold
+
+`CODEX_EXEC_TIMEOUT` controls the hard timeout (in seconds) passed to `timeout`/`gtimeout`:
+
+| Variable | Default | Notes |
+|----------|---------|-------|
+| `CODEX_EXEC_TIMEOUT` | `300` (5 min) | Override when large prompts cause exit 124 |
+| `CODEX_EXEC_MAX_PROMPT_CHARS` | `32000` | Prompt is truncated (with notice) if it exceeds this limit |
+
+**Override syntax:**
+```bash
+CODEX_EXEC_TIMEOUT=600 BEAD_ID=... PHASE_LABEL=... beads-workflow/scripts/codex-exec.sh ...
+```
+
+**When to raise the timeout:**
+- Codex exits 124 (timeout) without any findings in the output
+- The prompt contains large agent file content (e.g. `session-close.md` at 511+ lines)
+- Wave sessions processing many beads in sequence
+
+**When to lower `CODEX_EXEC_MAX_PROMPT_CHARS`:**
+- Repeated exit 124s even after raising the timeout — the prompt is simply too large
+- Default (32000 chars) covers most diffs; lower only if Codex still times out
+
+**Bash tool timeout:** When overriding `CODEX_EXEC_TIMEOUT`, also raise the Bash `timeout:` parameter
+to `(CODEX_EXEC_TIMEOUT + 60) * 1000` ms to prevent the Bash wrapper from racing the internal timeout.
+
 <!-- BEGIN BEADS INTEGRATION v:1 profile:minimal hash:ca08a54f -->
 ## Beads Issue Tracker
 

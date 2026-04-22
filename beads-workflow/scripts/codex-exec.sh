@@ -11,6 +11,25 @@
 #   WAVE_ID      — if set, forwarded to insert_agent_call
 #   ITERATION    — integer, default 1
 #
+# Timeout control:
+#   CODEX_EXEC_TIMEOUT          — hard timeout in seconds for the codex process.
+#                                  Default: 300 (5 minutes). Override example:
+#                                    CODEX_EXEC_TIMEOUT=600 beads-workflow/scripts/codex-exec.sh ...
+#                                  Raise this when the prompt is large (e.g. long agent files
+#                                  sent as context) and Codex exits 124 without producing findings.
+#                                  Callers using Bash tool should also raise `timeout:` to
+#                                  (CODEX_EXEC_TIMEOUT + 60) * 1000 ms so the Bash wrapper does
+#                                  not race the internal timeout.
+#
+# Prompt size guard:
+#   CODEX_EXEC_MAX_PROMPT_CHARS — maximum character count for the resolved prompt (positional $1).
+#                                  Default: 32000. Override example:
+#                                    CODEX_EXEC_MAX_PROMPT_CHARS=64000 beads-workflow/scripts/codex-exec.sh ...
+#                                  If the resolved prompt exceeds this limit it is truncated to the
+#                                  first N chars and a truncation notice is appended. This prevents
+#                                  giant agent file content (e.g. session-close.md at 511 lines) from
+#                                  being sent raw to Codex, which is the primary cause of exit 124.
+#
 # Degraded mode: if RUN_ID is empty or the metrics module is unavailable,
 # codex still runs — only metrics recording is skipped (WARNING to stderr).
 #
@@ -92,6 +111,7 @@ trap 'rm -f "$TMPFILE"' EXIT
 # entirely would be worse.
 # ---------------------------------------------------------------------------
 CODEX_EXEC_TIMEOUT="${CODEX_EXEC_TIMEOUT:-300}"
+CODEX_EXEC_MAX_PROMPT_CHARS="${CODEX_EXEC_MAX_PROMPT_CHARS:-32000}"
 TIMEOUT_CMD=()
 if command -v timeout >/dev/null 2>&1; then
     TIMEOUT_CMD=(timeout "$CODEX_EXEC_TIMEOUT")
@@ -138,6 +158,21 @@ sys.stdout.write(prompt.replace('{{DIFF}}', content))
 " "$1" "$_DIFF_CONTENT")
     shift
     set -- "$_RESOLVED" "$@"
+fi
+
+# ---------------------------------------------------------------------------
+# Prompt size guard: truncate $1 if it exceeds CODEX_EXEC_MAX_PROMPT_CHARS.
+# Large prompts (e.g. long agent file content sent as context) are the primary
+# cause of Codex exit 124 (timeout) without producing findings.  Truncating
+# here prevents the worst cases before the request is sent.
+# ---------------------------------------------------------------------------
+if [[ -n "${1:-}" ]]; then
+    _PROMPT_LEN=${#1}
+    if [[ $_PROMPT_LEN -gt $CODEX_EXEC_MAX_PROMPT_CHARS ]]; then
+        echo "codex-exec.sh: WARNING: prompt is ${_PROMPT_LEN} chars — truncating to ${CODEX_EXEC_MAX_PROMPT_CHARS} chars (override via CODEX_EXEC_MAX_PROMPT_CHARS)" >&2
+        _TRUNCATED="${1:0:${CODEX_EXEC_MAX_PROMPT_CHARS}}"$'\n\n'"[TRUNCATED: prompt exceeded ${CODEX_EXEC_MAX_PROMPT_CHARS} chars — ${_PROMPT_LEN} chars total. Review git diff directly for full context.]"
+        set -- "$_TRUNCATED" "${@:2}"
+    fi
 fi
 
 # ---------------------------------------------------------------------------
