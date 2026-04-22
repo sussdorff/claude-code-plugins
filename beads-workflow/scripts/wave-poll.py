@@ -20,8 +20,6 @@ Environment override (for testing):
   WAVE_COMPLETION_OVERRIDE=/path/to/mock-wave-completion.sh
 """
 
-from __future__ import annotations
-
 import argparse
 import datetime
 import json
