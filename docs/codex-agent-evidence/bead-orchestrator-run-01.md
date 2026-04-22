@@ -1,6 +1,9 @@
 # Codex Bead-Orchestrator Agent: E2E Evidence Run 01
 
-**Bead:** CCP-i47 (dry-run)  
+**Bead:** CCP-i47 (dry-run)
+**Note:** CCP-i47 is used as the dry-run target since CCP-67x itself creates these artifacts;
+running CCP-67x against itself would be circular. CCP-i47 is a representative non-critical
+task bead, demonstrating the same bead-orchestrator entry path.  
 **Date:** 2026-04-22  
 **Agent file:** `~/.codex/agents/bead-orchestrator.toml`  
 **Verdict:** PASS — agent loaded via nickname matching, recognized the bead workflow, and
@@ -156,5 +159,5 @@ nickname matching design.
 
 ## Raw JSONL Source
 
-Captured to `/Users/malte/.claude/projects/[session]/tool-results/ba5iw46wh.txt`
-(47 events, ~123KB).
+Full transcript available locally. The evidence above covers the key agent reasoning and
+command execution trace. Total: 47 JSONL events (~123KB).
