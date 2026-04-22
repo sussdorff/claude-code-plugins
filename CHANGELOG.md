@@ -1,8 +1,11 @@
 ## [Unreleased]
 
+## [2026.04.86] - 2026-04-22
+
 ### Added
 
 - *(CCP-9bm)* Add **Subagent Debrief Return Contract** standard defining fixed-heading markdown format (Key Decisions, Challenges Encountered, Surprising Findings, Follow-up Items) for structured knowledge capture across all subagents with parse_debrief.py helper and check-debrief-adherence.py enforcer-reactive lint
+- *(CCP-k1m)* Add **--non-interactive mode** to session-close agent with deterministic defaults at all interactive points, resume-from-mid-close state detection, and audit document classifying all interactive decision points
 - *(CCP-hf1)* Add **/vision-author** skill with 7-question guided dialogue producing structured vision.md — enforces present-tense sections via tense-gate, rejects STUB/TBD/blank entries with bead-creation routing, auto-generates genesis ADR, supports --refresh mode for re-authoring with conformance scanning
 - *(CCP-6up.3)* Add **validate-skill.py** Enforcer-Reactive for script-first authoring — flags executable bash/python blocks and verbal multi-step pipelines in skill bodies with --strict mode (exit 0/1/2); wired into skill-auditor for per-skill auditing and integrated into skill creation path
 - *(CCP-a67)* Add **/vision-review** skill for cadence-triggered vision health assessment with per-principle Y/N dialog, council integration (degraded mode fallback), draft ADR generation (superseding by rule_id), health score computation (<80% triggers `/vision-author --refresh` suggestion), `trinity_role: enforcer-reactive`

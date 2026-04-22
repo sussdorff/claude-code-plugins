@@ -85,6 +85,102 @@ Handler scripts live in `session-close-handlers/` in the plugin cache. Resolve t
 HANDLERS_DIR="$HOME/.claude/plugins/cache/sussdorff-plugins/core/agents/session-close-handlers"
 ```
 
+## Non-Interactive Mode
+
+**Opt-in.** Interactive mode is the default. Non-interactive mode is activated by:
+- Including `--non-interactive` in the invocation prompt, OR
+- Setting `SESSION_CLOSE_NON_INTERACTIVE=1` in the environment before spawning this agent.
+
+### Purpose
+
+Non-interactive mode enables automated stall recovery. When a session-close is triggered
+programmatically (e.g. by a CI pipeline, a recovery agent, or a scheduled close), human
+prompts would deadlock. Non-interactive mode applies deterministic defaults at every
+interactive point so the workflow completes without waiting for input.
+
+### Deterministic Defaults
+
+| Interactive Point | Default in Non-Interactive Mode |
+|-------------------|---------------------------------|
+| Which unstaged files to stage (Step 5) | Auto-stage **all** `.git_state.unstaged[]` files |
+| Untracked files (Step 5) | Log as advisory; do not stage |
+| Bun audit `high`/`critical` — proceed? (Step 5) | Auto-proceed; log vulns to bead notes |
+| Conventional commit message (Step 6) | Construct from caller-supplied bead context, or fall back to `chore: automated session close [<bead-id>]` |
+| Missing bead close reason (Step 16b exit 3) | Auto-compose from bead title + commit message |
+
+### Caller-Supplied Commit Context
+
+If the invocation prompt includes any of the following, use them to build the commit message:
+
+```
+Bead ID:    <id>           → used as scope, e.g. feat(CCP-k1m): ...
+Bead title: <title>        → used as short description
+Type:       feat|fix|chore → used as commit type (default: chore)
+```
+
+If none are provided, the fallback is: `chore: automated session close [<bead-id>]`
+
+### Needs-Human Conditions
+
+These conditions are **not** defaultable. In non-interactive mode, return a structured
+`BLOCKED` response immediately — never deadlock:
+
+| Condition | Action |
+|-----------|--------|
+| Merge conflict (Step 3 or Step 14) | Return `BLOCKED: merge conflict — human must resolve` |
+| Screen locked during push | Return `BLOCKED: screen locked — human must unlock` |
+| Pipeline failed (CI ran and failed) | Return `BLOCKED: CI pipeline failed — see run URL` |
+
+---
+
+## Resume from Mid-Close State
+
+### Purpose
+
+If a session-close is interrupted mid-way (crash, timeout, or stall), restarting from
+scratch may re-run already-completed steps (duplicate commits, double merges). This section
+defines detection logic so the workflow can resume from the correct checkpoint.
+
+### State Detection
+
+Run at startup when `--non-interactive` is set (or when explicitly requested in interactive
+mode via `--resume`):
+
+```
+1. Check if HEAD is tagged with a version tag
+   → Already tagged: skip to push (Step 16 / phase-b-ship.sh with --skip-merge --skip-version)
+
+2. Check if feature branch is already merged into main
+   → Already merged: skip to pipeline watch / bead close (Step 16b)
+
+3. Check if a conventional commit exists since origin/main (`git log --oneline origin/main..HEAD`)
+   → If any commit has a conventional-commit format subject (e.g. `feat(...):`/`fix:`/`chore:`) and the branch has not yet been merged to main: skip to second merge (Steps 13-15 in phase-b-ship.sh)
+
+4. No state found → start from beginning (Step 1 / phase-b-prepare.sh)
+```
+
+### Mode Behavior
+
+| Mode | Resume Detection Behavior |
+|------|--------------------------|
+| `--non-interactive` | Detection **drives routing** — auto-resume from the detected checkpoint |
+| Interactive (default) | Detection is **advisory** — prints detected state as a summary, user confirms routing |
+
+### Advisory Output (Interactive Mode)
+
+When state is detected in interactive mode, print before proceeding:
+
+```
+RESUME ADVISORY: Previous session-close state detected.
+  - Conventional commit: <sha> (<msg>)
+  - Tag: <tag or "none">
+  - Feature merged to main: yes/no
+Suggested resume point: <step description>
+Proceed from this checkpoint? (y/n)
+```
+
+---
+
 ## Phase B: Ship-Close (Steps 1-7, 9, 13-17)
 
 ### Steps 1, 2, 3, 4, 5, 7, 9: Prepare (phase-b-prepare.sh)
@@ -141,6 +237,11 @@ simplification advisory, changelog, and docs check).
    - If `.simplify.status` is `advisory`: note for the user (non-blocking)
    - If `.docs_check.gaps[]` non-empty: report gaps (advisory, non-blocking)
 
+   **If `--non-interactive`:** Skip all prompts above. Auto-stage all `.git_state.unstaged[]`
+   files. If `.bun_audit.status` is `high` or `critical`: log vulnerabilities to bead notes
+   (`bd update <id> --append-notes="Security audit: <vulns>"`) and proceed automatically.
+   Simplify and docs-check notes are silently logged; no user interaction.
+
 6. **Note for Step 6 (conventional commit):** If `.changelog.status == "updated"`,
    `CHANGELOG.md` is already staged — include it in the Step 6 commit (no separate changelog commit).
 
@@ -153,7 +254,15 @@ Interactive. Build commit message with user:
 4. Optional body
 5. Stage files and commit (include staged `CHANGELOG.md` if `.changelog.status == "updated"`)
 
-**IMPORTANT:** Do NOT create tags before the commit. Do NOT skip interactive commit message.
+**If `--non-interactive`:** Skip the interactive dialog. Build the commit message automatically:
+- If the caller's prompt contains a bead ID, title, and/or type: construct
+  `<type>(<bead-id>): <bead-title-as-description>`.
+- If no commit context is provided by the caller: use `chore: automated session close [<bead-id>]`
+  (or `chore: automated session close` if no bead ID is known).
+- Stage all files from `git_state.staged[]` plus any auto-staged unstaged files, then commit.
+
+**IMPORTANT:** Do NOT create tags before the commit. Do NOT skip interactive commit message
+(in interactive mode). In non-interactive mode the auto-generated message above is used.
 
 ## Phase A: Worker-Debrief (Steps 10-12)
 
@@ -282,6 +391,8 @@ Parse `CLOSE_JSON` (see `phase-b-close-beads.schema.json`):
 and stamp it into the bead: `bd update <id> --append-notes="Close reason: <reason>"`. Then rerun
 `phase-b-close-beads.sh`.
 
+**If `--non-interactive`:** Auto-compose the close reason from bead title + the Step 6 commit subject (format: `<bead-title>: <commit-subject>`). Stamp via `bd update <id> --append-notes='Close reason: <auto-composed>'` then rerun the handler.
+
 **Store closed beads list** from `.closed[]` — used by Step 17 for What's New synthesis.
 
 Good close reasons:
@@ -409,6 +520,8 @@ Check ALL repos modified during the session (e.g. `~/code/claude/` for skills/st
 
 | Flag | Effect |
 |------|--------|
+| `--non-interactive` | Opt-in: skip all interactive prompts, apply deterministic defaults (see Non-Interactive Mode section). Activate via flag or `SESSION_CLOSE_NON_INTERACTIVE=1`. |
+| `--resume` | Trigger state detection at startup and auto-resume from checkpoint; advisory in interactive mode, auto-routing in non-interactive mode. |
 | `--dry-run` | Preview all steps, no git changes |
 | `--debrief-only` | Run only Phase A: learnings, debrief, summary, turn-log upload (Steps 10-12c). No git operations. |
 | `--ship-only` | Run only Phase B: commit, changelog, merge, push, close (Steps 1-7, 9, 13-17). No learnings/debrief. |
