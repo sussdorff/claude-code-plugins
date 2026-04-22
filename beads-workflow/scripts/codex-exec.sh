@@ -146,7 +146,7 @@ fi
 START_MS=$(python3 -c "import time; print(int(time.time() * 1000))")
 
 CODEX_EXIT=0
-"${TIMEOUT_CMD[@]}" codex exec --json "$@" | tee "$TMPFILE"
+"${TIMEOUT_CMD[@]}" codex exec --json "$@" < /dev/null | tee "$TMPFILE"
 # Capture codex's (or timeout's) exit code from PIPESTATUS (index 0 = left side
 # of pipe, index 1 = tee). When TIMEOUT_CMD is set and the timeout fires, the
 # `timeout` utility exits 124; that 124 flows through PIPESTATUS[0] into
