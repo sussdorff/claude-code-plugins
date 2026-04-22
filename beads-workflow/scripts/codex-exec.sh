@@ -2,7 +2,7 @@
 # codex-exec.sh — Thin wrapper around 'codex exec --json' that records usage
 # from turn.completed events into metrics.db via metrics.insert_agent_call().
 #
-# Required env vars:
+# Required env vars (when metrics recording is desired):
 #   RUN_ID       — bead_runs.run_id this Codex call belongs to
 #   BEAD_ID      — for denormalized query convenience
 #   PHASE_LABEL  — one of: codex-adversarial | codex-review | codex-fix-check
@@ -11,8 +11,11 @@
 #   WAVE_ID      — if set, forwarded to insert_agent_call
 #   ITERATION    — integer, default 1
 #
+# Degraded mode: if RUN_ID is empty or the metrics module is unavailable,
+# codex still runs — only metrics recording is skipped (WARNING to stderr).
+#
 # Exit code: propagates codex's exact exit code.
-# Errors (missing env vars, missing module): stderr + exit 1 (no DB write).
+# Errors (missing BEAD_ID/PHASE_LABEL when RUN_ID is set, metrics DB failure): stderr + exit 1.
 
 set -uo pipefail
 
@@ -24,30 +27,36 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 METRICS_DIR="${METRICS_DIR_OVERRIDE:-${SCRIPT_DIR}/../lib/orchestrator}"
 
 # ---------------------------------------------------------------------------
-# Validate required env vars
+# Validate env vars and determine whether metrics recording is possible
 # ---------------------------------------------------------------------------
+SKIP_METRICS=0
+
 if [[ -z "${RUN_ID:-}" ]]; then
-    echo "codex-exec.sh: ERROR: RUN_ID is not set" >&2
-    exit 1
-fi
-if [[ -z "${BEAD_ID:-}" ]]; then
-    echo "codex-exec.sh: ERROR: BEAD_ID is not set" >&2
-    exit 1
-fi
-if [[ -z "${PHASE_LABEL:-}" ]]; then
-    echo "codex-exec.sh: ERROR: PHASE_LABEL is not set" >&2
-    exit 1
+    echo "codex-exec.sh: WARNING: RUN_ID is not set — metrics recording skipped" >&2
+    SKIP_METRICS=1
 fi
 
 ITERATION="${ITERATION:-1}"
 WAVE_ID="${WAVE_ID:-}"
 
-# ---------------------------------------------------------------------------
-# Validate Python / metrics module availability
-# ---------------------------------------------------------------------------
-if ! python3 -c "import sys; sys.path.insert(0, '${METRICS_DIR}'); from metrics import insert_agent_call" 2>/dev/null; then
-    echo "codex-exec.sh: ERROR: Cannot import insert_agent_call from ${METRICS_DIR}/metrics.py" >&2
-    exit 1
+if [[ $SKIP_METRICS -eq 0 ]]; then
+    # BEAD_ID and PHASE_LABEL are only required when recording metrics
+    if [[ -z "${BEAD_ID:-}" ]]; then
+        echo "codex-exec.sh: ERROR: BEAD_ID is not set" >&2
+        exit 1
+    fi
+    if [[ -z "${PHASE_LABEL:-}" ]]; then
+        echo "codex-exec.sh: ERROR: PHASE_LABEL is not set" >&2
+        exit 1
+    fi
+
+    # ---------------------------------------------------------------------------
+    # Validate Python / metrics module availability
+    # ---------------------------------------------------------------------------
+    if ! python3 -c "import sys; sys.path.insert(0, '${METRICS_DIR}'); from metrics import insert_agent_call" 2>/dev/null; then
+        echo "codex-exec.sh: WARNING: Cannot import metrics module from ${METRICS_DIR} — metrics recording skipped" >&2
+        SKIP_METRICS=1
+    fi
 fi
 
 # ---------------------------------------------------------------------------
@@ -111,7 +120,12 @@ DURATION_MS=$(( END_MS - START_MS ))
 
 # ---------------------------------------------------------------------------
 # Parse ALL turn.completed events from temp file, sum usage fields
+# (skipped when SKIP_METRICS=1)
 # ---------------------------------------------------------------------------
+if [[ $SKIP_METRICS -eq 1 ]]; then
+    exit "$CODEX_EXIT"
+fi
+
 PYTHON_EXIT=0
 python3 - <<PYEOF || PYTHON_EXIT=$?
 import sys

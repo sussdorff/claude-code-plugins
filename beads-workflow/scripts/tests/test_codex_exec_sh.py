@@ -174,15 +174,28 @@ def test_shell_script_writes_db(tmp_path: Path) -> None:
 
 
 # ---------------------------------------------------------------------------
-# Error case: missing RUN_ID → non-zero exit, no DB write
+# Degraded mode: missing RUN_ID → codex still runs, metrics skipped
 # ---------------------------------------------------------------------------
 
-def test_missing_run_id_exits_nonzero(tmp_path: Path) -> None:
-    """Missing RUN_ID must cause non-zero exit before any DB write."""
+def test_missing_run_id_skips_metrics_but_runs_codex(tmp_path: Path) -> None:
+    """
+    Missing RUN_ID must NOT abort — codex runs, metrics recording is skipped.
+    Verifies:
+      1. Exit code 0 (codex ran successfully)
+      2. No agent_calls row written to any DB
+      3. WARNING (not ERROR) referencing RUN_ID appears in stderr
+    """
+    db = tmp_path / "metrics.db"
+    mock_dir = _make_mock_codex(tmp_path / "mock_bin")
+    codex_config = _make_mock_config(tmp_path / "codex_cfg")
+
     env = os.environ.copy()
     env.pop("RUN_ID", None)
     env["BEAD_ID"] = "TEST-CCP-2vo.3"
     env["PHASE_LABEL"] = "codex-review"
+    env["PATH"] = f"{mock_dir}:{env.get('PATH', '')}"
+    env["METRICS_DB_PATH"] = str(db)
+    env["CODEX_CONFIG_PATH"] = str(codex_config)
 
     result = subprocess.run(
         ["bash", str(_CODEX_EXEC)],
@@ -190,11 +203,16 @@ def test_missing_run_id_exits_nonzero(tmp_path: Path) -> None:
         capture_output=True,
         text=True,
     )
-    assert result.returncode != 0, (
-        "Expected non-zero exit when RUN_ID is missing, got 0"
+    assert result.returncode == 0, (
+        f"Expected exit 0 when RUN_ID is missing (degraded mode), got {result.returncode}\n"
+        f"stdout={result.stdout!r}\nstderr={result.stderr!r}"
     )
-    assert "RUN_ID" in result.stderr, (
-        f"Expected 'RUN_ID' in stderr, got: {result.stderr!r}"
+    assert "WARNING" in result.stderr and "RUN_ID" in result.stderr, (
+        f"Expected WARNING about RUN_ID in stderr, got: {result.stderr!r}"
+    )
+    # No DB file should have been created (metrics skipped entirely)
+    assert not db.exists(), (
+        "metrics.db should not exist when metrics recording is skipped"
     )
 
 
