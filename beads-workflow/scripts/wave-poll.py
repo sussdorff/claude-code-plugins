@@ -4,11 +4,13 @@ wave-poll.py — Polling loop helper for the wave-monitor agent.
 
 Extracted from beads-workflow/agents/wave-monitor.md ## Implementation section.
 Runs wave-completion.sh in a loop, detects terminal conditions, and prints a
-JSON verdict to stdout before exiting.
+canonical execution-result envelope to stdout before exiting.
 
-Verdict format matches the wave-monitor Return Contract:
-  {"status": "complete", "summary": {...}}
-  {"status": "needs_intervention", "reason": "...", "bead_id": "...", "details": "..."}
+Output conforms to core/contracts/execution-result.schema.json:
+  status: "ok" (wave complete) | "warning" (needs_intervention) | "error" (hard error)
+  data.verdict: the wave-monitor Return Contract payload:
+    {"status": "complete", "summary": {...}}
+    {"status": "needs_intervention", "reason": "...", "bead_id": "...", "details": "..."}
 
 Usage:
   python3 wave-poll.py --config /path/to/wave-config.json \\
@@ -30,6 +32,38 @@ import sys
 import time
 from pathlib import Path
 from typing import Any
+
+# ---------------------------------------------------------------------------
+# Execution-result envelope
+# ---------------------------------------------------------------------------
+
+_SCHEMA_PATH = "core/contracts/execution-result.schema.json"
+_PRODUCER = "wave-poll.py"
+_CONTRACT_VERSION = "1"
+
+
+def _envelope(
+    status: str,
+    summary: str,
+    verdict: dict[str, Any],
+    errors: list[dict[str, Any]] | None = None,
+    next_steps: list[dict[str, Any]] | None = None,
+) -> dict[str, Any]:
+    """Wrap a verdict in the canonical execution-result envelope."""
+    return {
+        "status": status,
+        "summary": summary,
+        "data": {"verdict": verdict},
+        "errors": errors or [],
+        "next_steps": next_steps or [],
+        "open_items": [],
+        "meta": {
+            "contract_version": _CONTRACT_VERSION,
+            "producer": _PRODUCER,
+            "generated_at": datetime.datetime.now(datetime.timezone.utc).isoformat(),
+            "schema": _SCHEMA_PATH,
+        },
+    }
 
 
 # ---------------------------------------------------------------------------
@@ -309,6 +343,73 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     return parser.parse_args(argv)
 
 
+def _verdict_to_envelope(verdict: dict[str, Any]) -> dict[str, Any]:
+    """Wrap a raw verdict dict in the canonical execution-result envelope."""
+    v_status = verdict.get("status", "")
+
+    if v_status == "complete":
+        summary_str = (
+            f"Wave complete: {verdict.get('summary', {}).get('bead_count', '?')} beads "
+            f"in {verdict.get('summary', {}).get('elapsed_minutes', '?')} minutes."
+        )
+        return _envelope(
+            status="ok",
+            summary=summary_str,
+            verdict=verdict,
+        )
+
+    # needs_intervention
+    reason = verdict.get("reason", "unknown")
+    bead_id = verdict.get("bead_id")
+    details = verdict.get("details", "")
+
+    if reason in ("ambiguous",):
+        # Hard error — wave infrastructure problem
+        summary_str = f"Wave monitoring error: {details}"
+        return _envelope(
+            status="error",
+            summary=summary_str,
+            verdict=verdict,
+            errors=[
+                {
+                    "code": f"wave-poll/{reason}",
+                    "message": details,
+                    "retryable": False,
+                }
+            ],
+            next_steps=[
+                {
+                    "id": "investigate",
+                    "summary": f"Investigate wave monitoring failure: {details}",
+                    "priority": "now",
+                    "automatable": False,
+                }
+            ],
+        )
+
+    # warning — intervention needed but wave is still running
+    if bead_id:
+        summary_str = f"Wave needs intervention: {reason} on bead {bead_id}. {details}"
+        ns_summary = f"Investigate bead {bead_id}: {details}"
+    else:
+        summary_str = f"Wave needs intervention: {reason}. {details}"
+        ns_summary = f"Investigate wave issue ({reason}): {details}"
+
+    return _envelope(
+        status="warning",
+        summary=summary_str,
+        verdict=verdict,
+        next_steps=[
+            {
+                "id": f"intervention/{reason}",
+                "summary": ns_summary,
+                "priority": "now",
+                "automatable": False,
+            }
+        ],
+    )
+
+
 def main(argv: list[str] | None = None) -> int:
     args = _parse_args(argv)
     verdict = poll(
@@ -317,7 +418,8 @@ def main(argv: list[str] | None = None) -> int:
         review_max=args.review_max,
         poll_interval=args.poll_interval,
     )
-    print(json.dumps(verdict))
+    envelope = _verdict_to_envelope(verdict)
+    print(json.dumps(envelope))
     return 0
 
 

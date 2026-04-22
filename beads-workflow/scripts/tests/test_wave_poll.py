@@ -102,8 +102,21 @@ def test_wave_poll_exists() -> None:
     assert _WAVE_POLL.exists(), f"wave-poll.py not found at {_WAVE_POLL}"
 
 
+def _check_envelope(result: dict | None) -> None:
+    """Assert the result is a valid execution-result envelope."""
+    assert result is not None, "Expected JSON output"
+    assert result["status"] in {"ok", "warning", "error"}, f"Bad envelope status: {result['status']}"
+    assert "data" in result, "Missing 'data' in envelope"
+    assert "verdict" in result["data"], "Missing 'data.verdict' in envelope"
+    assert "errors" in result, "Missing 'errors' in envelope"
+    assert "next_steps" in result, "Missing 'next_steps' in envelope"
+    assert "open_items" in result, "Missing 'open_items' in envelope"
+    assert "meta" in result, "Missing 'meta' in envelope"
+    assert "summary" in result, "Missing 'summary' in envelope"
+
+
 def test_verdict_complete(tmp_path: Path) -> None:
-    """wave-poll.py returns complete when wave-completion.sh reports complete=true."""
+    """wave-poll.py returns ok envelope with complete verdict when wave-completion.sh reports complete=true."""
     config = _make_wave_config(tmp_path)
     script = _make_mock_completion(
         tmp_path, "complete",
@@ -117,16 +130,18 @@ def test_verdict_complete(tmp_path: Path) -> None:
         }),
         0,
     )
-    rc, verdict = _run_poll(tmp_path, config, script)
+    rc, result = _run_poll(tmp_path, config, script)
     assert rc == 0, f"Expected exit 0, got {rc}"
-    assert verdict is not None, "Expected JSON output"
+    _check_envelope(result)
+    assert result["status"] == "ok"
+    verdict = result["data"]["verdict"]
     assert verdict["status"] == "complete"
     assert "summary" in verdict
     assert "polls_run" in verdict["summary"]
 
 
 def test_verdict_stuck_via_stalls(tmp_path: Path) -> None:
-    """wave-poll.py returns needs_intervention/stuck when stalls array is non-empty."""
+    """wave-poll.py returns warning envelope with needs_intervention/stuck when stalls array is non-empty."""
     config = _make_wave_config(tmp_path)
     script = _make_mock_completion(
         tmp_path, "stalls",
@@ -140,50 +155,59 @@ def test_verdict_stuck_via_stalls(tmp_path: Path) -> None:
         }),
         1,
     )
-    rc, verdict = _run_poll(tmp_path, config, script)
+    rc, result = _run_poll(tmp_path, config, script)
     assert rc == 0
-    assert verdict is not None
+    _check_envelope(result)
+    assert result["status"] == "warning"
+    verdict = result["data"]["verdict"]
     assert verdict["status"] == "needs_intervention"
     assert verdict["reason"] == "stuck"
     assert verdict["bead_id"] == "TEST-aaa"
 
 
 def test_verdict_ambiguous_exit2(tmp_path: Path) -> None:
-    """wave-poll.py returns needs_intervention/ambiguous when exit code is 2."""
+    """wave-poll.py returns error envelope with needs_intervention/ambiguous when exit code is 2."""
     config = _make_wave_config(tmp_path)
     script = _make_mock_completion(tmp_path, "exit2", "", 2)
-    rc, verdict = _run_poll(tmp_path, config, script)
+    rc, result = _run_poll(tmp_path, config, script)
     assert rc == 0
-    assert verdict is not None
+    _check_envelope(result)
+    assert result["status"] == "error"
+    verdict = result["data"]["verdict"]
     assert verdict["status"] == "needs_intervention"
     assert verdict["reason"] == "ambiguous"
     assert verdict["bead_id"] is None
 
 
 def test_verdict_ambiguous_invalid_json(tmp_path: Path) -> None:
-    """wave-poll.py returns needs_intervention/ambiguous when output is not JSON."""
+    """wave-poll.py returns error envelope with needs_intervention/ambiguous when output is not JSON."""
     config = _make_wave_config(tmp_path)
     script = _make_mock_completion(tmp_path, "badjson", "this is not json", 0)
-    rc, verdict = _run_poll(tmp_path, config, script)
+    rc, result = _run_poll(tmp_path, config, script)
     assert rc == 0
-    assert verdict is not None
+    _check_envelope(result)
+    assert result["status"] == "error"
+    verdict = result["data"]["verdict"]
     assert verdict["status"] == "needs_intervention"
     assert verdict["reason"] == "ambiguous"
 
 
 def test_verdict_ambiguous_missing_config(tmp_path: Path) -> None:
-    """wave-poll.py returns needs_intervention/ambiguous when config file is missing."""
+    """wave-poll.py returns error envelope with needs_intervention/ambiguous when config file is missing."""
     missing_config = tmp_path / "nonexistent-config.json"
     script = _make_mock_completion(tmp_path, "missing", "{}", 0)
 
-    result = subprocess.run(
+    proc = subprocess.run(
         [sys.executable, str(_WAVE_POLL),
          "--config", str(missing_config),
          "--poll-interval", "0"],
         capture_output=True, text=True,
         env={**os.environ, "WAVE_COMPLETION_OVERRIDE": str(script)},
     )
-    verdict = json.loads(result.stdout.strip())
+    result = json.loads(proc.stdout.strip())
+    _check_envelope(result)
+    assert result["status"] == "error"
+    verdict = result["data"]["verdict"]
     assert verdict["status"] == "needs_intervention"
     assert verdict["reason"] == "ambiguous"
 
@@ -196,12 +220,13 @@ def test_cli_args_parsed(tmp_path: Path) -> None:
         json.dumps({"complete": True, "stragglers": [], "stalls": []}),
         0,
     )
-    rc, verdict = _run_poll(
+    rc, result = _run_poll(
         tmp_path, config, script,
         extra_args=["--stuck-hours", "2", "--review-max", "5"],
     )
     assert rc == 0
-    assert verdict["status"] == "complete"
+    _check_envelope(result)
+    assert result["data"]["verdict"]["status"] == "complete"
 
 
 def test_complete_elapsed_minutes_is_integer(tmp_path: Path) -> None:
@@ -212,9 +237,10 @@ def test_complete_elapsed_minutes_is_integer(tmp_path: Path) -> None:
         json.dumps({"complete": True, "stragglers": [], "stalls": []}),
         0,
     )
-    rc, verdict = _run_poll(tmp_path, config, script)
+    rc, result = _run_poll(tmp_path, config, script)
     assert rc == 0
-    assert verdict is not None
+    _check_envelope(result)
+    verdict = result["data"]["verdict"]
     assert verdict["status"] == "complete"
     em = verdict["summary"]["elapsed_minutes"]
     assert isinstance(em, int), f"elapsed_minutes should be int, got {type(em).__name__}: {em!r}"
@@ -247,12 +273,14 @@ def test_stuck_by_hours(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None
     original_path = os.environ.get("PATH", "")
     monkeypatch.setenv("PATH", f"{tmp_path}:{original_path}")
 
-    rc, verdict = _run_poll(
+    rc, result = _run_poll(
         tmp_path, config, completion_script,
         extra_args=["--stuck-hours", "1"],
     )
     assert rc == 0
-    assert verdict is not None
+    _check_envelope(result)
+    assert result["status"] == "warning"
+    verdict = result["data"]["verdict"]
     assert verdict["status"] == "needs_intervention"
     assert verdict["reason"] == "stuck"
     assert verdict["bead_id"] == "TEST-bbb"
@@ -289,9 +317,11 @@ def test_pane_error(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     original_path = os.environ.get("PATH", "")
     monkeypatch.setenv("PATH", f"{tmp_path}:{original_path}")
 
-    rc, verdict = _run_poll(tmp_path, config, completion_script)
+    rc, result = _run_poll(tmp_path, config, completion_script)
     assert rc == 0
-    assert verdict is not None
+    _check_envelope(result)
+    assert result["status"] == "warning"
+    verdict = result["data"]["verdict"]
     assert verdict["status"] == "needs_intervention"
     assert verdict["reason"] == "pane-error"
     assert verdict["bead_id"] == "TEST-ccc"
@@ -328,12 +358,14 @@ def test_review_loop(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     original_path = os.environ.get("PATH", "")
     monkeypatch.setenv("PATH", f"{tmp_path}:{original_path}")
 
-    rc, verdict = _run_poll(
+    rc, result = _run_poll(
         tmp_path, config, completion_script,
         extra_args=["--review-max", "3"],
     )
     assert rc == 0
-    assert verdict is not None
+    _check_envelope(result)
+    assert result["status"] == "warning"
+    verdict = result["data"]["verdict"]
     assert verdict["status"] == "needs_intervention"
     assert verdict["reason"] == "review-loop"
     assert verdict["bead_id"] == "TEST-ddd"

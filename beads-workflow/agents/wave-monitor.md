@@ -186,13 +186,18 @@ if not hits:
 print(hits[0] if hits else '')
 ")
 
-# Delegate all polling logic to the helper and print its verdict
-# wave-poll.py handles wave-completion.sh discovery internally
-python3 "$SCRIPT" \
+# Delegate all polling logic to the helper
+# wave-poll.py returns an execution-result envelope; extract data.verdict and emit it
+RESULT=$(python3 "$SCRIPT" \
   --config "$WAVE_CONFIG" \
   --stuck-hours "$STUCK_HOURS" \
   --review-max "$REVIEW_MAX" \
-  --poll-interval "$POLL_SEC"
+  --poll-interval "$POLL_SEC")
+
+# wave-poll.py wraps its output in the canonical execution-result envelope.
+# Extract data.verdict so wave-monitor returns the plain wave-monitor contract
+# that wave-orchestrator expects (complete/needs_intervention format).
+echo "$RESULT" | python3 -c "import sys,json; d=json.load(sys.stdin); print(json.dumps(d['data']['verdict']))"
 ```
 
 ## Escalation Heuristics
@@ -258,4 +263,19 @@ Documents what was extracted, what was classified as ALLOWED, and why.
 | `wave-monitor.md` `## Implementation` | 4 x `python3 -c` (arg parse) | Single-field JSON field extraction from `$ARGUMENTS` (wave_config_path, stuck_threshold_hours, review_loop_max_iterations, poll_interval_seconds) | ALLOWED: single-value extraction, no branching, no failure contract. Thin dispatch wrapper only — all logic delegates to wave-poll.py |
 | `core/skills/dolt/SKILL.md` | Lines 352–359 | `python3 -c` updating `metadata.json` dolt_database field | ALLOWED: instructional recovery snippet in a troubleshooting guide. One-shot JSON field rewrite, no caller-facing output contract; not part of a harness workflow |
 | `core/skills/dolt/SKILL.md` | Lines 386–391 | `python3 -c` cleaning `metadata.json` to keep only dolt_database/project_id | ALLOWED: same rationale as above — instructional troubleshooting fragment. Single operation, no branching |
-| `wave-poll.py` JSON verdict output format | wave-completion/needs_intervention envelope | Pre-existing caller contract with wave-orchestrator (complete/needs_intervention) | AK4-exempt: pre-existing caller contract with wave-orchestrator — AK4 does NOT retroactively require rewriting an established inter-component contract |
+| `wave-poll.py` stdout | execution-result envelope wrapping `data.verdict` | `wave-monitor.md` extracts `data.verdict` via `python3 -c "...d['data']['verdict']..."` and re-emits it | AK4-compliant: wave-poll.py now returns canonical envelope; wave-monitor strips to plain verdict for wave-orchestrator |
+
+### Expanded Inventory — Additional files reviewed (CCP-6up.5 AK1)
+
+| Agent / Skill | Embedded code | Classification | Rationale |
+|---|---|---|---|
+| `beads-workflow/agents/wave-orchestrator.md` | No `python3 -c` / `uv run python -c` inline snippets | ALLOWED | All code is shell commands (`bd`, `gh`, `git`, `bash`) and `Agent(...)` prose invocations — no extractable multi-line Python |
+| `beads-workflow/agents/quick-fix.md` | No `python3 -c` / `uv run python -c` inline snippets | ALLOWED | Orchestration prose + bash commands only; no Python extraction targets |
+| `beads-workflow/skills/bead-metrics/SKILL.md` | NOT FOUND | N/A | File does not exist at this path |
+| `dev-tools/agents/constraint-checker.md` | Line 123: `python3 -c "import <artifact_module>"` | ALLOWED | One-liner import check, single value (importability), no branching, no output contract |
+| `dev-tools/agents/holdout-validator.md` | Line 101: `python3 -c "import <artifact_module>"` | ALLOWED | Same pattern as constraint-checker — single import check, purely illustrative |
+| `dev-tools/agents/scenario-generator.md` | Lines 119–139: multi-line `python3 -c` FHIR JSON parser | ALLOWED | Generic seed-file scanner that is reference/example code in a VERIFY section. No harness output contract; parsing is illustrative — the agent adapts it per project |
+| `dev-tools/skills/codex/SKILL.md` | Lines 164–189, 248–..., 281–...: multi-line JSONL parsers piped from `codex exec` | ALLOWED | All three blocks parse codex JSONL streaming output inline. They are single-purpose presentation transforms (print human-readable output), not workflow logic. No branching on parsed data, no execution-result contract; duplication is shallow (same parse pattern, different call sites). INVENTORY-NOTE: if duplication grows to 4+ call sites, extract to `codex-jsonl-parse.py` helper |
+| `meta/agents/skill-auditor.md` | Line 90: `python3 -c "..."` in Pattern description | ALLOWED | Appears only in the auditor's own detection-pattern description (meta-documentation of what to scan for), not as executable workflow code |
+| `infra/skills/hetzner-cloud/SKILL.md` | Lines 286–296: multi-line `python3 -c` base64 DNS record decoder | ALLOWED | Single-use DNS migration helper in a reference guide. One-shot transformation with no caller-facing output contract; illustrative example for an ad-hoc manual operation |
+| `beads-workflow/skills/retro/SKILL.md` | Line 55: `uv run python -c "...from orchestrator.metrics import query_report..."` | ALLOWED | Single one-liner that calls an existing library function (`query_report()`). Value extraction only, no branching or error contract |

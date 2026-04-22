@@ -68,10 +68,11 @@ MOCK
     2>/dev/null
   ) || true
 
+  # wave-poll.py now returns execution-result envelope; extract data.verdict
   local verdict_status
   local verdict_reason
-  verdict_status=$(echo "$verdict" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('status',''))" 2>/dev/null || echo "")
-  verdict_reason=$(echo "$verdict" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('reason',''))" 2>/dev/null || echo "")
+  verdict_status=$(echo "$verdict" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d['data']['verdict'].get('status',''))" 2>/dev/null || echo "")
+  verdict_reason=$(echo "$verdict" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d['data']['verdict'].get('reason',''))" 2>/dev/null || echo "")
 
   # Evaluate
   if [[ "$verdict_status" == "$expected_status" ]]; then
