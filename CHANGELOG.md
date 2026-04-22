@@ -5,6 +5,14 @@
 - *(CCP-9yd)* Port **session-close** agent to Codex format (TOML agents, gap documentation, E2E evidence)
 - *(CCP-e2r)* Collapse **session-close** step-handlers into phase-level handlers (reduces tool calls from ~44 to ~9-11)
 
+### Fixed
+
+- *(codex-exec)* Degrade gracefully when metrics DB unavailable — adversarial Codex review no longer silently skipped when RUN_ID is empty; only DB recording step is skipped
+
+### Refactored
+
+- *(beads-workflow)* Extract inline metrics bash+Python from agent instructions into metrics-start.sh and metrics-rollup.sh; both non-fatal on failure; 8 new tests (78 total)
+
 ## [2026.04.76] - 2026-04-22
 
 ### Features
