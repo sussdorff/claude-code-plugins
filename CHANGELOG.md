@@ -1,13 +1,20 @@
 ## [unreleased]
 
+## [2026.04.97] - 2026-04-22
+
 ### 🚀 Features
 
-- Session-close serializer + wave-orchestrator single-instance guard
-- Skill-auditor validator, wave-dispatch workspace fix, planning docs
+- *(CCP-o4z)* Session-end Stop hook for beads-workflow (open-brain safety net)
+
+### 🐛 Bug Fixes
+
+- *(CCP-o4z)* JSON list parsing for in-progress beads detection
+- *(CCP-o4z)* Dotted bead ID regex anchoring in session-end hook
 
 ### ⚙️ Miscellaneous Tasks
 
-- *(CCP-28l)* Update bead state for session close
+- *(CCP-o4z)* Red test suite for session-end hook (TDD)
+
 ## [2026.04.95] - 2026-04-22
 
 ### ⚙️ Miscellaneous Tasks
