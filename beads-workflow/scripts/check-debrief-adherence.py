@@ -21,6 +21,7 @@ Usage:
     python3 check-debrief-adherence.py
     python3 check-debrief-adherence.py --search-path /path/to/repo/root
     python3 check-debrief-adherence.py --standard-doc /path/to/debrief-contract.md
+    python3 check-debrief-adherence.py --exclude-pattern .claude/worktrees
 
 Exit codes:
     0  All required agents are compliant
@@ -218,6 +219,7 @@ def _agent_name_from_path(path: Path) -> str:
 def check_agents_dir(
     search_root: Path,
     exemptions: Optional[set[str]] = None,
+    exclude_pattern: str = ".claude/worktrees",
 ) -> list[dict]:
     """Check all agent files under search_root for debrief compliance.
 
@@ -225,6 +227,10 @@ def check_agents_dir(
         search_root: Root directory to search for agents/ subdirectories.
         exemptions: Set of agent names that are exempt from the check.
                     If None, loads from standard doc (or falls back to hardcoded).
+        exclude_pattern: Path substring pattern; any agent file whose path
+                         contains this string is silently skipped.
+                         Defaults to ".claude/worktrees" to avoid false positives
+                         from open bead worktrees.
 
     Returns:
         List of violation dicts, each with keys:
@@ -237,6 +243,8 @@ def check_agents_dir(
         exemptions = load_exemptions()
 
     agent_files = find_agent_files(search_root)
+    if exclude_pattern:
+        agent_files = [f for f in agent_files if exclude_pattern not in str(f)]
     violations: list[dict] = []
 
     for md_file in agent_files:
@@ -294,13 +302,22 @@ def main() -> None:
             f"(default: {_DEFAULT_STANDARD_DOC})"
         ),
     )
+    parser.add_argument(
+        "--exclude-pattern",
+        metavar="PATTERN",
+        default=".claude/worktrees",
+        help=(
+            "Path substring pattern; agent files whose path contains this string "
+            "are silently skipped (default: .claude/worktrees)"
+        ),
+    )
     args = parser.parse_args()
 
     search_root = Path(args.search_path).resolve()
     standard_doc = Path(args.standard_doc)
 
     exemptions = load_exemptions(standard_doc)
-    violations = check_agents_dir(search_root, exemptions)
+    violations = check_agents_dir(search_root, exemptions, exclude_pattern=args.exclude_pattern)
 
     if not violations:
         print("✓ Debrief adherence check: all agents compliant")
