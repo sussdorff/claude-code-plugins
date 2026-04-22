@@ -1,5 +1,11 @@
 ## [Unreleased]
 
+## [2026.04.93] - 2026-04-22
+
+### Refactored
+
+- *(CCP-4gi)* session-close Step 11 now reads structured debrief from orchestrator handoff file (`.worktree-handoff.json`) as primary source — falls back to in-session `### Debrief` blocks when no handoff present (ad-hoc sessions); adds `metadata.source="session-close"` to all `save_memory` calls for cross-wave deduplication coordination with SessionEnd safety-net; TOML port synced with updated spec
+
 ## [2026.04.92] - 2026-04-22
 
 ### Fixed
