@@ -1,3 +1,12 @@
+## [2026.04.76] - 2026-04-22
+
+### Features
+
+- *(CCP-dnk)* Convert wave-orchestrator to Sonnet subagent, wire in wave-monitor delegation
+- *(CCP-dnk)* Replace Phase 5 ScheduleWakeup polling loop with blocking Agent(wave-monitor) call
+- *(CCP-dnk)* Add all 5 wave-monitor verdict branches (complete, pane-error, stuck, review-loop, ambiguous)
+- *(CCP-dnk)* Rewrite wave-orchestrator skill.md as 32-line trampoline
+
 ## [2026.04.73] - 2026-04-22
 
 ### 🚀 Features
