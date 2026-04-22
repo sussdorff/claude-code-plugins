@@ -15,8 +15,9 @@ set -euo pipefail
 BEAD_IDS=()
 QUICK_IDS=()
 WORKSPACE=""
-BASE_PANE=""
+BASE_SURFACE=""
 WAVE_ID=""
+SKIP_SCENARIOS=0
 
 # Parse arguments
 # Use --quick <id> to route specific beads to the quick-fix agent (cld -bq)
@@ -28,7 +29,7 @@ while [[ $# -gt 0 ]]; do
       shift 2
       ;;
     --base-pane)
-      BASE_PANE="$2"
+      BASE_SURFACE="$2"
       shift 2
       ;;
     --wave-id)
@@ -38,6 +39,10 @@ while [[ $# -gt 0 ]]; do
     --quick)
       QUICK_IDS+=("$2")
       shift 2
+      ;;
+    --skip-scenarios)
+      SKIP_SCENARIOS=1
+      shift
       ;;
     *)
       BEAD_IDS+=("$1")
@@ -56,8 +61,34 @@ fi
 
 if [[ ${#ALL_IDS[@]} -eq 0 ]]; then
   echo "Error: no bead IDs provided" >&2
-  echo "Usage: wave-dispatch.sh <bead-id1> ... [--quick <id>] ... [--workspace <id>] [--base-pane <id>]" >&2
+  echo "Usage: wave-dispatch.sh <bead-id1> ... [--quick <id>] ... [--workspace <id>] [--base-pane <id>] [--skip-scenarios]" >&2
   exit 1
+fi
+
+# Scenario gate: feature beads must have a ## Scenario section before dispatch.
+# Runs BEFORE any pane is created so no surfaces are wasted on blocked beads.
+if [[ "$SKIP_SCENARIOS" -eq 0 ]]; then
+  MISSING_SCENARIOS=()
+  for id in "${ALL_IDS[@]}"; do
+    BEAD_TYPE=$(bd show "$id" --json 2>/dev/null | jq -r '.type // ""' 2>/dev/null || true)
+    if [[ "$BEAD_TYPE" == "feature" ]]; then
+      if ! bd show "$id" 2>/dev/null | grep -qE "^## (Scenario|Szenario)"; then
+        MISSING_SCENARIOS+=("$id")
+      fi
+    fi
+  done
+  if [[ ${#MISSING_SCENARIOS[@]} -gt 0 ]]; then
+    echo "Error: the following feature bead(s) are missing a ## Scenario section:" >&2
+    for id in "${MISSING_SCENARIOS[@]}"; do
+      echo "  - $id" >&2
+    done
+    echo "" >&2
+    echo "Run the scenario generator for each bead, then retry:" >&2
+    echo "  Agent(subagent_type='dev-tools:scenario-generator', prompt='Generate scenarios for ${MISSING_SCENARIOS[*]}')" >&2
+    echo "" >&2
+    echo "To bypass this check (not recommended): add --skip-scenarios" >&2
+    exit 1
+  fi
 fi
 
 # Helper: check if a bead ID is in the quick-fix list
@@ -83,16 +114,17 @@ if [[ -z "$WORKSPACE" ]]; then
   fi
 fi
 
-# Determine base pane for splits
-if [[ -z "$BASE_PANE" ]]; then
-  BASE_PANE=$(cmux identify --json 2>/dev/null | jq -r '.caller.pane_ref // empty' 2>/dev/null || true)
-  if [[ -z "$BASE_PANE" ]]; then
-    echo "Error: could not determine base pane. Pass --base-pane explicitly." >&2
+# Determine base surface for splits
+# new-split needs a surface ref (surface:N), not a pane ref (pane:N)
+if [[ -z "$BASE_SURFACE" ]]; then
+  BASE_SURFACE=$(cmux identify --json 2>/dev/null | jq -r '.caller.surface_ref // empty' 2>/dev/null || true)
+  if [[ -z "$BASE_SURFACE" ]]; then
+    echo "Error: could not determine base surface. Pass --base-pane explicitly." >&2
     exit 1
   fi
 fi
 
-echo "Workspace: $WORKSPACE, Base pane: $BASE_PANE" >&2
+echo "Workspace: $WORKSPACE, Base surface: $BASE_SURFACE" >&2
 
 DISPATCH_TIME=$(date -u +"%Y-%m-%dT%H:%M:%S")
 BEADS_JSON="[]"
@@ -112,7 +144,8 @@ for i in "${!ALL_IDS[@]}"; do
   fi
 
   # Always create a new split (never reuse the orchestrator's surface)
-  SPLIT_OUTPUT=$(cmux new-split right --pane "$BASE_PANE" --workspace "$WORKSPACE" 2>&1 || true)
+  # --surface takes a surface ref (surface:N); --pane is not a valid flag for new-split
+  SPLIT_OUTPUT=$(cmux new-split right --surface "$BASE_SURFACE" --workspace "$WORKSPACE" 2>&1 || true)
   SURFACE=$(echo "$SPLIT_OUTPUT" | extract_surface || true)
 
   if [[ -z "$SURFACE" ]]; then
