@@ -1,4 +1,9 @@
-## [unreleased]
+## [2026.04.99] - 2026-04-22
+
+### 🐛 Bug Fixes
+
+- HANDLERS_DIR path bug + ci-monitor + git-state helpers for session-close
+## [2026.04.98] - 2026-04-22
 
 ### 🐛 Bug Fixes
 
@@ -7,6 +12,7 @@
 ### ⚙️ Miscellaneous Tasks
 
 - Add embeddeddolt/ to .gitignore + skill-audit CI workflow
+- *(CCP-1bo)* Bump version to 2026.04.98 and release changelog
 ## [2026.04.97] - 2026-04-22
 
 ### ⚙️ Miscellaneous Tasks
