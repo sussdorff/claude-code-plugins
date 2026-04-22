@@ -277,6 +277,12 @@ Spawn the `learning-extractor` agent:
 Agent(subagent_type="general-purpose", prompt="Extract learnings from the current session. Scope: current-session.")
 ```
 
+**Handoff scope clarification:** This step is NOT superseded by the orchestrator handoff file.
+Step 10 extracts cross-bead patterns, user behavioral signals, and meta-observations from the
+full session transcript — a superset of what the bead-level debrief aggregates. Step 11 uses
+the handoff file; Step 10 always runs on the full transcript regardless of handoff presence
+(unless `--skip-learnings` is passed).
+
 ### Step 11: Session Debrief
 
 Skip if `--skip-debrief`.
@@ -310,6 +316,7 @@ Save via `mcp__open-brain__save_memory`:
 - type: `debrief`
 - project: repo name
 - session_ref: bead-id or `session-YYYY-MM-DD`
+- metadata: `{ "source": "session-close" }`
 
 If no debrief sections found and no handoff file present, skip gracefully.
 
@@ -320,9 +327,14 @@ Skip if `--skip-summary`.
 Gather session data and save via `mcp__open-brain__save_memory`:
 - title: `Session Summary [YYYY-MM-DD] - <project>`
 - text: branch, tag, commits, files changed, beads status
+- narrative: When the orchestrator handoff was present (Step 11 consumed `aggregated_debrief`),
+  include the structured debrief sections in the narrative field: Key Decisions, Challenges
+  Encountered, Surprising Findings, Follow-up Items. If no handoff was available, derive the
+  narrative from any `### Debrief` blocks collected in the session context.
 - type: `session_summary`
 - project: repo name
 - session_ref: bead-id or `session-YYYY-MM-DD`
+- metadata: `{ "source": "session-close" }`
 
 After saving, identify significant decisions and save each separately.
 
