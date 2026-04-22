@@ -1,6 +1,6 @@
 {
   "name": "beads-workflow",
-  "version": "2026.04.89",
+  "version": "2026.04.92",
   "description": "Beads orchestration and lifecycle — wave-orchestrator (Sonnet agent), wave-monitor (Haiku agent), epic-init, retro, compound, bead-metrics, workplan, intake",
   "keywords": [
     "beads",

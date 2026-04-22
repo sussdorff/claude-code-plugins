@@ -1,5 +1,15 @@
 ## [Unreleased]
 
+## [2026.04.92] - 2026-04-22
+
+### Fixed
+
+- *(CCP-5xe)* Fix shell-unsafe debrief piping in bead-orchestrator — replace `echo|python` interpolation with single-quoted heredoc; use tempfile+os.replace() pattern for atomic JSON writes to `.worktree-handoff.json`; preserve handoff file during `--debrief-only` runs for idempotency; gitignore `.worktree-handoff.json` and `.worktree-turns.jsonl` as runtime artifacts
+
+### Refactored
+
+- *(CCP-5xe)* bead-orchestrator now aggregates subagent debriefs via `parse_debrief.py` and writes structured handoff file (`.worktree-handoff.json`) for session-close to consume — file-based handoff is the sole viable mechanism since session-close runs as downstream subagent
+
 ## [2026.04.89] - 2026-04-22
 
 ### Added
