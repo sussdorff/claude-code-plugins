@@ -148,16 +148,18 @@ class TestGenerateDraftAdr:
         assert "status: draft" in content
 
     def test_adr_frontmatter_council_mode(self, principle, adr_dir):
-        """ADR frontmatter has 'council_mode:' field."""
+        """ADR frontmatter has 'council_mode:' field with the caller-provided value."""
         path = generate_draft_adr(
             principle=principle,
             evidence="Evidence.",
             council_finding="Council says no issues.",
             run_date="20260422-120000",
             adr_dir=adr_dir,
+            council_mode="full",
         )
         content = path.read_text(encoding="utf-8")
         assert "council_mode:" in content
+        assert "council_mode: full" in content
 
     def test_adr_architecture_contracts_section(self, principle, adr_dir):
         """ADR body has 'Architecture Contracts Touched' section with supersedes link."""
@@ -171,6 +173,31 @@ class TestGenerateDraftAdr:
         content = path.read_text(encoding="utf-8")
         assert "Architecture Contracts Touched" in content
         assert "vision.md#P1" in content
+
+    def test_adr_frontmatter_yaml_roundtrip_special_chars(self, principle, adr_dir):
+        """ADR frontmatter evidence with colons, quotes, and newlines parses as valid YAML."""
+        yaml = pytest.importorskip("yaml", reason="pyyaml not installed in this env")
+        tricky_evidence = 'Deployment: "new model"\nLine two: value\ncolon: here'
+        path = generate_draft_adr(
+            principle=principle,
+            evidence=tricky_evidence,
+            council_finding='Council says: "no issues"\nSecond line.',
+            run_date="20260422-120000",
+            adr_dir=adr_dir,
+            council_mode="full",
+        )
+        content = path.read_text(encoding="utf-8")
+        # Extract the YAML frontmatter block between --- delimiters
+        parts = content.split("---")
+        assert len(parts) >= 3, "Expected YAML frontmatter delimiters in ADR content"
+        frontmatter_text = parts[1]
+        parsed = yaml.safe_load(frontmatter_text)
+        assert parsed is not None, "Frontmatter should parse as valid YAML"
+        # Verify evidence round-trips correctly
+        assert "Deployment" in parsed.get("evidence", ""), (
+            f"Evidence should contain 'Deployment', got: {parsed.get('evidence')!r}"
+        )
+        assert parsed.get("council_mode") == "full"
 
 
 # ---------------------------------------------------------------------------

@@ -41,9 +41,12 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
 
-# Add repo root to sys.path for local imports
-sys.path.insert(0, str(Path(__file__).parent.parent))
-from scripts.vision_parser import Principle, VisionParseError, parse_vision
+try:
+    # Direct execution or scripts/ directory on sys.path
+    from vision_parser import Principle, VisionParseError, parse_vision
+except ImportError:
+    # Imported as scripts.vision_review (e.g. from tests with repo root on sys.path)
+    from scripts.vision_parser import Principle, VisionParseError, parse_vision  # type: ignore[no-redef]
 
 
 # ---------------------------------------------------------------------------
@@ -101,6 +104,7 @@ def generate_draft_adr(
     council_finding: str | None,
     run_date: str,
     adr_dir: Path,
+    council_mode: str = "skipped",
 ) -> Path:
     """Write a draft ADR for a contested principle.
 
@@ -113,6 +117,7 @@ def generate_draft_adr(
         council_finding: Council critique, or None if council was unavailable.
         run_date:        Timestamp string in YYYYMMDD-HHMMSS format.
         adr_dir:         Directory to write the draft ADR into (created if missing).
+        council_mode:    Caller-authoritative council mode string.
 
     Returns:
         Path to the created draft ADR file.
@@ -123,17 +128,24 @@ def generate_draft_adr(
     filename = f"vision-mutation-{rule_id}-{run_date}.md"
     adr_path = adr_dir / filename
 
-    # Determine council_mode from finding presence
-    council_mode = "full" if council_finding is not None else "skipped"
     council_text = council_finding if council_finding is not None else "Council not available (degraded mode)."
+
+    # Use YAML literal block scalars for user-supplied text to handle colons, quotes, newlines
+    def _yaml_literal(text: str, indent: int = 2) -> str:
+        """Format text as a YAML literal block scalar with given indent."""
+        pad = " " * indent
+        indented_lines = "\n".join(pad + line for line in text.splitlines())
+        return "|\n" + indented_lines
+
+    evidence_yaml = _yaml_literal(evidence)
+    council_yaml_value = _yaml_literal(council_text)
 
     content = f"""---
 type: vision-mutation
 status: draft
 supersedes: vision.md#{rule_id}
-evidence:
-  - {evidence}
-  - {council_finding if council_finding else "N/A (no council finding)"}
+evidence: {evidence_yaml}
+council_finding: {council_yaml_value}
 council_mode: {council_mode}
 ---
 
@@ -209,8 +221,12 @@ def generate_review_report(
     table_rows = ""
     for r in results:
         status_icon = "✅ Y" if r.confirmed else "❌ N"
-        evidence_snippet = r.evidence[:60].replace("|", "\\|")
-        table_rows += f"| {r.principle_id} | {r.principle_text[:40]}... | {status_icon} | {evidence_snippet} |\n"
+        # Sanitize: collapse whitespace (removes newlines), then truncate
+        principle_text = " ".join(r.principle_text.split())
+        principle_snippet = principle_text[:40] + ("..." if len(principle_text) > 40 else "")
+        evidence_flat = " ".join(r.evidence.split())
+        evidence_snippet = evidence_flat[:60].replace("|", "\\|")
+        table_rows += f"| {r.principle_id} | {principle_snippet} | {status_icon} | {evidence_snippet} |\n"
 
     # Conditional re-author suggestion
     reauthor_section = ""
@@ -364,7 +380,7 @@ def _run_cli(argv: list[str]) -> int:
             print("Evidence (brief): ", end="", flush=True)
             evidence = input().strip() or "No evidence provided."
 
-        council_finding = mock_findings.get(principle.id) if mock_findings else None
+        council_finding = mock_findings.get(principle.id)
 
         result = PrincipleResult(
             principle_id=principle.id,
@@ -384,6 +400,7 @@ def _run_cli(argv: list[str]) -> int:
                 council_finding=council_finding,
                 run_date=run_date,
                 adr_dir=adr_dir,
+                council_mode=council_mode,
             )
             draft_adrs.append(adr_path)
             print(f"  Draft ADR: {adr_path}")
