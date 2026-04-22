@@ -250,8 +250,8 @@ class TestSafetyNetNote:
             "The appended note must mention session-close"
         )
 
-    def test_safety_net_prints_to_stdout(self, capsys):
-        """AK7: When safety-net fires, informational text is printed to stdout."""
+    def test_safety_net_prints_to_stderr(self, capsys):
+        """AK7: When safety-net fires, informational text is printed to stderr (observability-only hook)."""
         session_end = _load_session_end()
 
         payload = _make_payload(cwd="/Users/malte/.claude/worktrees/bead-CCP-abc")
@@ -263,9 +263,12 @@ class TestSafetyNetNote:
             )
             session_end.handle(payload)
 
-        out = capsys.readouterr().out
-        assert out.strip(), (
-            "When the safety-net note is appended, stdout must contain informational text"
+        captured = capsys.readouterr()
+        assert not captured.out.strip(), (
+            "Safety-net message must NOT go to stdout for an observability-only hook"
+        )
+        assert captured.err.strip(), (
+            "When the safety-net note is appended, stderr must contain informational text"
         )
 
 

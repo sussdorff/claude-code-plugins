@@ -22,7 +22,7 @@ import subprocess
 import sys
 
 _WORKTREE_MARKER = ".claude/worktrees/"
-_BEAD_SEGMENT_RE = re.compile(r"(?:^|/)bead-([A-Za-z0-9]+-[A-Za-z0-9]+)(?:/|$)")
+_BEAD_SEGMENT_RE = re.compile(r"(?:^|/)bead-([A-Za-z0-9]+-[A-Za-z0-9]+)(?:/|$)")  # Format: <PREFIX>-<SUFFIX>, e.g. CCP-o4z, open-brain-xyz
 _SAFETY_NET_NOTE = (
     "Session ended without session-close. "
     "Run session-close manually to merge and push."
@@ -64,7 +64,7 @@ def _get_bead_status(bead_id: str) -> str | None:
             return None
         data = json.loads(result.stdout)
         return data.get("status")
-    except (subprocess.TimeoutExpired, json.JSONDecodeError, Exception):
+    except (subprocess.TimeoutExpired, json.JSONDecodeError, FileNotFoundError):
         return None
 
 
@@ -81,8 +81,8 @@ def _append_safety_note(bead_id: str) -> None:
             text=True,
             timeout=5,
         )
-    except Exception:
-        pass  # Silent — never block session stop
+    except Exception as e:
+        print(f"[session-end] error: {e}", file=sys.stderr)
 
 
 def handle(payload: dict) -> None:
@@ -113,7 +113,8 @@ def handle(payload: dict) -> None:
         _append_safety_note(bead_id)
         print(
             f"[session-end] Safety net fired for bead {bead_id}: "
-            f"session ended without session-close. Note appended."
+            f"session ended without session-close. Note appended.",
+            file=sys.stderr,
         )
 
 
@@ -130,8 +131,8 @@ def main() -> None:
 
     try:
         handle(payload)
-    except Exception:
-        pass  # Silent — never block session stop
+    except Exception as e:
+        print(f"[session-end] error: {e}", file=sys.stderr)
 
     sys.exit(0)
 
