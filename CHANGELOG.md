@@ -1,5 +1,7 @@
 ## [unreleased]
 
+## [2026.04.74] - 2026-04-21
+
 ### Research
 
 - *(CCP-ar0)* **parent-session parking verified** — spike confirmed that when a subagent runs via `Agent()`, the parent session is fully parked (zero token re-reads during child execution). Empirical evidence from session log analysis showing no parent LLM activity during 101-second child runs. Design implication for CCP-aoc: wave-monitor subagent should use `bash sleep 270` between polls (not `ScheduleWakeup`, which creates new sessions and breaks the `Agent()` paradigm). Parent context is NOT re-read during subagent execution — cost savings from the wave-monitor pattern are confirmed.
