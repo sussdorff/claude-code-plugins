@@ -225,6 +225,12 @@ gracefully — it runs codex and skips DB recording. The review still happens; o
 Pass `--diff-range` so codex-exec.sh resolves `{{DIFF}}` automatically — inline for small diffs
 (≤ 2 files, ≤ 256 KB), self-collect guidance for large ones.
 
+> **Timeout note:** codex-exec.sh enforces a hard timeout (default: 300s, override via
+> `CODEX_EXEC_TIMEOUT=<seconds>`). If Codex exits 124 (timeout) without findings, the prompt
+> is likely too large. The script auto-truncates prompts exceeding `CODEX_EXEC_MAX_PROMPT_CHARS`
+> (default: 32000 chars) — raise the timeout or lower the char limit to tune behavior.
+> When overriding, also raise the Bash `timeout:` to `(CODEX_EXEC_TIMEOUT + 60) * 1000` ms.
+
 ```bash
 RUN_ID={RUN_ID} BEAD_ID={BEAD_ID} PHASE_LABEL=codex-adversarial ITERATION=1 \
   "$CODEX_EXEC" --diff-range {PRE_IMPL_SHA}...HEAD \

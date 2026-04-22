@@ -112,7 +112,7 @@ for i in "${!ALL_IDS[@]}"; do
   fi
 
   # Always create a new split (never reuse the orchestrator's surface)
-  SPLIT_OUTPUT=$(cmux new-split right --pane "$BASE_PANE" 2>&1 || true)
+  SPLIT_OUTPUT=$(cmux new-split right --pane "$BASE_PANE" --workspace "$WORKSPACE" 2>&1 || true)
   SURFACE=$(echo "$SPLIT_OUTPUT" | extract_surface || true)
 
   if [[ -z "$SURFACE" ]]; then

@@ -223,6 +223,19 @@ else
   fi
 fi
 
+
+# ---------------------------------------------------------------------------
+# Lock: release session-close lock
+# ---------------------------------------------------------------------------
+# Release after all bead operations are done (close + dolt sync).
+# This unblocks the next session-close waiting in the queue.
+REPO_ROOT_FOR_LOCK="$(git rev-parse --show-toplevel 2>/dev/null || echo "")"
+if [[ -n "$REPO_ROOT_FOR_LOCK" ]]; then
+  HANDLERS_DIR_FOR_LOCK="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+  LOCK_FILE_RELEASE="${REPO_ROOT_FOR_LOCK}/.session-close.lock"
+  bash "$HANDLERS_DIR_FOR_LOCK/session-close-lock.sh" release "$LOCK_FILE_RELEASE" || true
+fi
+
 # ---------------------------------------------------------------------------
 # Emit JSON
 # ---------------------------------------------------------------------------

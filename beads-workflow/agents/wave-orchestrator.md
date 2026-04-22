@@ -21,6 +21,7 @@ sets up cmux panes, dispatches `cld -b <id>` into each, and monitors until compl
 - `wave-dispatch.sh` — Creates panes, names surfaces, dispatches `cld -b`, outputs wave config JSON
 - `wave-status.sh` — Reads all surfaces in parallel, pattern-matches status, returns structured JSON
 - `wave-completion.sh` — Quick check: all beads closed + all panes idle? Returns JSON + exit code
+- `wave-lock.sh` — Single-instance guard: prevents two wave orchestrators from running concurrently
 
 These scripts replace manual per-surface cmux calls. Use them instead of invoking cmux
 directly for dispatch, monitoring, and completion checks.
@@ -52,6 +53,63 @@ Examples:
 /wave-orchestrator mira-adapters-0al mira-adapters-n4r mira-adapters-0r0
 /wave-orchestrator eArztbrief --max-parallel=3
 /wave-orchestrator --dry-run Mahnung
+```
+
+---
+
+## Phase 0.5: Single-Instance Lock
+
+Before doing any work, acquire the wave-orchestrator lock to prevent two instances from
+running concurrently. The lock is stored at `$MAIN_REPO_ROOT/.wave-orchestrator.lock`.
+
+### Acquiring the lock
+
+```bash
+# Locate wave-lock.sh
+WAVE_LOCK_SH=$(find ~/.claude/skills -name "wave-lock.sh" 2>/dev/null | head -1)
+if [[ -z "$WAVE_LOCK_SH" ]]; then
+  WAVE_LOCK_SH=$(find . -path "*/wave-orchestrator/scripts/wave-lock.sh" 2>/dev/null | head -1)
+fi
+
+MAIN_REPO_ROOT=$(git rev-parse --show-toplevel 2>/dev/null || echo "$HOME")
+LOCK_FILE="$MAIN_REPO_ROOT/.wave-orchestrator.lock"
+
+# Derive a wave_id for this session (used in error messages)
+WAVE_ID="wave-$(date -u +%Y%m%d-%H%M%S)"
+
+# Acquire: fail-fast if another live orchestrator holds the lock
+bash "$WAVE_LOCK_SH" acquire "$LOCK_FILE" "$WAVE_ID" "${CMUX_SURFACE:-unknown}"
+```
+
+**Fail-fast behavior:**
+- If another live orchestrator holds the lock → exit immediately with:
+  ```
+  ERROR: Wave orchestrator already running (wave_id: ..., surface: ...).
+  Do NOT start another — use beads-workflow:wave-monitor to watch progress.
+  ```
+- If lock file exists but holder PID is dead → warn, auto-clear, proceed.
+- If no lock → acquire immediately, continue to Phase 0.
+
+### Releasing the lock
+
+Release on clean exit (after Phase 7 completes or on user-requested abort):
+
+```bash
+bash "$WAVE_LOCK_SH" release "$LOCK_FILE"
+```
+
+Use a bash trap to ensure release even on unexpected exit:
+
+```bash
+trap 'bash "$WAVE_LOCK_SH" release "$LOCK_FILE" 2>/dev/null || true' EXIT
+```
+
+### Status check
+
+To inspect whether a wave is running without acquiring:
+
+```bash
+bash "$WAVE_LOCK_SH" status "$LOCK_FILE"
 ```
 
 ---

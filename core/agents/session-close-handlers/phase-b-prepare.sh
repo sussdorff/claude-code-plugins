@@ -65,6 +65,20 @@ HANDLERS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PLANS_DIR="$REPO_ROOT/malte/plans"
 
 # ---------------------------------------------------------------------------
+# Lock: serialize parallel session-close agents
+# ---------------------------------------------------------------------------
+# Acquire before any work to ensure only one session-close runs at a time.
+# Released at the end of phase-b-close-beads.sh.
+LOCK_FILE="${REPO_ROOT}/.session-close.lock"
+BEAD_ID="${BEAD_ID:-${BD_BEAD_ID:-unknown}}"
+SURFACE="${SURFACE:-${CMUX_SURFACE:-unknown}}"
+
+echo "==> Acquiring session-close lock (bead=$BEAD_ID surface=$SURFACE)" >&2
+bash "$HANDLERS_DIR/session-close-lock.sh" acquire "$LOCK_FILE" "$BEAD_ID" "$SURFACE"
+
+
+
+# ---------------------------------------------------------------------------
 # Result accumulators (JSON-safe via jq at the end)
 # ---------------------------------------------------------------------------
 FIRST_MERGE_STATUS="not_attempted"
