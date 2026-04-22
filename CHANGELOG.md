@@ -2,6 +2,7 @@
 
 ### 🚀 Features
 
+- *(CCP-67x)* Add Codex bead-orchestrator and wave-orchestrator agents with session-close handoff
 - Session-close serializer + wave-orchestrator single-instance guard
 - Skill-auditor validator, wave-dispatch workspace fix, planning docs
 
