@@ -882,6 +882,30 @@ def query_adhoc_report(db_path: Path = DB_PATH) -> str:
     return "\n".join(lines)
 
 
+def increment_auto_decisions(run_id: str, db_path: Path = DB_PATH) -> None:
+    """Increment the auto_decisions counter by 1 for the given run_id.
+
+    Silently does nothing when the DB does not exist (e.g. in CI without
+    a live metrics database).  Called by bead-orchestrator at Axis B
+    auto-accept points in Phase 6 and Phase 8.
+
+    Args:
+        run_id: UUID string identifying the bead_runs row to update.
+        db_path: Override DB path (mainly for testing).
+    """
+    if not db_path.exists():
+        return
+    conn = sqlite3.connect(str(db_path))
+    try:
+        conn.execute(
+            "UPDATE bead_runs SET auto_decisions = auto_decisions + 1 WHERE run_id = ?",
+            (run_id,),
+        )
+        conn.commit()
+    finally:
+        conn.close()
+
+
 def get_run(run_id: str, db_path: Path = DB_PATH) -> dict:
     """
     Fetch a bead_runs row by run_id. Returns a dict of all columns.
