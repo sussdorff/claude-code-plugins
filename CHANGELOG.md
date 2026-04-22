@@ -1,20 +1,28 @@
 ## [unreleased]
 
-## [2026.04.97] - 2026-04-22
-
-### 🚀 Features
-
-- *(CCP-o4z)* Session-end Stop hook for beads-workflow (open-brain safety net)
-
 ### 🐛 Bug Fixes
 
-- *(CCP-o4z)* JSON list parsing for in-progress beads detection
-- *(CCP-o4z)* Dotted bead ID regex anchoring in session-end hook
+- *(CCP-1bo)* Wave-dispatch --surface flag, scenario pre-flight gate
 
 ### ⚙️ Miscellaneous Tasks
 
-- *(CCP-o4z)* Red test suite for session-end hook (TDD)
+- Add embeddeddolt/ to .gitignore + skill-audit CI workflow
+## [2026.04.97] - 2026-04-22
 
+### ⚙️ Miscellaneous Tasks
+
+- *(CCP-o4z)* Bump version to 2026.04.97 and release changelog
+## [2026.04.96] - 2026-04-22
+
+### 🚀 Features
+
+- Session-close serializer + wave-orchestrator single-instance guard
+- Skill-auditor validator, wave-dispatch workspace fix, planning docs
+
+### ⚙️ Miscellaneous Tasks
+
+- *(CCP-28l)* Update bead state for session close
+- Bump version to 2026.04.96 and release changelog
 ## [2026.04.95] - 2026-04-22
 
 ### ⚙️ Miscellaneous Tasks
@@ -25,17 +33,24 @@
 
 ### 🚀 Features
 
+- *(CCP-o4z)* Green — session-end Stop hook for beads-workflow
 - *(CCP-6s1)* Add --exclude-pattern flag to check-debrief-adherence.py
 
 ### 🐛 Bug Fixes
 
 - *(wave-monitor)* Reduce poll interval from 270s to 60s
+- *(CCP-o4z)* Address review findings iteration 1
+- *(CCP-o4z)* Address codex adversarial findings
 - *(CCP-28l)* Fix prompt tail-truncation and document timeout Bash wrapper alignment
 - *(CCP-6s1)* Match exclude-pattern against relative path not absolute
 
 ### 📚 Documentation
 
 - *(CCP-28l)* Document Codex timeout threshold and add pre-truncation guard
+
+### 🧪 Testing
+
+- *(CCP-o4z)* Red — session-end hook test suite
 
 ### ⚙️ Miscellaneous Tasks
 
