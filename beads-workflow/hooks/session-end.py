@@ -22,7 +22,7 @@ import subprocess
 import sys
 
 _WORKTREE_MARKER = ".claude/worktrees/"
-_BEAD_SEGMENT_RE = re.compile(r"(?:^|/)bead-([A-Za-z0-9]+-[A-Za-z0-9]+)(?:/|$)")  # Format: <PREFIX>-<SUFFIX>, e.g. CCP-o4z, open-brain-xyz
+_BEAD_SEGMENT_RE = re.compile(r"(?:^|/)bead-([A-Za-z0-9]+-[A-Za-z0-9.]+)(?:/|$)")  # Format: <PREFIX>-<SUFFIX>, e.g. CCP-o4z, open-brain-xyz, CCP-2vo.8
 _SAFETY_NET_NOTE = (
     "Session ended without session-close. "
     "Run session-close manually to merge and push."
@@ -63,6 +63,8 @@ def _get_bead_status(bead_id: str) -> str | None:
         if result.returncode != 0:
             return None
         data = json.loads(result.stdout)
+        if isinstance(data, list):
+            data = data[0] if data else {}
         return data.get("status")
     except (subprocess.TimeoutExpired, json.JSONDecodeError, FileNotFoundError):
         return None

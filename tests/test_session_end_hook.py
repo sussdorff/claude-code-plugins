@@ -215,6 +215,24 @@ class TestBeadIdExtraction:
             "/Users/malte/.claude/worktrees/not-a-bead"
         ) is None
 
+    def test_extract_bead_id_dotted_suffix(self):
+        """AK4: extract_bead_id handles dotted IDs like CCP-2vo.8."""
+        session_end = _load_session_end()
+
+        bead_id = session_end.extract_bead_id(
+            "/Users/malte/.claude/worktrees/bead-CCP-2vo.8"
+        )
+        assert bead_id == "CCP-2vo.8"
+
+    def test_extract_bead_id_dotted_suffix_with_subdir(self):
+        """AK4: extract_bead_id handles dotted IDs with subdirectory."""
+        session_end = _load_session_end()
+
+        bead_id = session_end.extract_bead_id(
+            "/Users/malte/.claude/worktrees/bead-CCP-2hd.1/subdir"
+        )
+        assert bead_id == "CCP-2hd.1"
+
 
 # ---------------------------------------------------------------------------
 # AK5: Safety-net note for in_progress bead
@@ -248,6 +266,29 @@ class TestSafetyNetNote:
         update_cmd = next(c for c in update_calls if "update" in str(c))
         assert any("session-close" in str(arg) for arg in update_cmd), (
             "The appended note must mention session-close"
+        )
+
+    def test_appends_note_when_bd_show_returns_list(self, capsys):
+        """AK5: bd show --json may return a list; first element status is used."""
+        session_end = _load_session_end()
+
+        payload = _make_payload(cwd="/Users/malte/.claude/worktrees/bead-CCP-abc")
+        # bd show --json returns a LIST of objects in this repo
+        bead_json = json.dumps([{"id": "CCP-abc", "status": "in_progress"}])
+
+        update_calls = []
+
+        def fake_run(cmd, **kwargs):
+            if "show" in cmd:
+                return MagicMock(returncode=0, stdout=bead_json, stderr="")
+            update_calls.append(cmd)
+            return MagicMock(returncode=0, stdout="", stderr="")
+
+        with patch("subprocess.run", side_effect=fake_run):
+            session_end.handle(payload)
+
+        assert any("update" in str(c) for c in update_calls), (
+            "bd update must be called when bd show returns a list with in_progress status"
         )
 
     def test_safety_net_prints_to_stderr(self, capsys):
