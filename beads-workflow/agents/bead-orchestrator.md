@@ -236,7 +236,7 @@ METRICS_START="beads-workflow/scripts/metrics-start.sh"
 if [[ ! -f "$METRICS_START" ]]; then
   METRICS_START=$(find ~/.claude/plugins -name metrics-start.sh -type f 2>/dev/null | sort -r | head -1)
 fi
-RUN_ID=$("$METRICS_START" "<bead_id>" "<wave_id_or_empty>" "full-1pane")
+RUN_ID=$("$METRICS_START" "<bead_id>" "${WAVE_ID:-}" "full-1pane")
 export CCP_ORCHESTRATOR_RUN_ID="$RUN_ID"  # Prevents SubagentStop hook from double-writing ad-hoc rows
 echo "RUN_ID=$RUN_ID"
 ```
