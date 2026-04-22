@@ -1,78 +1,274 @@
-## [Unreleased]
+## [unreleased]
 
+### 🚀 Features
+
+- Session-close serializer + wave-orchestrator single-instance guard
+- Skill-auditor validator, wave-dispatch workspace fix, planning docs
+
+### ⚙️ Miscellaneous Tasks
+
+- *(CCP-28l)* Update bead state for session close
 ## [2026.04.95] - 2026-04-22
 
-### Fixed
+### ⚙️ Miscellaneous Tasks
 
-- *(CCP-28l)* Fix prompt tail-truncation and document timeout Bash wrapper alignment — middle-truncation preserves tail format instructions; Bash wrapper timeout alignment documented as BLOCKING
+- Merge origin/main into worktree-bead-CCP-28l (resolve issues.jsonl conflict)
+- *(CCP-28l)* Bump version to 2026.04.95 and release changelog
+## [2026.04.94] - 2026-04-22
 
-### Added
+### 🚀 Features
 
-- *(CCP-28l)* Document Codex timeout threshold in codex-exec.sh header; add pre-truncation guard (CODEX_EXEC_MAX_PROMPT_CHARS=32000) with configurable tail buffer (CODEX_EXEC_TAIL_BUFFER=1024)
+- *(CCP-6s1)* Add --exclude-pattern flag to check-debrief-adherence.py
 
+### 🐛 Bug Fixes
+
+- *(wave-monitor)* Reduce poll interval from 270s to 60s
+- *(CCP-28l)* Fix prompt tail-truncation and document timeout Bash wrapper alignment
+- *(CCP-6s1)* Match exclude-pattern against relative path not absolute
+
+### 📚 Documentation
+
+- *(CCP-28l)* Document Codex timeout threshold and add pre-truncation guard
+
+### ⚙️ Miscellaneous Tasks
+
+- *(CCP-6s1)* Update bead state for session close
+- *(CCP-6s1)* Bump version to 2026.04.94 and release changelog
 ## [2026.04.93] - 2026-04-22
 
-### Refactored
+### 🐛 Bug Fixes
 
-- *(CCP-4gi)* session-close Step 11 now reads structured debrief from orchestrator handoff file (`.worktree-handoff.json`) as primary source — falls back to in-session `### Debrief` blocks when no handoff present (ad-hoc sessions); adds `metadata.source="session-close"` to all `save_memory` calls for cross-wave deduplication coordination with SessionEnd safety-net; TOML port synced with updated spec
+- *(CCP-4gi)* Sync TOML port with session-close.md handoff and metadata.source changes
 
+### 🚜 Refactor
+
+- *(CCP-4gi)* Enrich session-close debrief with handoff aggregation and metadata.source
+
+### ⚙️ Miscellaneous Tasks
+
+- *(CCP-4gi)* Bump version to 2026.04.93 and release changelog
 ## [2026.04.92] - 2026-04-22
 
-### Fixed
+### ⚙️ Miscellaneous Tasks
 
-- *(CCP-5xe)* Fix shell-unsafe debrief piping in bead-orchestrator — replace `echo|python` interpolation with single-quoted heredoc; use tempfile+os.replace() pattern for atomic JSON writes to `.worktree-handoff.json`; preserve handoff file during `--debrief-only` runs for idempotency; gitignore `.worktree-handoff.json` and `.worktree-turns.jsonl` as runtime artifacts
+- *(CCP-5xe)* Bump version to 2026.04.92 and release changelog
+## [2026.04.91] - 2026-04-22
 
-### Refactored
+### 🐛 Bug Fixes
 
-- *(CCP-5xe)* bead-orchestrator now aggregates subagent debriefs via `parse_debrief.py` and writes structured handoff file (`.worktree-handoff.json`) for session-close to consume — file-based handoff is the sole viable mechanism since session-close runs as downstream subagent
+- *(codex-exec)* Redirect stdin from /dev/null to prevent interactive wait
 
+### ⚙️ Miscellaneous Tasks
+
+- Bump version to 2026.04.91
+## [2026.04.90] - 2026-04-22
+
+### 🚀 Features
+
+- *(codex-exec)* Add --diff-range flag for inline vs self-collect diff handling
+
+### 🐛 Bug Fixes
+
+- *(CCP-e7a)* Remove debrief from strict-output agents, exempt in standard, fix scout fence
+
+### ⚙️ Miscellaneous Tasks
+
+- Bump version to 2026.04.90
 ## [2026.04.89] - 2026-04-22
 
-### Added
+### ⚙️ Miscellaneous Tasks
 
-- *(CCP-e7a)* Roll out **debrief template** to all 26 non-exempt agent prompts — every agent prompt now includes the mandatory `### Debrief` block with Key Decisions / Challenges Encountered / Surprising Findings / Follow-up Items headings, completing the Subagent Debrief Return Contract pipeline
+- *(CCP-e7a)* Bump version to 2026.04.89 and release changelog
+## [2026.04.88] - 2026-04-22
 
+### 🚀 Features
+
+- *(CCP-e7a)* Add debrief template to all non-exempt agent prompts
+
+### 🐛 Bug Fixes
+
+- *(CCP-5xe)* Fix shell-unsafe debrief piping and handoff file cleanup
+- *(CCP-5xe)* Safe JSON serialization via tempfile, preserve handoff for debrief-only retries
+
+### 🚜 Refactor
+
+- *(CCP-5xe)* Bead-orchestrator aggregates subagent debriefs via parse_debrief.py and handoff file
+
+### ⚙️ Miscellaneous Tasks
+
+- *(CCP-5xe)* Bump version to 2026.04.88 and release changelog
 ## [2026.04.87] - 2026-04-22
 
-### Added
+### ⚙️ Miscellaneous Tasks
 
-- *(CCP-9bm)* Add **Subagent Debrief Return Contract** standard defining fixed-heading markdown format (Key Decisions, Challenges Encountered, Surprising Findings, Follow-up Items) for structured knowledge capture across all subagents with parse_debrief.py helper and check-debrief-adherence.py enforcer-reactive lint
-- *(CCP-k1m)* Add **--non-interactive mode** to session-close agent with deterministic defaults at all interactive points, resume-from-mid-close state detection, and audit document classifying all interactive decision points
-- *(CCP-hf1)* Add **/vision-author** skill with 7-question guided dialogue producing structured vision.md — enforces present-tense sections via tense-gate, rejects STUB/TBD/blank entries with bead-creation routing, auto-generates genesis ADR, supports --refresh mode for re-authoring with conformance scanning
-- *(CCP-6up.3)* Add **validate-skill.py** Enforcer-Reactive for script-first authoring — flags executable bash/python blocks and verbal multi-step pipelines in skill bodies with --strict mode (exit 0/1/2); wired into skill-auditor for per-skill auditing and integrated into skill creation path
-- *(CCP-a67)* Add **/vision-review** skill for cadence-triggered vision health assessment with per-principle Y/N dialog, council integration (degraded mode fallback), draft ADR generation (superseding by rule_id), health score computation (<80% triggers `/vision-author --refresh` suggestion), `trinity_role: enforcer-reactive`
+- *(CCP-9bm)* Merge main into feature branch, resolve changelog conflict
+- *(CCP-9bm)* Bump version to 2026.04.87 and release changelog
+## [2026.04.86] - 2026-04-22
 
-### Changed
+### 🚀 Features
 
-- *(CCP-9yd)* Port **session-close** agent to Codex format (TOML agents, gap documentation, E2E evidence)
-- *(CCP-e2r)* Collapse **session-close** step-handlers into phase-level handlers (reduces tool calls from ~44 to ~9-11)
+- *(CCP-9bm)* Green — parse_debrief.py stdlib parser for subagent debrief sections
+- *(CCP-9bm)* Green — check-debrief-adherence.py lint script + test import fix
+- *(CCP-9bm)* Green — add debrief template to 5 required agent prompts
+- *(CCP-k1m)* Non-interactive session-close mode with resume support
 
-### Fixed
+### 🐛 Bug Fixes
 
-- *(codex-exec)* Degrade gracefully when metrics DB unavailable — adversarial Codex review no longer silently skipped when RUN_ID is empty; only DB recording step is skipped
+- *(CCP-k1m)* Address review findings iteration 1
 
-### Refactored
+### 📚 Documentation
 
-- *(beads-workflow)* Extract inline metrics bash+Python from agent instructions into metrics-start.sh and metrics-rollup.sh; both non-fatal on failure; 8 new tests (78 total)
+- *(CCP-9bm)* Add changelog entry for debrief return contract
 
-## [2026.04.81] - 2026-04-22
+### 🧪 Testing
 
-### Fixed
+- *(CCP-9bm)* Red — parse_debrief test suite (all 4 headings, embedded, empty sections, CLI)
+- *(CCP-9bm)* Red — check-debrief-adherence test suite (conforming, missing, exempt, CLI)
+- *(CCP-k1m)* Red — non-interactive session-close mode test suite
 
-- *(open-brain-7lz)* wave-dispatch.sh now propagates WAVE_ID into bead_runs.wave_id so Phase 7 token-usage breakdowns can be aggregated by wave
-- *(wave-completion)* metrics sanity check defaults and safety hardened — prevents false-positive failures when bead_runs rows are missing
-- *(bead-orchestrator)* document codex-exec.sh BLOCKING RULE: must run synchronously (never run_in_background), use Bash timeout 360000ms
+### ⚙️ Miscellaneous Tasks
 
+- *(CCP-k1m)* Bump version to 2026.04.86 and release changelog
+## [2026.04.85] - 2026-04-22
+
+### 🐛 Bug Fixes
+
+- *(CCP-6up.5)* Address review findings iteration 1
+- *(CCP-6up.5)* Address auto-fixable verification disputes
+- *(CCP-6up.5)* Correct bead-metrics inventory row and remove obsolete __future__ import
+
+### 🚜 Refactor
+
+- *(CCP-6up.5)* Green — add increment_auto_decisions to metrics.py
+- *(CCP-6up.5)* Green — extract wave-monitor bash to wave-poll.py
+- *(CCP-6up.5)* Green — update agents and smoke test to use extracted helpers
+
+### 🧪 Testing
+
+- *(CCP-6up.5)* Red — increment_auto_decisions tests
+- *(CCP-6up.5)* Red — wave-poll.py unit tests
+
+### ⚙️ Miscellaneous Tasks
+
+- *(CCP-6up.5)* Update bead state for session close
+- Bump version to 2026.04.85
+## [2026.04.84] - 2026-04-22
+
+### ⚙️ Miscellaneous Tasks
+
+- Bump version to 2026.04.84
+## [2026.04.83] - 2026-04-22
+
+### ⚙️ Miscellaneous Tasks
+
+- Bump version to 2026.04.83
+## [2026.04.82] - 2026-04-22
+
+### 🚀 Features
+
+- *(CCP-hf1)* Green — vision_renderer.py and vision_conformance.py
+- *(CCP-hf1)* Green — vision-author skill, template, smoke-test checklist
+- *(CCP-6up.3)* Green — add validate-skill.py for EXTRACTABLE_CODE enforcement in SKILL.md
+- *(CCP-6up.3)* Green — wire validate-skill into skill-auditor SKILL.md and agent
+- *(CCP-a67)* Green — vision_review.py + mock_council fixture (22 tests passing)
+- *(CCP-a67)* Add vision-review SKILL.md with trinity_role enforcer-reactive
+
+### 🐛 Bug Fixes
+
+- *(CCP-hf1)* Address review findings iteration 1
+- *(CCP-6up.3)* Address review findings iteration 1
+- *(wave-dispatch)* Propagate WAVE_ID into bead_runs.wave_id
+- *(wave-completion)* Fix metrics sanity check defaults and safety
+- *(CCP-a67)* Address review findings iteration 1
+
+### 📚 Documentation
+
+- *(CCP-hf1)* Update changelog with vision-author skill
+- Update changelog for CCP-6up.3 (skill-authoring Enforcer-Reactive)
+
+### 🧪 Testing
+
+- *(CCP-hf1)* Red — vision-author unit tests (renderer, conformance, tense-gate)
+- *(CCP-6up.3)* Red — EXTRACTABLE_CODE enforcement tests for validate-skill.py
+- *(CCP-a67)* Red — vision-review test suite (health score, ADR gen, report gen, smoke)
+
+### ⚙️ Miscellaneous Tasks
+
+- *(open-brain-7lz)* Bump version to 2026.04.81, update changelog
+- *(CCP-a67)* Update bead state and changelog
+- *(CCP-a67)* Add changelog entry for vision-review skill
+- *(CCP-a67)* Update bead state for session close
+- Bump version to 2026.04.82
+## [2026.04.80] - 2026-04-22
+
+### 🚀 Features
+
+- Add script-first execution result contract
+
+### 🐛 Bug Fixes
+
+- *(codex-exec)* Degrade gracefully when metrics DB unavailable
+
+### 🚜 Refactor
+
+- *(beads-workflow)* Extract inline metrics code into dedicated shell scripts
+
+### ⚙️ Miscellaneous Tasks
+
+- Update changelog
+- Bump version to 2026.04.80
+## [2026.04.79] - 2026-04-22
+
+### 🚀 Features
+
+- *(CCP-9yd)* Add Codex session-close agent TOML with gap documentation
+
+### 🐛 Bug Fixes
+
+- *(CCP-9yd)* Address review findings iteration 1
+
+### ⚙️ Miscellaneous Tasks
+
+- Sync issues.jsonl from main merge
+- Merge worktree-bead-CCP-9yd (resolve evidence file conflict)
+- Bump version to 2026.04.79
+## [2026.04.78] - 2026-04-22
+
+### 🚀 Features
+
+- *(CCP-9yd)* Green — create Codex session-close agent TOML
+- *(CCP-e2r)* Collapse session-close step-handlers into phase-level batch handlers
+- *(CCP-9yd)* Add E2E evidence for Codex session-close agent run
+
+### 🐛 Bug Fixes
+
+- *(CCP-e2r)* Address review findings — idempotency, error handling, regex fixes
+- *(CCP-9yd)* Address review findings iteration 1
+
+### 🧪 Testing
+
+- *(CCP-9yd)* Red — validate codex session-close agent TOML structure
+
+### ⚙️ Miscellaneous Tasks
+
+- Update changelog for CCP-e2r
+- Bump version to 2026.04.78
+## [2026.04.77] - 2026-04-22
+
+### ⚙️ Miscellaneous Tasks
+
+- *(CCP-8tb)* Sync trampoline stub to .agents/skills/skill-auditor
+- Bump version to 2026.04.77
 ## [2026.04.76] - 2026-04-22
 
-### Features
+### 🚀 Features
 
-- *(CCP-dnk)* Convert wave-orchestrator to Sonnet subagent, wire in wave-monitor delegation
-- *(CCP-dnk)* Replace Phase 5 ScheduleWakeup polling loop with blocking Agent(wave-monitor) call
-- *(CCP-dnk)* Add all 5 wave-monitor verdict branches (complete, pane-error, stuck, review-loop, ambiguous)
-- *(CCP-dnk)* Rewrite wave-orchestrator skill.md as 32-line trampoline
+- *(CCP-dnk)* Port wave-orchestrator to Sonnet subagent, wire in wave-monitor
 
-## [2026.04.73] - 2026-04-22
+### ⚙️ Miscellaneous Tasks
+
+- *(CCP-dnk)* Update changelog for wave-orchestrator agent migration
+## [2026.04.75] - 2026-04-22
 
 ### 🚀 Features
 
@@ -82,6 +278,11 @@
 
 - *(CCP-793)* Harden quick-fix session-close handoff
 - *(skill-auditor)* Flag description overflow >1024 chars as blocking
+
+### ⚙️ Miscellaneous Tasks
+
+- Update changelog
+- Bump version to 2026.04.75
 ## [2026.04.74] - 2026-04-22
 
 ### 🚀 Features
