@@ -51,10 +51,18 @@ that the full bead-orchestrator now uses (CCP-2vo.4); the old 2-pane review flow
 
 **Consequence for wave-orchestrator:** All beads (quick and full) consume 1 pane each.
 
-## Worktree Isolation
+## Runtime Context
 
-Same as bead-orchestrator: when launched via `cld -b <id>`, you run in an isolated git worktree
-on branch `worktree-bead-<id>`. All subagents inherit this worktree. Do NOT cd out or switch branches.
+Preferred path is the same as bead-orchestrator: when launched via `cld -b <id>`, quick-fix runs
+in an isolated git worktree on branch `worktree-bead-<id>`.
+
+However, quick-fix may also be spawned inline as an `Agent(...)` subagent from an existing session.
+In that case you may be running directly on the caller's current branch (often `main`), NOT in a
+bead-specific worktree.
+
+**Implication:** detect the actual runtime in Phase 0 and pass that exact branch/worktree context to
+`core:session-close`. Never assume `worktree-bead-{BEAD_ID}` exists. Never manually emulate
+session-close because you noticed you're on `main`.
 
 ## Portless Namespace
 
@@ -127,7 +135,22 @@ Gather minimal context:
    ```
    Store this SHA as `PRE_IMPL_SHA` in your context — you need it for the Codex review base.
 
-4. Create a metrics run (store `RUN_ID` for codex-exec.sh calls):
+4. Capture runtime branch/worktree context:
+   ```bash
+   CURRENT_BRANCH=$(git branch --show-current)
+   REPO_ROOT=$(git rev-parse --show-toplevel)
+   COMMON_GIT_DIR=$(git rev-parse --git-common-dir)
+   MAIN_REPO=$(cd "$COMMON_GIT_DIR/.." && pwd)
+   if [[ "$REPO_ROOT" != "$MAIN_REPO" ]]; then
+     WORKTREE_MODE="worktree"
+   else
+     WORKTREE_MODE="main-or-standalone"
+   fi
+   printf '%s\n%s\n' "$CURRENT_BRANCH" "$WORKTREE_MODE"
+   ```
+   Store these values as `CURRENT_BRANCH` and `WORKTREE_MODE` in your context.
+
+5. Create a metrics run (store `RUN_ID` for codex-exec.sh calls):
    ```python
    import sys; sys.path.insert(0, 'beads-workflow/lib/orchestrator')
    try:
@@ -318,12 +341,26 @@ Metrics failure does NOT block Phase 5. Proceed regardless.
 > - ❌ Describing what Phase 5 would do instead of invoking it.
 > - ❌ Skipping Phase 5 because Codex was skipped, tests were skipped, or metrics failed.
 > - ❌ Skipping Phase 5 because "the user can do it manually."
+> - ❌ Reading `session-close.md`, deciding the run is "simple" or on `main`, and manually doing
+>      git/tag/`bd close`/learnings work yourself instead of spawning `core:session-close`.
+> - ❌ Rewriting Phase 5 into a parent-side `--debrief-only` or `--ship-only` plan. The parent
+>      quick-fix agent spawns `core:session-close`; it does NOT emulate or split session-close.
 > - ❌ Skipping Phase 5 on fix-loop HARD STOP — the ONLY exit before Phase 5 is the Phase 0
 >      pre-flight refusal or an unresolved Iter-2 findings hard-stop.
 >
 > **Required action:** Invoke `Agent(subagent_type="core:session-close", ...)` NOW.
 
 #### Step 5a: Invoke session-close
+
+Before you send the invocation, collect the actual branch context that session-close needs:
+
+```bash
+git log --oneline {PRE_IMPL_SHA}..HEAD
+```
+
+**Response-shape rule:** the response that performs Step 5a must contain the `Agent(...)` tool call
+and NO prose before or after it. Do not "announce" the tool call. Do not explain what you are about
+to do. Emit the tool call as the only action in that response.
 
 ```
 Agent(
@@ -337,22 +374,40 @@ Agent(
   - Regressions fixed: {count}
   - Commits on branch: <paste `git log --oneline {PRE_IMPL_SHA}..HEAD` output here>
   - Pre-impl SHA: {PRE_IMPL_SHA}
-  - Feature branch: worktree-bead-{BEAD_ID}
+  - Current branch: {CURRENT_BRANCH}
+  - Worktree mode: {WORKTREE_MODE}
 
-  Run the COMPLETE session-close pipeline — ALL phases are MANDATORY:
-  1. Double-merge: merge main → feature branch (resolve conflicts if any)
-  2. Conventional commit + changelog entry + CalVer/SemVer version tag (respect project convention)
-  3. Learnings + session summary (open-brain save)
-  4. Merge feature → main + git push + bd dolt commit && bd dolt pull && bd dolt push --force
-  5. Close the bead: bd close {BEAD_ID}
+  Runtime notes:
+  - If `Current branch` is `main`, this quick-fix run was not isolated in a bead worktree.
+  - `session-close` already supports main-branch runs and skips non-applicable merge steps itself.
+  - Do NOT ask the parent quick-fix agent to manually run versioning, push, `bd close`, or
+    open-brain saves as a substitute for spawning `core:session-close`.
+  - Do NOT reinterpret this handoff as `--debrief-only` or `--ship-only` from the parent. Spawn
+    `core:session-close` once with the real runtime state above and let it execute the applicable
+    steps.
 
-  Do NOT stop after phase 3. Do NOT emit 'Next: ...' — complete all 5 phases before returning.
-  The bead is NOT closed until step 5 completes successfully.
+  Run the COMPLETE session-close pipeline. ALL applicable phases are MANDATORY:
+  1. Learnings + session summary (open-brain save)
+  2. Conventional commit + changelog entry + version/tag work, if still applicable
+  3. Merge/push/dolt sync/close work, if still applicable in this runtime context
+  4. Close the bead if it is not already closed
+  5. Return a summary of what was executed vs. skipped
+
+  Do NOT stop after learnings. Do NOT emit 'Next: ...'. If a merge-related step does not apply
+  because the run is already on `main`, skip it inside session-close and continue.
   """
 )
 ```
 
 #### Step 5b: Handle invocation failure
+
+If the runtime responds with **"Your tool call was malformed and could not be parsed"**:
+
+1. Do NOT write more prose.
+2. Do NOT run more `Bash`, `Read`, or verification commands.
+3. Do NOT paraphrase the intended `Agent(...)` call in plain text.
+4. Your **next response must be ONLY** the retried `Agent(subagent_type="core:session-close", ...)`
+   invocation.
 
 If `Agent(subagent_type="core:session-close", ...)` returns an error (e.g., "Agent type not found"):
 
@@ -363,11 +418,17 @@ If `Agent(subagent_type="core:session-close", ...)` returns an error (e.g., "Age
    > "❌ Quick-fix {BEAD_ID} cannot complete Phase 5 auto-trigger. The `core:session-close`
    > agent is not registered in this runtime despite the Phase 0a pre-flight passing.
    >
-   > The bead is NOT closed. Work is committed on `worktree-bead-{BEAD_ID}` but NOT merged,
-   > NOT pushed, NOT tagged. Manual recovery required:
-   >   cd <repo-root> && git checkout main && git merge worktree-bead-{BEAD_ID} --no-ff
-   >   git push && bd dolt commit && bd dolt pull && bd dolt push --force
-   >   bd close {BEAD_ID}
+   > Runtime context:
+   > - Current branch: {CURRENT_BRANCH}
+   > - Worktree mode: {WORKTREE_MODE}
+   >
+   > Manual recovery depends on the runtime shape:
+   > - If `WORKTREE_MODE=worktree`: finish recovery from that feature branch, then merge/push/close.
+   > - If `WORKTREE_MODE=main-or-standalone`: stay on `{CURRENT_BRANCH}` and manually complete the
+   >   remaining close-out steps there.
+   >
+   > In both cases: git push && bd dolt commit && bd dolt pull && bd dolt push --force
+   > Then: bd close {BEAD_ID}
    >
    > Please file a bug against quick-fix so we can harden the pre-flight check."
 4. Do NOT return silently. Do NOT say "ready for session-close." Only use this path if Steps 5a
@@ -447,6 +508,10 @@ The old cmux-send-to-self approach is deprecated — do not reintroduce it.
   introduce `cmux send --surface $CMUX_SURFACE_ID "..."` style self-messaging — the env
   var is not reliably exported through `cld`, and even when it is, the self-injection is
   convoluted compared to just calling the next agent directly.
+- **`session-close` owns close-out even on `main`.** If quick-fix was spawned inline on the
+  caller's current branch, pass `CURRENT_BRANCH`/`WORKTREE_MODE` to `core:session-close` and let
+  it skip non-applicable merge steps. Do NOT manually do versioning, push, `bd close`, or
+  learnings work as a substitute.
 - **"Next: session close" in a recap is a BUG** — trigger session-close yourself via
   `Agent(subagent_type="core:session-close", ...)` before returning. A user-visible
   HANDOFF message is acceptable only as a last-resort diagnostic, never as the normal path.
@@ -459,6 +524,9 @@ The old cmux-send-to-self approach is deprecated — do not reintroduce it.
 - **If Codex was skipped, session-close still fires.** Skipping Codex review is a graceful
   degradation for the REVIEW step. It is NOT a license to skip the HANDOFF step. Phase 2
   being skipped does not cascade to Phase 5.
+- **Malformed Agent retries are not analysis checkpoints.** If the runtime says your
+  `Agent(...)` call was malformed, immediately retry the tool call as the ONLY content of your
+  next response. Do not narrate the retry.
 - **Pre-flight protects you.** Phase 0a refuses to start if session-close isn't available.
   That means by the time you reach Phase 5, session-close IS available — there is no
   legitimate excuse for not invoking it.
