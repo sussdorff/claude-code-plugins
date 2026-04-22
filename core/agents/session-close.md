@@ -80,10 +80,20 @@ Steps [3], [4], [5] run in tight sequence to minimize the race window. Step [6a]
 
 ## Handlers
 
-Handler scripts live in `session-close-handlers/` in the plugin cache. Resolve the path:
+Handler scripts live in `session-close-handlers/` in the plugin cache. Resolve the path
+by finding the **latest installed version** — the version number is part of the path:
+
 ```bash
-HANDLERS_DIR="$HOME/.claude/plugins/cache/sussdorff-plugins/core/agents/session-close-handlers"
+LATEST=$(ls "$HOME/.claude/plugins/cache/sussdorff-plugins/core/" 2>/dev/null | sort -V | tail -1)
+HANDLERS_DIR="$HOME/.claude/plugins/cache/sussdorff-plugins/core/$LATEST/agents/session-close-handlers"
+if [[ -z "$LATEST" || ! -d "$HANDLERS_DIR" ]]; then
+  echo "ERROR: session-close handlers not found at $HANDLERS_DIR — reinstall core plugin" >&2
+  exit 1
+fi
 ```
+
+**Common mistake:** Using `$HOME/.claude/plugins/cache/sussdorff-plugins/core/agents/session-close-handlers`
+(without the version) will silently fail because that path does NOT exist. Always resolve via `sort -V | tail -1`.
 
 ## Non-Interactive Mode
 
@@ -355,9 +365,13 @@ Only runs in a worktree (`REPO_ROOT != MAIN_REPO`). **Non-blocking** — any fai
 
 ### Steps 13, 14, 15, 15b, 16, 16a, 16c: Ship (phase-b-ship.sh)
 
-Run the ship handler after Step 6 (conventional commit). This single call replaces seven
-individual step handlers (kill procs, second merge, feature merge, version bump, push, pipeline
+Run the ship handler after Step 6 (conventional commit). **This single call replaces seven
+individual step handlers** (kill procs, second merge, feature merge, version bump, push, pipeline
 watch, and plugin cache sync). Steps 14+15 run in tight sequence to minimize the race window.
+
+CI is handled inside phase-b-ship.sh (step 16a → pipeline-watch.sh). Do NOT monitor CI
+separately after calling phase-b-ship.sh. If you need CI monitoring on a manual push path,
+use `Agent(subagent_type="core:ci-monitor")` — see the system prompt for details.
 
 ```bash
 SHIP_JSON=$(bash "$HANDLERS_DIR/phase-b-ship.sh" \
