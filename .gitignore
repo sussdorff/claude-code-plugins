@@ -26,3 +26,6 @@ issues.jsonl
 # Worktree IPC files (transient, must never be committed)
 .worktree-handoff.json
 .worktree-turns.jsonl
+
+# Embedded Dolt runtime state
+embeddeddolt/

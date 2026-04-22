@@ -1,0 +1,48 @@
+name: Skill Audit
+
+on:
+  push:
+    paths:
+      - '**/SKILL.md'
+      - '.agents/skills/skill-auditor/scripts/**'
+      - 'meta/skills/skill-auditor/scripts/**'
+  pull_request:
+    paths:
+      - '**/SKILL.md'
+      - '.agents/skills/skill-auditor/scripts/**'
+      - 'meta/skills/skill-auditor/scripts/**'
+
+jobs:
+  validate-skills:
+    name: Validate skills (EXTRACTABLE_CODE)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Run skill validator on all SKILL.md files
+        run: |
+          VALIDATOR=".agents/skills/skill-auditor/scripts/validate-skill.py"
+          SCAN=".agents/skills/skill-auditor/scripts/scan-skills.sh"
+
+          if [[ ! -f "$VALIDATOR" ]]; then
+            echo "validate-skill.py not found at $VALIDATOR — skipping"
+            exit 0
+          fi
+
+          FAILED=0
+          while IFS= read -r skill_file; do
+            echo "Checking: $skill_file"
+            if ! python3 "$VALIDATOR" "$skill_file"; then
+              FAILED=1
+            fi
+          done < <(find . -name "SKILL.md" \
+            -not -path "./.claude/*" \
+            -not -path "./.dolt/*" \
+            -not -path "*/__pycache__/*")
+
+          exit $FAILED
