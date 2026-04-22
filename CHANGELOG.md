@@ -1,5 +1,11 @@
 ## [Unreleased]
 
+## [2026.04.89] - 2026-04-22
+
+### Added
+
+- *(CCP-e7a)* Roll out **debrief template** to all 26 non-exempt agent prompts — every agent prompt now includes the mandatory `### Debrief` block with Key Decisions / Challenges Encountered / Surprising Findings / Follow-up Items headings, completing the Subagent Debrief Return Contract pipeline
+
 ## [2026.04.87] - 2026-04-22
 
 ### Added
