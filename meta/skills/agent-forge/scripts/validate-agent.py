@@ -37,6 +37,10 @@ class AgentValidator:
         (r"##\s+[Vv][Ee][Rr][Ii][Ff][Yy]", "VERIFY"),
         (r"##\s+[Ll][Ee][Aa][Rr][Nn]", "LEARN"),
     ]
+    FENCED_CODE_RE = re.compile(
+        r"```(?P<lang>bash|sh|zsh|python)\s*\n(?P<body>.*?)```",
+        re.IGNORECASE | re.DOTALL,
+    )
 
     def __init__(self, agent_path: Path, strict: bool = False):
         """Initialize validator with agent path (file or directory)."""
@@ -67,6 +71,7 @@ class AgentValidator:
         self._validate_model()
         self._validate_color()
         self._validate_body()
+        self._check_extractable_code()
         self._check_token_count()
         self._check_todos()
 
@@ -371,6 +376,70 @@ class AgentValidator:
                 "Move detailed docs to references/"
             )
 
+    def _check_extractable_code(self):
+        """Warn when executable workflow logic is embedded in the prompt."""
+        script_hint = (
+            "Move deterministic workflow logic to bundled scripts/ and use the "
+            "execution-result contract in core/contracts/execution-result.schema.json "
+            "for multi-field or errorful outputs."
+        )
+
+        for match in self.FENCED_CODE_RE.finditer(self.body):
+            lang = match.group("lang").lower()
+            block = match.group("body")
+            real_lines = [
+                line for line in block.splitlines()
+                if line.strip() and not line.strip().startswith("#")
+            ]
+            line_count = len(real_lines)
+
+            if lang == "python" and line_count > 5:
+                self.warnings.append(
+                    f"Extractable executable code: {line_count}-line Python block embedded in prompt. {script_hint}"
+                )
+            elif lang in {"bash", "sh", "zsh"} and line_count > 10:
+                self.warnings.append(
+                    f"Extractable executable code: {line_count}-line shell block embedded in prompt. {script_hint}"
+                )
+
+            if lang in {"bash", "sh", "zsh"} and self._looks_like_multi_step_pipeline(block):
+                self.warnings.append(
+                    "Inline multi-step shell pipeline detected in prompt. "
+                    f"{script_hint}"
+                )
+
+        inline_patterns = [
+            (r"\b(?:python|python3|uv run python)\s+-c\b", "Inline Python -c invocation"),
+            (r"<<\s*['\"]?(?:PY|PYEOF|PYTHON)", "Inline Python heredoc"),
+        ]
+        for pattern, label in inline_patterns:
+            if re.search(pattern, self.body):
+                self.warnings.append(
+                    f"{label} detected in prompt. {script_hint}"
+                )
+
+    @staticmethod
+    def _looks_like_multi_step_pipeline(block: str) -> bool:
+        """Heuristic for shell blocks that are acting like small programs."""
+        markers = [
+            r"\$\(",
+            r"\|",
+            r"\bjq\b",
+            r"\bgrep\b",
+            r"\bsed\b",
+            r"\bawk\b",
+            r"\bsqlite3\b",
+            r"\bcmux\b",
+            r"\b(?:python|python3|uv run python)\s+-c\b",
+            r"2>&1",
+        ]
+        hits = sum(1 for pattern in markers if re.search(pattern, block))
+        real_lines = [
+            line for line in block.splitlines()
+            if line.strip() and not line.strip().startswith("#")
+        ]
+        return len(real_lines) >= 4 and hits >= 4
+
     def _check_todos(self):
         """Check for TODO markers."""
         if "TODO" in self.body:
@@ -438,6 +507,7 @@ Validation Checks:
   - Color validity
   - System prompt structure
   - Quality gate sections (Pre-flight, Responsibility, VERIFY, LEARN)
+  - Extractable executable code / inline shell-python pipelines
   - Token count estimates
   - TODO markers
 

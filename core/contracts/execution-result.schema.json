@@ -1,0 +1,151 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "execution-result",
+  "description": "Canonical machine-readable result envelope for agent-facing workflow scripts. Emit this when a helper returns multiple fields or when the caller must distinguish ok/warning/error and know how to continue.",
+  "type": "object",
+  "required": ["status", "summary", "data", "errors", "next_steps", "open_items", "meta"],
+  "properties": {
+    "status": {
+      "type": "string",
+      "enum": ["ok", "warning", "error"],
+      "description": "ok=workflow completed successfully, warning=completed with degradation or caveat, error=caller intervention or alternate branch required"
+    },
+    "summary": {
+      "type": "string",
+      "description": "Single human-readable sentence summarizing the result"
+    },
+    "data": {
+      "type": "object",
+      "description": "Primary payload for the caller. Keep it stable and machine-oriented.",
+      "additionalProperties": true
+    },
+    "errors": {
+      "type": "array",
+      "description": "Known problems encountered while producing the result. Empty on clean success.",
+      "items": {
+        "type": "object",
+        "required": ["code", "message"],
+        "properties": {
+          "code": {
+            "type": "string",
+            "description": "Stable machine-readable error code"
+          },
+          "message": {
+            "type": "string",
+            "description": "Human-readable explanation"
+          },
+          "retryable": {
+            "type": "boolean",
+            "description": "Whether retrying the same step may succeed"
+          },
+          "suggested_fix": {
+            "type": "string",
+            "description": "Concrete remediation guidance for the caller or human"
+          },
+          "continue_with": {
+            "type": "string",
+            "description": "How the caller can degrade gracefully or continue without a fix"
+          },
+          "blocked_by": {
+            "type": "array",
+            "items": {"type": "string"},
+            "description": "Optional list of missing dependencies, files, services, or prerequisites"
+          },
+          "details": {
+            "type": "object",
+            "additionalProperties": true,
+            "description": "Optional structured context useful for debugging or branching"
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    "next_steps": {
+      "type": "array",
+      "description": "Actions the caller can take next. Prefer 0-3 concrete items.",
+      "items": {
+        "type": "object",
+        "required": ["id", "summary"],
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "Stable identifier for this next step"
+          },
+          "summary": {
+            "type": "string",
+            "description": "Short action description"
+          },
+          "priority": {
+            "type": "string",
+            "enum": ["now", "soon", "later"],
+            "description": "Suggested urgency for the step"
+          },
+          "automatable": {
+            "type": "boolean",
+            "description": "Whether the caller can perform this action automatically"
+          },
+          "command": {
+            "type": "string",
+            "description": "Optional command or invocation hint"
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    "open_items": {
+      "type": "array",
+      "description": "Remaining work or unresolved questions after this script finished.",
+      "items": {
+        "type": "object",
+        "required": ["id", "summary"],
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "Stable identifier for the item"
+          },
+          "summary": {
+            "type": "string",
+            "description": "What remains open"
+          },
+          "blocking": {
+            "type": "boolean",
+            "description": "Whether this item blocks the caller's main path"
+          },
+          "owner": {
+            "type": "string",
+            "description": "Optional responsible agent, team, or human"
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    "meta": {
+      "type": "object",
+      "required": ["contract_version", "producer"],
+      "properties": {
+        "contract_version": {
+          "type": "string",
+          "description": "Version string for this result contract"
+        },
+        "producer": {
+          "type": "string",
+          "description": "Script or helper name that produced the envelope"
+        },
+        "generated_at": {
+          "type": "string",
+          "description": "Timestamp in ISO-8601 format"
+        },
+        "schema": {
+          "type": "string",
+          "description": "Path or URI to the schema the result conforms to"
+        },
+        "dry_run": {
+          "type": "boolean",
+          "description": "Whether the result was generated in dry-run mode"
+        }
+      },
+      "additionalProperties": true
+    }
+  },
+  "additionalProperties": false
+}

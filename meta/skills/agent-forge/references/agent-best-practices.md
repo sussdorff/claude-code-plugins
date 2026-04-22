@@ -69,6 +69,19 @@ Test after creating: try user phrases that should trigger the agent. If it fails
 
 **Include a `## Tool Usage` section** — specify WHEN/HOW to use each tool to reduce hallucinated tool choice.
 
+## Deterministic Work Belongs in Scripts
+
+Do not embed executable workflows in agent prompts when a bundled helper can do the work predictably.
+
+- Prompts decide; scripts execute deterministic collection, parsing, polling, and transformation.
+- Prefer Python helpers over inline shell glue when the logic spans multiple steps.
+- If a helper returns more than one field or has meaningful failure modes, emit the canonical execution-result envelope.
+- Use bare stdout only for a single atomic value with no branching semantics.
+
+Reference:
+- `meta/skills/agent-forge/references/execution-result-contract.md`
+- `core/contracts/execution-result.schema.json`
+
 ## Context Management
 
 - Custom agents don't inherit project CLAUDE.md — include all needed context in the system prompt

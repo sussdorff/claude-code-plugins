@@ -70,6 +70,13 @@ TODO: Add numbered, actionable steps for the agent to follow:
 2. [Step 2: What to do next]
 3. [Step 3: etc.]
 
+## Script Boundaries
+
+- Keep deterministic collection, parsing, polling, and transformation logic in bundled `scripts/`
+- Use this prompt for judgment, prioritization, and branching only
+- Use the execution-result envelope for helpers that return multiple fields or actionable failures
+- Use bare stdout only for single atomic values
+
 ## Output Format
 
 TODO: Define the expected output structure:
@@ -130,7 +137,8 @@ def create_agent(name: str, output_path: str) -> bool:
         print("   - color: Visual identifier (red, blue, green, yellow, purple, orange, pink, cyan)")
         print("2. Replace all TODO items with actual content")
         print("3. Write clear, numbered instructions")
-        print(f"4. Test by invoking: 'Use the {name} agent to...'")
+        print("4. Extract deterministic workflows to bundled scripts instead of embedding shell/python programs in the prompt")
+        print(f"5. Test by invoking: 'Use the {name} agent to...'")
         print()
         print("Tip: Keep system prompt under 3k tokens for best performance")
         return True

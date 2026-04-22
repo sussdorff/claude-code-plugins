@@ -132,6 +132,8 @@ Full field documentation: `references/agent-frontmatter-reference.md`
 - Define output format explicitly
 - Include decision criteria for judgment calls
 - Include a `## Tool Usage` section with WHEN/HOW per tool to reduce hallucinated tool choice
+- Do not embed deterministic shell/Python workflows in the prompt when bundled `scripts/` can do the work predictably
+- For helper outputs with multiple fields or actionable failures, use the execution-result contract in `references/execution-result-contract.md`
 
 Token efficiency keeps agents composable -- lightweight agents combine better in pipelines.
 
@@ -144,6 +146,7 @@ python3 scripts/validate-agent.py <agent-path>
 ```
 
 Checks: frontmatter structure, required fields, name format, description quality, tool validity, model selection, token count, TODO markers.
+Also warns about extractable executable code or inline shell/Python pipeline logic embedded in the prompt.
 
 ### Step 7: Test
 
@@ -207,6 +210,8 @@ Structure findings as:
   Excess tools expand attack surface and dilute agent focus.
 - Write system prompts over 10k tokens.
   Attention dilution causes the agent to ignore instructions.
+- Encode deterministic workflows as prompt-local shell/Python programs.
+  Extract them into bundled scripts and return machine-readable results instead.
 - Skip the validation step before deploying.
   Malformed frontmatter silently breaks auto-delegation.
 - Omit the `model` field assuming it defaults to opus — it defaults to `inherit`.
@@ -222,6 +227,7 @@ Structure findings as:
 | `agent-vs-skill-vs-command.md` | Decision tree, comparison table, hybrid patterns |
 | `agent-frontmatter-reference.md` | All frontmatter fields, valid values, examples |
 | `agent-best-practices.md` | Token efficiency, model economics, multi-agent patterns |
+| `execution-result-contract.md` | Script-first workflow rule and canonical JSON envelope |
 | `agent-patterns.md` | Complete agent files: single-purpose, pipelines, orchestrators |
 | `troubleshooting.md` | Auto-delegation failures, tool issues, prompt sizing |
 

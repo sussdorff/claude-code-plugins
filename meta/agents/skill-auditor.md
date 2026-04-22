@@ -82,6 +82,38 @@ DESCRIPTION OVERFLOW: {skill-name} description is {N} chars (hard limit: 1024 �
 ```
 Any skill exceeding 1024 chars must be flagged regardless of score — it cannot be loaded by Codex CLI at all.
 
+**Extractable code findings** are reported as ADVISORY or BLOCKING depending on severity. Scan for two patterns:
+
+*Pattern 1 — Literal code blocks:*
+- Fenced ` ```python ``` ` blocks with > 5 lines of real logic (not just imports or a single function call)
+- Fenced ` ```bash ``` ` blocks with > 10 lines of real logic (path discovery, fallback chains, parsing)
+- Inline Python via `python3 -c "..."` or `uv run python -c "..."` with multi-line heredocs
+
+*Pattern 2 — Verbal multi-step pipelines:*
+- Instructions that describe a sequence of ≥ 3 dependent tool calls operating on a shared data value (e.g., "run X, store the output as VAR, parse VAR, pass the parsed result to Y")
+- Fallback chains described in prose: "try A; if it fails, try B; if that fails, set VAR to empty"
+- For-each loops described verbally: "for each item returned by X, run Y"
+
+*Severity:*
+- **ADVISORY**: Single code block ≤ 20 lines, not repeated elsewhere, or verbal pipeline not yet causing observable token waste
+- **BLOCKING**: Code block > 20 lines, OR identical/near-identical logic appears in multiple agent/skill files, OR verbal pipeline covers ≥ 4 dependent steps with branching
+
+*Report format:*
+```
+EXTRACTABLE_CODE [{ADVISORY|BLOCKING}]: {skill-name} — {short description of what should be a script}
+  → Suggested script: {scripts/proposed-name.sh} | Output contract: {bare value | JSON}
+```
+
+*Output contract guidance:* If the extraction produces a single value (a UUID, a path, a count), a bare printed value is sufficient and the calling agent stores it directly. If the extraction produces multiple fields OR has meaningful failure modes that the caller needs to distinguish (success vs. degraded vs. error), the script should output the canonical execution-result envelope from `core/contracts/execution-result.schema.json` (see `meta/skills/agent-forge/references/execution-result-contract.md`). A minimal valid shape is:
+```json
+{"status": "ok|warning|error", "summary": "human-readable summary", "data": {...}, "errors": [], "next_steps": [], "open_items": [], "meta": {...}}
+```
+This lets the calling agent check `status` without parsing free-form text and eliminates the need for multi-step "run this, check if output is empty, run that" verbal pipelines in the skill.
+
+*Impact on scoring:* Extractable code findings reduce the score in two existing dimensions:
+- **Writing Style** (−5 pts per ADVISORY, −10 pts per BLOCKING): Skills should reference scripts, not embed code. Verbal pipelines are not imperative agent instructions.
+- **Token Efficiency** (−3 pts per ADVISORY, −6 pts per BLOCKING): Inline code bloats the skill beyond its informational purpose.
+
 ### 4. Assign Grades
 
 | Grade | Score | Meaning |
@@ -106,6 +138,10 @@ Any skill exceeding 1024 chars must be flagged regardless of score — it cannot
 
 ### Description Hard-Limit Violations (BLOCKING — Codex CLI rejects)
 - {skill-name}: DESCRIPTION OVERFLOW — {N} chars (hard limit: 1024)
+
+### Extractable Code Findings
+- {skill-name}: EXTRACTABLE_CODE [BLOCKING] — {N}-line Python block in phase X duplicates logic present in Y other files → scripts/proposed-name.sh (JSON output)
+- {skill-name}: EXTRACTABLE_CODE [ADVISORY] — verbal 4-step pipeline "run X → parse → call Y → store result" → scripts/proposed-name.sh (bare value output)
 
 ### Fleet Summary
 - Total skills: {n}
@@ -170,6 +206,7 @@ Rewrite ONLY the sections that correspond to the weak dimensions:
 | Writing Style | Convert passive/tutorial phrasing to imperative; remove filler ("you might want to") |
 | Token Efficiency | Move infrequently-needed content to `references/`; trim redundant prose |
 | Progressive Disclosure | Add `references/` file(s) for deep context; update SKILL.md with pointers |
+| Writing Style / Token Efficiency (EXTRACTABLE_CODE) | Extract inline code or verbal pipelines to a script in `scripts/`. Replace the code block or verbal steps with a single `$SCRIPT` call. Choose the output contract based on complexity: (a) **bare value** — single output, no meaningful failure modes (just print it); (b) **JSON** — multiple fields or distinguishable failure modes (`{"status":"ok\|warning\|error","data":{...},"message":"..."}` on one line). Add `$SCRIPT` to the Resources section. |
 
 Do not rewrite sections that scored well.
 
@@ -223,6 +260,7 @@ Changes made:
 - Assume quality standard content — always load from file
 - Rewrite sections that scored well — improve only weak dimensions
 - Fall back to a lower model — if Opus is unavailable, error rather than silently switching
+- Miss verbal pipelines — `EXTRACTABLE_CODE` is not only about fenced code blocks; multi-step prose describing dependent tool-use sequences counts too
 
 ## Resources
 

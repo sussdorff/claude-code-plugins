@@ -20,6 +20,13 @@ Provide numbered, actionable steps that the agent should follow:
 4. [Fourth action - what decisions to make]
 5. [Final action - how to format and deliver results]
 
+## Script Boundaries
+
+- Keep deterministic collection, parsing, polling, and transformation logic in bundled `scripts/`
+- Use this prompt for judgment, prioritization, and branching only
+- If a helper returns multiple fields or actionable failures, require the `execution-result` JSON envelope
+- Use bare stdout only for single atomic values (for example one path, one UUID, or one count)
+
 ## Best Practices
 
 List domain-specific best practices relevant to this agent's work:
@@ -229,4 +236,5 @@ See references/ directory for comprehensive guides:
 - `agent-vs-skill-vs-command.md` - When to use agents vs other components
 - `agent-frontmatter-reference.md` - Complete field documentation
 - `agent-best-practices.md` - 2025 best practices and patterns
+- `execution-result-contract.md` - Canonical JSON envelope for script-first workflows
 - `agent-patterns.md` - Real-world examples and templates
