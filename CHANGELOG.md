@@ -17,6 +17,14 @@
 
 - *(beads-workflow)* Extract inline metrics bash+Python from agent instructions into metrics-start.sh and metrics-rollup.sh; both non-fatal on failure; 8 new tests (78 total)
 
+## [2026.04.81] - 2026-04-22
+
+### Fixed
+
+- *(open-brain-7lz)* wave-dispatch.sh now propagates WAVE_ID into bead_runs.wave_id so Phase 7 token-usage breakdowns can be aggregated by wave
+- *(wave-completion)* metrics sanity check defaults and safety hardened — prevents false-positive failures when bead_runs rows are missing
+- *(bead-orchestrator)* document codex-exec.sh BLOCKING RULE: must run synchronously (never run_in_background), use Bash timeout 360000ms
+
 ## [2026.04.76] - 2026-04-22
 
 ### Features
