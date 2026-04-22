@@ -1,14 +1,30 @@
-## [unreleased]
+## [2026.04.100] - 2026-04-22
 
 ### 🚀 Features
 
-- *(CCP-67x)* Add Codex bead-orchestrator and wave-orchestrator agents with session-close handoff
+- *(CCP-67x)* Codex bead-orchestrator and wave-orchestrator TOML agents + evidence
 
+### 🐛 Bug Fixes
+
+- *(CCP-67x)* Address review findings — version-control TOMLs, Phase 3, WAVE_ID, evidence doc
+
+### ⚙️ Miscellaneous Tasks
+
+- Preserve unreleased changelog entry before merge
+- *(CCP-67x)* Update changelog
+- *(CCP-67x)* Stage bead state updates to issues.jsonl
+- *(CCP-67x)* Sync issues.jsonl after main merge
+- *(CCP-67x)* Re-export issues.jsonl (memory order normalisation)
+- *(CCP-67x)* Final issues.jsonl sync before ship
 ## [2026.04.99] - 2026-04-22
 
 ### 🐛 Bug Fixes
 
 - HANDLERS_DIR path bug + ci-monitor + git-state helpers for session-close
+
+### ⚙️ Miscellaneous Tasks
+
+- Bump version to 2026.04.99 and release changelog
 ## [2026.04.98] - 2026-04-22
 
 ### 🐛 Bug Fixes
@@ -28,7 +44,6 @@
 
 ### 🚀 Features
 
-- *(CCP-67x)* Add Codex bead-orchestrator and wave-orchestrator agents with session-close handoff
 - Session-close serializer + wave-orchestrator single-instance guard
 - Skill-auditor validator, wave-dispatch workspace fix, planning docs
 
