@@ -238,13 +238,24 @@ When invoked:
 
 ## Debrief Requirement
 
-Before returning your final result, include a `## Debrief` section documenting:
-- **Decisions**: Test design choices made and why (framework patterns, mocking strategies, coverage decisions)
-- **Challenges & Resolutions**: What was hard to test, how you solved it
-- **Surprises**: Unexpected behavior, flaky tests, or edge cases found while testing
-- **Follow-up Items**: Tests that should be added, coverage gaps, framework quirks to remember
+Before returning your final result, include a `### Debrief` section documenting key decisions
+(test design choices, framework patterns, mocking strategies), challenges and how you resolved
+them, surprising findings (unexpected behavior, flaky tests, edge cases), and follow-up items
+(coverage gaps, framework quirks to remember).
 
-This helps preserve knowledge before context is lost.
+### Debrief
+
+#### Key Decisions
+- <decisions made>
+
+#### Challenges Encountered
+- <challenges>
+
+#### Surprising Findings
+- <surprises>
+
+#### Follow-up Items
+- <follow-ups>
 
 ## Session Capture
 

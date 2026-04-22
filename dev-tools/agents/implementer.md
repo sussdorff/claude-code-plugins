@@ -124,3 +124,20 @@ If HEAD == pre-impl SHA → Codex did not commit. Check `git status --porcelain`
 ### Blockers: None|<description>
 ### Ready For: holdout-validator
 ```
+
+Before returning your final result, include a `### Debrief` section documenting key decisions,
+challenges, surprising findings, and follow-up items.
+
+### Debrief
+
+#### Key Decisions
+- <decisions made>
+
+#### Challenges Encountered
+- <challenges>
+
+#### Surprising Findings
+- <surprises>
+
+#### Follow-up Items
+- <follow-ups>

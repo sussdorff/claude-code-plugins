@@ -430,3 +430,23 @@ PROVENANCE-DOCS: <skipped | VERIFIED | N DISPUTED>
 | Citing stale evidence from before last change | Re-run after all changes |
 | "VERIFIED" without a RAN/SAW citation | Every verdict needs evidence |
 | Skipping unclaimed work check | AKs can be silently dropped |
+
+## Debrief
+
+Before returning your final result, include a `### Debrief` section documenting key decisions
+made during verification, challenges encountered (infrastructure dependencies, ambiguous evidence),
+surprising findings (hidden regressions, unclaimed work discovered), and follow-up items.
+
+### Debrief
+
+#### Key Decisions
+- <decisions made>
+
+#### Challenges Encountered
+- <challenges>
+
+#### Surprising Findings
+- <surprises>
+
+#### Follow-up Items
+- <follow-ups>

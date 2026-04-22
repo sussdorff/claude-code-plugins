@@ -360,3 +360,24 @@ Append to Summary: `NOTE: Safeguard triggered (iteration <N> >= 3). Proceeding d
 - **Be specific in findings**: Reference AK numbers, line numbers from the diff, and exact criterion text. Vague findings like "needs more tests" are not actionable. Every FIX finding must say what to change.
 - **Do not re-review already-addressed findings**: If spawned on iteration 2+, evaluate the final diff state — not just new commits. The previous iteration's findings may already be fixed.
 - **THREE dots in git diff, ALWAYS**: `git diff abc...HEAD` (three dots) shows changes on the branch since it diverged. `git diff abc..HEAD` (two dots) shows symmetric difference which includes unrelated commits and produces garbage results. If you use two dots, the entire review is worthless. There is never a reason to use two dots in this agent.
+
+## Debrief
+
+Before returning your final result, include a `### Debrief` section documenting key decisions
+made during the review, challenges encountered (tricky diffs, ambiguous criteria), surprising
+findings (unexpected patterns, hidden complexity), and follow-up items (beads to create,
+concerns to track).
+
+### Debrief
+
+#### Key Decisions
+- <decisions made>
+
+#### Challenges Encountered
+- <challenges>
+
+#### Surprising Findings
+- <surprises>
+
+#### Follow-up Items
+- <follow-ups>
