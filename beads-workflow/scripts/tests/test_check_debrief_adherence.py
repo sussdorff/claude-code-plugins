@@ -11,10 +11,13 @@ import tempfile
 import unittest
 from pathlib import Path
 
-# Allow importing the module under test
-sys.path.insert(0, str(Path(__file__).parent.parent))
+# Allow importing the module under test (hyphenated filename requires importlib)
+import importlib.util
 
-import check_debrief_adherence as checker
+_SCRIPT_PATH = Path(__file__).parent.parent / "check-debrief-adherence.py"
+_spec = importlib.util.spec_from_file_location("check_debrief_adherence", _SCRIPT_PATH)
+checker = importlib.util.module_from_spec(_spec)
+_spec.loader.exec_module(checker)
 
 
 # ---------------------------------------------------------------------------
