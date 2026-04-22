@@ -153,8 +153,8 @@ mode via `--resume`):
 2. Check if feature branch is already merged into main
    → Already merged: skip to pipeline watch / bead close (Step 16b)
 
-3. Check if a conventional commit exists (HEAD differs from last pre-session-close SHA)
-   → Commit exists but not merged: skip to second merge (Steps 13-15 in phase-b-ship.sh)
+3. Check if a conventional commit exists since origin/main (`git log --oneline origin/main..HEAD`)
+   → If any commit has a conventional-commit format subject (e.g. `feat(...):`/`fix:`/`chore:`) and the branch has not yet been merged to main: skip to second merge (Steps 13-15 in phase-b-ship.sh)
 
 4. No state found → start from beginning (Step 1 / phase-b-prepare.sh)
 ```
@@ -391,6 +391,8 @@ Parse `CLOSE_JSON` (see `phase-b-close-beads.schema.json`):
 and stamp it into the bead: `bd update <id> --append-notes="Close reason: <reason>"`. Then rerun
 `phase-b-close-beads.sh`.
 
+**If `--non-interactive`:** Auto-compose the close reason from bead title + the Step 6 commit subject (format: `<bead-title>: <commit-subject>`). Stamp via `bd update <id> --append-notes='Close reason: <auto-composed>'` then rerun the handler.
+
 **Store closed beads list** from `.closed[]` — used by Step 17 for What's New synthesis.
 
 Good close reasons:
@@ -519,6 +521,7 @@ Check ALL repos modified during the session (e.g. `~/code/claude/` for skills/st
 | Flag | Effect |
 |------|--------|
 | `--non-interactive` | Opt-in: skip all interactive prompts, apply deterministic defaults (see Non-Interactive Mode section). Activate via flag or `SESSION_CLOSE_NON_INTERACTIVE=1`. |
+| `--resume` | Trigger state detection at startup and auto-resume from checkpoint; advisory in interactive mode, auto-routing in non-interactive mode. |
 | `--dry-run` | Preview all steps, no git changes |
 | `--debrief-only` | Run only Phase A: learnings, debrief, summary, turn-log upload (Steps 10-12c). No git operations. |
 | `--ship-only` | Run only Phase B: commit, changelog, merge, push, close (Steps 1-7, 9, 13-17). No learnings/debrief. |

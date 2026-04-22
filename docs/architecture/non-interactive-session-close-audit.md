@@ -34,6 +34,9 @@ without human input.
 | 4 | Step 6 — Stage files and commit | Confirm staged files before commit | `can-default` | Stage all files from `git_state.staged[]` plus any auto-staged unstaged files; commit without confirmation |
 | 5 | Phase A — Learnings extraction subagent | May surface questions back to user | `can-default` | Run with `--non-interactive` context; subagent returns structured output without prompting |
 | 6 | Step 16b — Close beads: missing close reason (exit 3) | For each `missing_reason[]` bead, compose a close reason | `can-default` | Auto-compose close reason from bead title + commit message; stamp and rerun |
+| 7 | Step 14/15 — Second merge / feature merge: merge conflict | Conflict requires manual resolution | `needs-human` | Return structured BLOCKED response immediately |
+| 8 | Step 16 — Push: screen locked | Push blocked by OS screen lock | `needs-human` | Return structured BLOCKED response immediately |
+| 9 | Step 16a — Pipeline watch: CI pipeline failed | CI ran and failed; human must investigate | `needs-human` | Return structured BLOCKED response immediately |
 
 ---
 
