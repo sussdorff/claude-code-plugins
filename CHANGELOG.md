@@ -1,3 +1,9 @@
+## [unreleased]
+
+### 🚀 Features
+
+- *(CCP-67x)* Add Codex bead-orchestrator and wave-orchestrator agents with session-close handoff
+
 ## [2026.04.99] - 2026-04-22
 
 ### 🐛 Bug Fixes
