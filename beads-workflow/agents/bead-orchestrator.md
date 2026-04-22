@@ -627,6 +627,12 @@ DIFF=$(git diff <pre-impl-sha>...HEAD)
 ```
 
 Run adversarial review via codex-exec.sh:
+
+> **BLOCKING RULE:** Run codex-exec.sh **synchronously** — NEVER use `run_in_background: true`
+> or TaskCreate for this call. The script manages its own 300s internal timeout. Use Bash
+> with `timeout: 360000` (6 minutes in ms) to allow the full Codex run to complete.
+> Pattern `sleep N && cat <output>` is blocked by hooks — it will never work.
+
 ```bash
 RUN_ID=<run_id> BEAD_ID=<bead_id> PHASE_LABEL=codex-adversarial ITERATION=1 \
   beads-workflow/scripts/codex-exec.sh "Review this diff for regressions and bugs:
@@ -675,7 +681,7 @@ Commit: `fix(<bead-id>): address codex adversarial findings`
 At the end, log token usage via insert_agent_call(run_id=..., phase_label='codex-fix', agent_label='fix-opus', model='claude-opus', ...)
 ```
 
-**Step 2: Codex neutral re-check:**
+**Step 2: Codex neutral re-check** (synchronous — same Bash timeout rule as Phase 7):
 ```bash
 RUN_ID=<run_id> BEAD_ID=<bead_id> PHASE_LABEL=codex-fix-check ITERATION=1 \
   beads-workflow/scripts/codex-exec.sh "Verify these fixes resolve the reported regressions:
