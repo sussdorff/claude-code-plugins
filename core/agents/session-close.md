@@ -15,6 +15,10 @@ cache_control: ephemeral
 color: purple
 ---
 
+<!-- Codex port: .codex/agents/session-close.toml (bead CCP-9yd)
+     Drift check: compare developer_instructions in the TOML against this file.
+     Source of truth for workflow: this file. -->
+
 # Session Close Agent
 
 Autonomous orchestrator for session close with a **double-merge strategy** that minimizes

@@ -22,8 +22,12 @@ else:
     import tomli as tomllib
 
 REPO_ROOT = Path(__file__).parent.parent
-PERSONAL_AGENT = Path.home() / ".codex" / "agents" / "session-close.toml"
-PROJECT_AGENT = REPO_ROOT / ".codex" / "agents" / "session-close.toml"
+PERSONAL_AGENT_PATH = Path.home() / ".codex" / "agents" / "session-close.toml"
+REPO_AGENT_PATH = REPO_ROOT / ".codex" / "agents" / "session-close.toml"
+
+# Backwards-compat aliases
+PERSONAL_AGENT = PERSONAL_AGENT_PATH
+PROJECT_AGENT = REPO_AGENT_PATH
 
 
 class TestAgentFileExists:
@@ -59,7 +63,7 @@ class TestAgentRequiredFields:
 
     @pytest.fixture
     def agent_data(self):
-        return tomllib.loads(PERSONAL_AGENT.read_bytes().decode())
+        return tomllib.loads(REPO_AGENT_PATH.read_bytes().decode())
 
     def test_developer_instructions_present(self, agent_data):
         assert "developer_instructions" in agent_data, (
@@ -86,7 +90,7 @@ class TestWorkflowSections:
 
     @pytest.fixture
     def instructions(self):
-        data = tomllib.loads(PERSONAL_AGENT.read_bytes().decode())
+        data = tomllib.loads(REPO_AGENT_PATH.read_bytes().decode())
         return data["developer_instructions"].lower()
 
     def test_double_merge_strategy_present(self, instructions):
@@ -145,7 +149,7 @@ class TestGapDocumentation:
 
     @pytest.fixture
     def instructions(self):
-        data = tomllib.loads(PERSONAL_AGENT.read_bytes().decode())
+        data = tomllib.loads(REPO_AGENT_PATH.read_bytes().decode())
         return data["developer_instructions"]
 
     def test_gap_section_exists(self, instructions):
@@ -169,7 +173,7 @@ class TestDriftTracking:
 
     @pytest.fixture
     def raw_content(self):
-        return PERSONAL_AGENT.read_text()
+        return REPO_AGENT_PATH.read_text()
 
     def test_source_of_truth_comment_present(self, raw_content):
         assert "Source of truth" in raw_content or "source of truth" in raw_content.lower(), (
@@ -187,7 +191,7 @@ class TestPortabilityCompliance:
 
     @pytest.fixture
     def instructions(self):
-        data = tomllib.loads(PERSONAL_AGENT.read_bytes().decode())
+        data = tomllib.loads(REPO_AGENT_PATH.read_bytes().decode())
         return data["developer_instructions"]
 
     def test_no_mcp_tool_names_in_instructions(self, instructions):
