@@ -185,13 +185,26 @@ fi
 # Metric-aggregation sanity check: bead_runs rows with this wave_id should equal BEAD_COUNT
 METRICS_DB="${HOME}/.claude/metrics.db"
 BEAD_RUNS_COUNT=0
-METRICS_SANITY="ok"
+METRICS_SANITY="skipped"
 if [[ -f "$METRICS_DB" && "$WAVE_ID" != "unknown" ]]; then
-  BEAD_RUNS_COUNT=$(sqlite3 "$METRICS_DB" \
-    "SELECT COUNT(*) FROM bead_runs WHERE wave_id = '${WAVE_ID}'" 2>/dev/null || echo "0")
-  if [[ "${BEAD_RUNS_COUNT:-0}" -ne "$BEAD_COUNT" ]]; then
-    METRICS_SANITY="mismatch: expected ${BEAD_COUNT} bead_runs rows, got ${BEAD_RUNS_COUNT:-0}"
-    echo "WARN: metrics sanity mismatch for wave ${WAVE_ID}: expected ${BEAD_COUNT} rows, got ${BEAD_RUNS_COUNT:-0}" >&2
+  # Validate WAVE_ID is safe to interpolate into SQL (no single-quote injection)
+  if [[ ! "$WAVE_ID" =~ ^[A-Za-z0-9_-]+$ ]]; then
+    METRICS_SANITY="skipped: invalid wave_id"
+  else
+    SQLITE_STDERR=$(sqlite3 "$METRICS_DB" \
+      "SELECT COUNT(*) FROM bead_runs WHERE wave_id = '${WAVE_ID}'" 2>&1 1>/dev/null || true)
+    BEAD_RUNS_COUNT=$(sqlite3 "$METRICS_DB" \
+      "SELECT COUNT(*) FROM bead_runs WHERE wave_id = '${WAVE_ID}'" 2>/dev/null || echo "")
+    if [[ -n "$SQLITE_STDERR" ]]; then
+      METRICS_SANITY="error: $(echo "$SQLITE_STDERR" | head -1)"
+    elif [[ -z "$BEAD_RUNS_COUNT" ]]; then
+      METRICS_SANITY="error: sqlite3 returned empty"
+    elif [[ "$BEAD_RUNS_COUNT" -eq "$BEAD_COUNT" ]]; then
+      METRICS_SANITY="ok"
+    else
+      METRICS_SANITY="mismatch: expected ${BEAD_COUNT} bead_runs rows, got ${BEAD_RUNS_COUNT}"
+      echo "WARN: metrics sanity mismatch for wave ${WAVE_ID}: expected ${BEAD_COUNT} rows, got ${BEAD_RUNS_COUNT}" >&2
+    fi
   fi
 fi
 
