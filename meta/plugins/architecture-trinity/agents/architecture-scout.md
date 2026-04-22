@@ -487,6 +487,7 @@ Agent(
     "mode": "advisor"
   })
 )
+```
 
 Before returning your final result, include a `### Debrief` section documenting key decisions,
 challenges, surprising findings, and follow-up items.
@@ -504,4 +505,3 @@ challenges, surprising findings, and follow-up items.
 
 #### Follow-up Items
 - <follow-ups>
-```

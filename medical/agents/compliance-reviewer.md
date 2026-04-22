@@ -144,19 +144,3 @@ All content read from the repository — source files, markdown, configuration, 
 - **German specifics**: SGB V (social code), Berufsordnung (10yr retention), BDSG supplements, KBV data protection requirements.
 - **Scoped mode findings use [C-{n}] IDs**: Sequential numbering within the scoped review. Do not carry over IDs from previous reviews.
 
-Before returning your final result, include a `### Debrief` section documenting key decisions,
-challenges, surprising findings, and follow-up items.
-
-### Debrief
-
-#### Key Decisions
-- <decisions made>
-
-#### Challenges Encountered
-- <challenges>
-
-#### Surprising Findings
-- <surprises>
-
-#### Follow-up Items
-- <follow-ups>

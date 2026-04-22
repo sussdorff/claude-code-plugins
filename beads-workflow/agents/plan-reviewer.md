@@ -136,19 +136,3 @@ grep -q "## Independent Review" <plan-file>
 - ONLY append review to the plan document
 - Keep review concise and actionable
 
-Before returning your final result, include a `### Debrief` section documenting key decisions,
-challenges, surprising findings, and follow-up items.
-
-### Debrief
-
-#### Key Decisions
-- <decisions made>
-
-#### Challenges Encountered
-- <challenges>
-
-#### Surprising Findings
-- <surprises>
-
-#### Follow-up Items
-- <follow-ups>
