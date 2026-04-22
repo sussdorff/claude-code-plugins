@@ -116,6 +116,24 @@ Phase <N> summary: <decision made / what was found / what was done> — <any blo
 Accumulated summaries are stored as text in your context and passed verbatim in the
 `### Phase Summaries` section of subsequent subagent prompts.
 
+### Debrief Aggregation
+
+After receiving any subagent result, pipe the output through `parse_debrief.py` and accumulate
+the parsed data in an in-context `DEBRIEF_AGGREGATE` list (list of parsed debrief JSON dicts).
+
+```bash
+echo "<subagent output>" | python3 beads-workflow/lib/orchestrator/parse_debrief.py
+```
+
+- Exit code 0 → append the parsed JSON object to `DEBRIEF_AGGREGATE`
+- Exit code 1 (no `### Debrief` heading found) → skip silently; this is **expected** for
+  Explorer, Researcher, changelog-updater, and other utility subagents that do not emit debriefs.
+  Do NOT treat exit code 1 as an error.
+
+`DEBRIEF_AGGREGATE` is separate from `phase_summaries`. The existing 3-line `phase_summary`
+format stays unchanged — it is for visual status display. `DEBRIEF_AGGREGATE` stores the full
+structured debrief data for later aggregation and handoff.
+
 ---
 
 ### Phase 0: Claim (sizing · effort · quick-fix reroute · run_id · bd claim)
@@ -951,6 +969,33 @@ fi
 bd update <id> --append-notes="Close reason: <1-line summary with key metrics>"
 bd dolt commit
 ```
+
+---
+
+**Write debrief handoff file before session-close:**
+
+Merge all accumulated debriefs and write the handoff file so that `session-close` can consume
+the aggregated data in Step 11. This is the SOLE handoff mechanism — return-payload is
+structurally impossible because session-close runs as a downstream subagent.
+
+```bash
+python3 -c "
+import json, os, sys
+# DEBRIEF_AGGREGATE is the list of dicts you accumulated
+debriefs = <DEBRIEF_AGGREGATE>  # the orchestrator substitutes actual data
+merged = {'key_decisions': [], 'challenges_encountered': [], 'surprising_findings': [], 'follow_up_items': []}
+for d in debriefs:
+    for k in merged:
+        merged[k].extend(d.get(k, []))
+handoff = {'bead_id': '<BEAD_ID>', 'aggregated_debrief': merged}
+path = os.path.join(os.environ.get('REPO_ROOT', '.'), '.worktree-handoff.json')
+with open(path, 'w') as f: json.dump(handoff, f, ensure_ascii=False, indent=2)
+print(f'Handoff written to {path}')
+"
+```
+
+If `DEBRIEF_AGGREGATE` is empty (no subagents produced debriefs), write the file anyway with
+empty lists — `session-close` will fall back to synthesizing from session context.
 
 ---
 

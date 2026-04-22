@@ -281,7 +281,22 @@ Agent(subagent_type="general-purpose", prompt="Extract learnings from the curren
 
 Skip if `--skip-debrief`.
 
-Collect subagent debriefs from session context. Synthesize into structured debrief:
+**First, check for an orchestrator handoff file:**
+
+```bash
+HANDOFF="$REPO_ROOT/.worktree-handoff.json"
+if [[ -f "$HANDOFF" ]]; then
+  python3 -c "import json,sys; d=json.load(open(sys.argv[1])); print(json.dumps(d['aggregated_debrief'], ensure_ascii=False))" "$HANDOFF"
+fi
+```
+
+- If found: use `aggregated_debrief` from the handoff file as the seed data for the debrief.
+  Merge it with any additional `### Debrief` blocks found in the immediate session context
+  (e.g. a quick-fix agent's own debrief that ran within this session-close invocation).
+- If not found: synthesize from session context as before (graceful fallback — collect any
+  `### Debrief` blocks present in the session).
+
+Synthesize into structured debrief:
 - Key Decisions
 - Challenges Encountered
 - Surprising Findings
@@ -293,7 +308,7 @@ Save via `mcp__open-brain__save_memory`:
 - project: repo name
 - session_ref: bead-id or `session-YYYY-MM-DD`
 
-If no debrief sections found, skip gracefully.
+If no debrief sections found and no handoff file present, skip gracefully.
 
 ### Step 12: Session Summary
 
