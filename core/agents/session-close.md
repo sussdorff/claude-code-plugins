@@ -519,6 +519,7 @@ print(json.dumps({
   'merge_from_main_second': ship.get('second_merge', {}).get('status', 'skipped'),
   'worktree_merged':        ship.get('merge_feature', {}).get('status') == 'ok',
   'push_status':            ship.get('push', {}).get('status', 'skipped'),
+  'push_detail':            ship.get('push', {}).get('detail', ''),
   'pipeline_status':        ship.get('pipeline', {}).get('status', 'skipped_dry_run'),
   'pipeline_run_url':       ship.get('pipeline', {}).get('run_url', '')
 }))

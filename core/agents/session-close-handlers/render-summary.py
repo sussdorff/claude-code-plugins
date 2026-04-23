@@ -23,6 +23,7 @@ State schema (all fields optional — missing fields render as "unknown"):
   merge_from_main_second  (str)  - Result of second merge: success, skipped, conflict, unknown
   worktree_merged         (bool) - Whether feature branch was merged into main
   push_status             (str)  - success, skipped, failed, or unknown
+  push_detail             (str)  - Error message from failed push, empty on success
   pipeline_status         (str)  - passed, failed, skipped_no_gh, skipped_not_authed,
                                    skipped_no_workflow, skipped_flag, skipped_dry_run, unknown
   pipeline_run_url        (str)  - URL to the CI run (only on passed/failed)
@@ -60,6 +61,7 @@ def render(state: dict) -> str:
     merge2 = _str(state.get("merge_from_main_second"), "unknown")
     worktree_merged = _yn(state.get("worktree_merged"))
     push_status = _str(state.get("push_status"), "unknown")
+    push_detail = _str(state.get("push_detail"), "")
     pipeline_status = _str(state.get("pipeline_status"), "unknown")
     pipeline_run_url = _str(state.get("pipeline_run_url"), "")
 
@@ -75,6 +77,15 @@ def render(state: dict) -> str:
         turn_log_display = "skipped (no file)"
     elif turn_log == "skipped_dry_run":
         turn_log_display = "skipped (dry-run)"
+
+    # Format push status for readability
+    push_display = push_status
+    if push_status == "failed" and push_detail:
+        # Truncate detail to avoid overwhelming the summary
+        detail_short = push_detail[:120] + "..." if len(push_detail) > 120 else push_detail
+        push_display = f"FAILED — {detail_short}\n  → retry: git push origin main"
+    elif push_status == "failed":
+        push_display = "FAILED — (no detail captured)\n  → retry: git push origin main"
 
     # Format pipeline status for readability
     pipeline_display = pipeline_status
@@ -109,7 +120,7 @@ def render(state: dict) -> str:
         f"- First merge (main):   {merge1}",
         f"- Second merge (main):  {merge2}",
         f"- Worktree merged:      {worktree_merged}",
-        f"- Push:                 {push_status}",
+        f"- Push:                 {push_display}",
         f"- Pipeline:             {pipeline_display}",
     ]
     return "\n".join(lines)
