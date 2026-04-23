@@ -30,46 +30,14 @@ All service credentials live in **1Password vault "API Keys"**. Three credential
 The 1Password **Service Account** (read-only on "API Keys" vault) is used for automated/non-interactive access. The token lives in the active harness settings under `env.OP_SERVICE_ACCOUNT_TOKEN`.
 
 - **Claude Code sessions**: `OP_SERVICE_ACCOUNT_TOKEN` is auto-injected from settings.json. `op read` works without unlock.
-- **Normal shell sessions**: Token is NOT in the environment. Use this pattern in `.zshrc`:
-  ```bash
-  # Extract SA token from Claude settings for non-interactive op read
-  if [[ -z "$OP_SERVICE_ACCOUNT_TOKEN" ]]; then
-    _op_sa_token="$(python3 -c 'import json; print(json.load(open("'$HOME'/.claude/settings.json"))["env"]["OP_SERVICE_ACCOUNT_TOKEN"])' 2>/dev/null)"
-    [[ -n "$_op_sa_token" ]] && export MY_SECRET="$(OP_SERVICE_ACCOUNT_TOKEN=$_op_sa_token op read 'op://API Keys/Item/field' 2>/dev/null)"
-    unset _op_sa_token
-  else
-    export MY_SECRET="$(op read 'op://API Keys/Item/field' 2>/dev/null)"
-  fi
-  ```
+- **Normal shell sessions**: Token is NOT in the environment. See [`scripts/zshrc-op-snippet.sh`](scripts/zshrc-op-snippet.sh) for the `.zshrc` pattern that extracts the token from Claude settings for non-interactive `op read`.
 - **Service Account limitations**: Read-only. Cannot create or modify items. For writes, generate a script (see "Creating New Credentials" below).
 
 ## Reading Credentials
 
-```bash
-# Read a single field
-op read "op://API Keys/<ServiceName>/<FieldName>"
+See [`scripts/read-credentials.sh`](scripts/read-credentials.sh) for shell examples (single field read and common service examples).
 
-# Examples
-op read "op://API Keys/Prowlarr/API Key"
-op read "op://API Keys/Komga/username"
-op read "op://API Keys/Komga/password"
-op read "op://API Keys/Audiobookshelf/API Key"
-op read "op://API Keys/Dolt Root/password"
-```
-
-In Python code, use subprocess to call `op read`:
-```python
-import subprocess
-def read_op_credential(service: str, field: str) -> str | None:
-    try:
-        result = subprocess.run(
-            ["op", "read", f"op://API Keys/{service}/{field}"],
-            capture_output=True, text=True, check=True,
-        )
-        return result.stdout.strip() or None
-    except (subprocess.CalledProcessError, FileNotFoundError):
-        return None
-```
+In Python code, use subprocess to call `op read` — see [`scripts/read-credential.py`](scripts/read-credential.py) for the `read_op_credential(service, field)` helper function.
 
 ## Listing Credentials
 
@@ -83,45 +51,15 @@ op item list --vault "API Keys"
 
 ### For API Key services:
 
-```bash
-#!/bin/bash
-op item create \
-  --vault "API Keys" \
-  --category "API Credential" \
-  --title "<ServiceName>" \
-  --url "<service-url>" \
-  "API Key[password]=<the-api-key>"
-```
+See [`scripts/op-create-apikey.sh`](scripts/op-create-apikey.sh) for the template (vault "API Keys", category "API Credential", API Key field).
 
 ### For Basic Auth services:
 
-```bash
-#!/bin/bash
-op item create \
-  --vault "API Keys" \
-  --category "Login" \
-  --title "<ServiceName>" \
-  --url "<service-url>" \
-  --generate-password='20,letters,digits' \
-  "username=<username>"
-```
+See [`scripts/op-create-basicauth.sh`](scripts/op-create-basicauth.sh) for the template (category "Login", --generate-password, username field).
 
 ### For Database services:
 
-```bash
-#!/bin/bash
-op item create \
-  --vault "API Keys" \
-  --category "Database" \
-  --title "<ServiceName>" \
-  --tags "<tag1>,<tag2>" \
-  "username=<user>" \
-  "password=<password>" \
-  "hostname=<host>" \
-  "port=<port>" \
-  "database=<dbname>" \
-  "notesPlain=<description>"
-```
+See [`scripts/op-create-database.sh`](scripts/op-create-database.sh) for the template (category "Database", username/password/hostname/port/database/notesPlain fields).
 
 ### Workflow
 
