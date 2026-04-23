@@ -36,6 +36,16 @@ cp -rf source dest          # NOT: cp -r source dest
 - `apt-get` - use `-y` flag
 - `brew` - use `HOMEBREW_NO_AUTO_UPDATE=1` env var
 
+## Harness Authoring Rules
+
+Before writing or editing any skill body, agent `.md`, or helper script, follow these two rules:
+
+1. **Script-First** — executable workflow logic (fenced shell blocks >5 real lines, Python blocks >3 real lines, `python -c` glue, "run X, parse it, feed to Y" prose) does **not** belong in skill/agent bodies. Extract it to `scripts/` (or `beads-workflow/lib/orchestrator/` for orchestrator logic). Reference: `meta/skills/skill-auditor/references/skill-script-first.md`. Enforcer: `python3 meta/skills/skill-auditor/scripts/validate-skill.py <skill-dir>`.
+
+2. **Execution-Result Envelope** — helpers returning multiple fields or distinguishing ok/warning/error emit `core/contracts/execution-result.schema.json`. Single atomic values may print bare. Reference: `meta/skills/agent-forge/references/execution-result-contract.md`. Reference implementation: `beads-workflow/scripts/wave-poll.py`.
+
+Canonical Python homes: `beads-workflow/lib/orchestrator/` (orchestrator modules), `core/contracts/` (shared JSON schemas). Each has a `README.md`.
+
 ## Architecture Trinity Vocabulary
 
 When discussing or implementing architectural tooling, use these terms precisely:
