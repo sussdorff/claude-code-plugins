@@ -11,7 +11,7 @@ model: haiku
 
 # Standards
 
-Unified skill for managing coding standards. Merged global (`~/.claude/standards/`) und projekt-spezifische (`.claude/standards/`) Standards mit Partial-Merge Semantik.
+Unified skill for managing coding standards. Merged global and project-specific standards with Partial-Merge Semantik.
 
 ## Mode Detection
 
@@ -27,13 +27,13 @@ Parse the first argument to determine mode:
 
 Examples:
 ```
-/standards                          → inject (auto-suggest)
-/standards python/style             → inject (explicit)
-/standards --mode=paths python/*    → inject (explicit with options)
-/standards list                     → list
-/standards create python/errors     → create
-/standards sync --all               → sync
-/standards review python/style      → review
+standards                          → inject (auto-suggest)
+standards python/style             → inject (explicit)
+standards --mode=paths python/*    → inject (explicit with options)
+standards list                     → list
+standards create python/errors     → create
+standards sync --all               → sync
+standards review python/style      → review
 ```
 
 ---
@@ -45,19 +45,19 @@ Lade relevante Standards in den aktuellen Kontext.
 ### Usage
 
 ```
-/standards                                    # Auto-Suggest
-/standards python/dataprovider-test-patterns  # Explicit
-/standards python/* compliance/*              # Glob
-/standards --context="migration test"         # Explicit context
-/standards --files="src/**/*.py"              # File context
-/standards --mode=paths python/style          # Output mode
+standards                                    # Auto-Suggest
+standards python/dataprovider-test-patterns  # Explicit
+standards python/* compliance/*              # Glob
+standards --context="migration test"         # Explicit context
+standards --files="src/**/*.py"              # File context
+standards --mode=paths python/style          # Output mode
 ```
 
 ### Schritt 1: Index laden und mergen
 
 Lade beide index.yml Dateien:
-- Global: `~/.claude/standards/index.yml`
-- Projekt: `.claude/standards/index.yml` (falls vorhanden)
+- Global: `<global-standards-dir>/index.yml`
+- Projekt: `<project-standards-dir>/index.yml` (falls vorhanden)
 
 **Partial-Merge Regeln:**
 
@@ -113,18 +113,18 @@ Fuer jeden Standard validiere:
 - Datei muss existieren
 
 Base-Path wird aus `_source` bestimmt:
-- `global` → `~/.claude/standards/`
-- `project` / `project-override` → `.claude/standards/`
+- `global` → `<global-standards-dir>/`
+- `project` / `project-override` → `<project-standards-dir>/`
 
 ### Schritt 5: Szenario erkennen (fuer Output-Modus)
 
 Falls kein `--mode` angegeben:
 1. Plan Mode aktiv → `refs`
-2. Skill-Erstellung (`.claude/skills/` im Kontext) → `refs`
-3. Subagent-Prompt (Task-Tool Aufruf) → `paths`
+2. Skill-Erstellung (`<project-skills-dir>/` im Kontext) → `refs`
+3. Delegierter Helfer-Prompt → `paths`
 4. Sonst → `full`
 
-Falls unklar, frage mit AskUserQuestion:
+Falls unklar, frage den User:
 ```
 Wie soll ich die Standards formatieren?
 
@@ -171,8 +171,8 @@ Wie soll ich die Standards formatieren?
 ```markdown
 Fuege diese Referenzen ein:
 
-@.claude/standards/python/dataprovider-test-patterns.md
-@~/.claude/standards/python/dependency-injection.md
+@<project-standards-dir>/python/dataprovider-test-patterns.md
+@<global-standards-dir>/python/dependency-injection.md
 
 Diese Standards decken ab:
 - MockSystemDataProvider mit typisierten Daten fuer Tests
@@ -182,8 +182,8 @@ Diese Standards decken ab:
 #### Modus: paths (Subagent)
 ```markdown
 ## Standards (lies diese zuerst)
-- .claude/standards/python/dataprovider-test-patterns.md
-- .claude/standards/compliance/check-structure.md
+- <project-standards-dir>/python/dataprovider-test-patterns.md
+- <project-standards-dir>/compliance/check-structure.md
 ```
 
 ### Glob-Pattern Syntax
@@ -240,18 +240,18 @@ Scaffold einen neuen Standard.
 ### Usage
 
 ```
-/standards create python/error-handling
-/standards create --project frontend/api-patterns
+standards create python/error-handling
+standards create --project frontend/api-patterns
 ```
 
-Default: global (`~/.claude/standards/`). Mit `--project`: projekt-lokal (`.claude/standards/`).
+Default: global (`<global-standards-dir>/`). Mit `--project`: projekt-lokal (`<project-standards-dir>/`).
 
 ### Prozess
 
 1. **Parse Key:** `domain/name` extrahieren
 2. **Zielverzeichnis bestimmen:**
-   - Global: `~/.claude/standards/<domain>/<name>.md`
-   - Projekt: `.claude/standards/<domain>/<name>.md`
+   - Global: `<global-standards-dir>/<domain>/<name>.md`
+   - Projekt: `<project-standards-dir>/<domain>/<name>.md`
 3. **Pruefen:** Existiert der Key bereits in index.yml? Falls ja → Warnung und Abbruch
 4. **Datei erstellen:**
 
@@ -289,13 +289,13 @@ TODO
 6. **Meldung:**
 ```
 Standard erstellt:
-  Datei: ~/.claude/standards/<domain>/<name>.md
-  Index: ~/.claude/standards/index.yml (Eintrag hinzugefuegt)
+  Datei: <global-standards-dir>/<domain>/<name>.md
+  Index: <global-standards-dir>/index.yml (Eintrag hinzugefuegt)
 
 Naechste Schritte:
 1. Inhalt der .md Datei bearbeiten
 2. Triggers in index.yml anpassen
-3. Testen: /standards python/error-handling
+3. Testen: standards python/error-handling
 ```
 
 ---
@@ -307,10 +307,10 @@ Kopiere globale Standards ins Projekt fuer Team-Sharing.
 ### Usage
 
 ```
-/standards sync                           # Interaktiv
-/standards sync python/style git/*        # Bestimmte Standards
-/standards sync --all                     # Alle relevanten
-/standards sync --dry-run                 # Nur zeigen
+standards sync                           # Interaktiv
+standards sync python/style git/*        # Bestimmte Standards
+standards sync --all                     # Alle relevanten
+standards sync --dry-run                 # Nur zeigen
 ```
 
 ### Prozess
@@ -335,8 +335,8 @@ Kopiere globale Standards ins Projekt fuer Team-Sharing.
 
 5. **User-Entscheidung:** Bei expliziten Args oder `--all` direkt kopieren, sonst fragen
 6. **Kopieren:** Fuer jeden ausgewaehlten Standard:
-   - Erstelle Verzeichnis: `mkdir -p .claude/standards/<domain>/`
-   - Kopiere Datei: `cp ~/.claude/standards/<path> .claude/standards/<path>`
+   - Erstelle Verzeichnis: `mkdir -p <project-standards-dir>/<domain>/`
+   - Kopiere Datei: `cp <global-standards-dir>/<path> <project-standards-dir>/<path>`
    - Update projekt index.yml: Eintrag hinzufuegen (oder `path: inherit` wenn gewuenscht)
 7. **Zusammenfassung:**
 
@@ -346,7 +346,7 @@ Kopiere globale Standards ins Projekt fuer Team-Sharing.
 Kopiert: 3 Standards (python/style, python/python314-patterns, git/conventional-commits)
 
 Naechste Schritte:
-1. git add .claude/
+1. git add <project-standards-dir>/
 2. git commit -m "feat: add shared standards for team"
 ```
 
@@ -365,9 +365,9 @@ Pruefe Codebase-Compliance gegen geladene Standards.
 ### Usage
 
 ```
-/standards review                         # Alle matched Standards
-/standards review python/style            # Bestimmter Standard
-/standards review --fix                   # Mit Fix-Vorschlaegen
+standards review                         # Alle matched Standards
+standards review python/style            # Bestimmter Standard
+standards review --fix                   # Mit Fix-Vorschlaegen
 ```
 
 ### Prozess
@@ -424,7 +424,7 @@ Alle 5 letzten Commits folgen dem Format.
 
 | Fehler | Meldung |
 |--------|---------|
-| Keine index.yml | "Keine Standards konfiguriert. Erstelle ~/.claude/standards/index.yml" |
+| Keine index.yml | "Keine Standards konfiguriert. Erstelle <global-standards-dir>/index.yml" |
 | YAML invalid | "Parse-Fehler in {file}, Zeile {n}: {detail}" |
 | Path traversal | "Ungueltiger Pfad (../ nicht erlaubt): {path}" |
 | Absolute path | "Absolute Pfade nicht erlaubt: {path}" |

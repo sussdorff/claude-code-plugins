@@ -28,8 +28,7 @@ def test_portable_skill_scans_as_works_as_is() -> None:
     assert results[0]["status"] == "works-as-is"
 
 
-def test_claude_specific_skill_scans_as_needs_fix() -> None:
+def test_remediated_beads_skill_scans_as_works_as_is() -> None:
     results = scan_subset("beads")
-    assert results[0]["status"] == "needs-fix"
-    findings = results[0]["findings"]
-    assert findings, "needs-fix result must include findings"
+    assert results[0]["status"] == "works-as-is"
+    assert not results[0]["findings"]

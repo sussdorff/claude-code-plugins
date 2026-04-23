@@ -27,7 +27,7 @@ All service credentials live in **1Password vault "API Keys"**. Three credential
 
 ## Service Account vs Personal Account
 
-The 1Password **Service Account** (read-only on "API Keys" vault) is used for automated/non-interactive access. The token lives in `~/.claude/settings.json` under `env.OP_SERVICE_ACCOUNT_TOKEN`.
+The 1Password **Service Account** (read-only on "API Keys" vault) is used for automated/non-interactive access. The token lives in the active harness settings under `env.OP_SERVICE_ACCOUNT_TOKEN`.
 
 - **Claude Code sessions**: `OP_SERVICE_ACCOUNT_TOKEN` is auto-injected from settings.json. `op read` works without unlock.
 - **Normal shell sessions**: Token is NOT in the environment. Use this pattern in `.zshrc`:

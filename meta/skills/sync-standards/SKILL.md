@@ -30,22 +30,22 @@ Synchronisiere globale Standards und Commands ins aktuelle Projekt fuer Team-Sha
 
 Scanne beide Quellen:
 
-**Global (~/.claude/):**
+**Global (<global-config-dir>/):**
 ```bash
 # Standards
-yq -r '.standards | keys | .[]' ~/.claude/standards/index.yml 2>/dev/null || echo "No global standards"
+yq -r '.standards | keys | .[]' <global-standards-dir>/index.yml 2>/dev/null || echo "No global standards"
 
 # Commands
-ls ~/.claude/commands/*.md 2>/dev/null | xargs -n1 basename | sed 's/.md$//'
+ls <global-commands-dir>/*.md 2>/dev/null | xargs -n1 basename | sed 's/.md$//'
 ```
 
-**Projekt (.claude/):**
+**Projekt (<project-config-dir>/):**
 ```bash
 # Standards
-yq -r '.standards | keys | .[]' .claude/standards/index.yml 2>/dev/null || echo "No project standards"
+yq -r '.standards | keys | .[]' <project-standards-dir>/index.yml 2>/dev/null || echo "No project standards"
 
 # Commands
-ls .claude/commands/*.md 2>/dev/null | xargs -n1 basename | sed 's/.md$//'
+ls <project-commands-dir>/*.md 2>/dev/null | xargs -n1 basename | sed 's/.md$//'
 ```
 
 ### Schritt 2: Projekt-Kontext analysieren
@@ -101,7 +101,7 @@ Zeige dem User eine Uebersicht:
 
 ### Schritt 5: User-Entscheidung
 
-Frage mit AskUserQuestion:
+Frage den User:
 
 ```
 Welche Items sollen ins Projekt kopiert werden?
@@ -119,7 +119,7 @@ Fuer jeden ausgewaehlten Standard:
 
 1. **Datei kopieren:**
    ```bash
-   cp ~/.claude/standards/python/style.md .claude/standards/python/style.md
+   cp <global-standards-dir>/python/style.md <project-standards-dir>/python/style.md
    ```
 
 2. **index.yml updaten:**
@@ -131,7 +131,7 @@ Fuer jeden ausgewaehlten Command:
 
 1. **Datei kopieren:**
    ```bash
-   cp ~/.claude/commands/inject-standards.md .claude/commands/inject-standards.md
+   cp <global-commands-dir>/inject-standards.md <project-commands-dir>/inject-standards.md
    ```
 
 ### Schritt 7: CLAUDE.md Hinweis (optional)
@@ -141,7 +141,7 @@ Falls Commands kopiert wurden, schlage Ergaenzung fuer CLAUDE.md vor:
 ```markdown
 ## Projekt-Commands
 
-- `/inject-standards` - Lade relevante Coding-Standards in den Kontext
+- `inject-standards` - Lade relevante Coding-Standards in den Kontext
 ```
 
 ### Schritt 8: Zusammenfassung
@@ -154,7 +154,7 @@ Kopiert:
 - 1 Command (inject-standards)
 
 Naechste Schritte:
-1. `git add .claude/`
+1. `git add <project-config-dir>/`
 2. `git commit -m "feat: add shared standards and commands for team"`
 3. `git push`
 ```
@@ -162,26 +162,26 @@ Naechste Schritte:
 ## Optionen
 
 ```
-/sync-standards                    # Interaktiver Modus
-/sync-standards --dry-run          # Nur zeigen, nichts kopieren
-/sync-standards --all              # Alle relevanten ohne Nachfrage
-/sync-standards --standards-only   # Nur Standards, keine Commands
-/sync-standards --commands-only    # Nur Commands, keine Standards
+sync-standards                    # Interaktiver Modus
+sync-standards --dry-run          # Nur zeigen, nichts kopieren
+sync-standards --all              # Alle relevanten ohne Nachfrage
+sync-standards --standards-only   # Nur Standards, keine Commands
+sync-standards --commands-only    # Nur Commands, keine Standards
 ```
 
 ## Fehlerbehandlung
 
 | Fehler | Meldung |
 |--------|---------|
-| Kein .claude/ im Projekt | "Projekt hat kein .claude/ Verzeichnis. Erstelle mit: mkdir -p .claude/{standards,commands}" |
-| Kein global index.yml | "Keine globalen Standards konfiguriert unter ~/.claude/standards/" |
+| Kein Projekt-Config-Ordner | "Projekt hat kein Config-Verzeichnis. Erstelle <project-config-dir> mit standards/ und commands/" |
+| Kein global index.yml | "Keine globalen Standards konfiguriert unter <global-standards-dir>/" |
 | Datei existiert bereits | "Standard python/style existiert bereits im Projekt. Ueberschreiben? [y/N]" |
 | yq nicht installiert | "yq wird benoetigt: brew install yq" |
 
 ## Beispiel-Session
 
 ```
-User: /sync-standards
+User: sync-standards
 
 Claude: Analysiere Projekt...
 
@@ -222,7 +222,7 @@ Claude: Kopiere Standards und Commands...
 ✓ index.yml aktualisiert
 
 Fertig! Committe die Aenderungen:
-git add .claude/ && git commit -m "feat: add shared standards for team"
+git add <project-standards-dir>/ && git commit -m "feat: add shared standards for team"
 ```
 
 ## Do NOT
@@ -234,6 +234,6 @@ git add .claude/ && git commit -m "feat: add shared standards for team"
 
 ## Hinweise
 
-- Kopierte Standards sind **Snapshots** - Aenderungen am Global werden nicht automatisch synchronisiert. WHY: there is no automatic sync mechanism — global changes require re-running `/sync-standards`.
-- Fuer regelmaessigen Sync: `/sync-standards` erneut ausfuehren
+- Kopierte Standards sind **Snapshots** - Aenderungen am Global werden nicht automatisch synchronisiert. WHY: there is no automatic sync mechanism - global changes require re-running `sync-standards`.
+- Fuer regelmaessigen Sync: `sync-standards` erneut ausfuehren
 - Projekt-spezifische Standards haben Vorrang vor kopierten globalen. WHY: project standards are loaded after global ones and override matching rules.
