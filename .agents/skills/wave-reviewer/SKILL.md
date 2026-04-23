@@ -7,7 +7,7 @@ description: >-
   pre-wave review, bead tree review.
 ---
 
-# /wave-reviewer
+# Wave Reviewer
 
 ## Overview
 
@@ -18,7 +18,7 @@ cleanup wave, or deletion wave.
 
 Contrast with single-bead review:
 - Single-bead review asks "is this bead locally reasonable?"
-- `/wave-reviewer` asks "does this bead set work as one machine?"
+- `wave-reviewer` asks "does this bead set work as one machine?"
 
 ## When to Use
 
@@ -30,9 +30,9 @@ Contrast with single-bead review:
 Accepted inputs:
 
 ```text
-/wave-reviewer <epic-id>
-/wave-reviewer <bead-id-1> <bead-id-2> <bead-id-3>
-/wave-reviewer --ready <epic-id>
+wave-reviewer <epic-id>
+wave-reviewer <bead-id-1> <bead-id-2> <bead-id-3>
+wave-reviewer --ready <epic-id>
 ```
 
 Interpretation modes:
@@ -91,7 +91,7 @@ For the loaded bead set, extract all references to real implementation contracts
 - tables / schemas
 - environment vars
 - flags / modes
-- lifecycle verbs like merge, push, close, tag, session-close
+- lifecycle verbs like merge, push, close, tag, and final closeout
 
 Then verify them with repo reads/searches.
 
@@ -193,7 +193,7 @@ Rules:
 Good:
 - "Cleanup bead deletes the old control arm before validation bead can run the comparison."
 - "Wrapper bead depends on helper API that no other bead explicitly owns."
-- "Validation bead compares same logical bead twice, but session-close mutates main between runs."
+- "Validation bead compares same logical bead twice, but final closeout mutates main between runs."
 - "MEDIUM — CCP-xyz — Bead quality score C (bead_quality): no acceptance criteria present. Fix: add at least 1 outcome-focused AC before dispatch."
 
 Weak:
@@ -204,7 +204,7 @@ Weak:
 ## Example
 
 ```text
-/wave-reviewer CCP-2vo
+wave-reviewer CCP-2vo
 ```
 
 Possible result:
@@ -232,7 +232,7 @@ Typical triggers:
 - sloppy dependency rationale
 - contract-related beads using Trinity terms inconsistently
 
-That follow-up belongs in bead generation, not in `/wave-reviewer`.
+That follow-up belongs in bead generation, not in `wave-reviewer`.
 
 ## Resources
 

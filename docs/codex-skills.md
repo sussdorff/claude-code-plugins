@@ -3,6 +3,7 @@
 This document covers the full-fleet Codex skill export in this repository.
 For the rollout history and design rationale, see
 [`docs/codex-skills-rollout-plan.md`](codex-skills-rollout-plan.md).
+For tracked Codex agents, see [`docs/codex-agents.md`](codex-agents.md).
 
 ## sync-codex-skills
 

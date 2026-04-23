@@ -12,20 +12,20 @@ Use the `convention-reviewer` agent from `agents/agentos-lite/` to:
 
 1. **Analyze** the current project codebase
 2. **Compare** against existing standards in:
-   - `~/.claude/standards/index.yml` (global)
-   - `.claude/standards/index.yml` (project, if exists)
+   - `<global-standards-dir>/index.yml`
+   - `<project-standards-dir>/index.yml` (project, if it exists)
 3. **Discover** recurring patterns that are not documented
 4. **Propose** new standards for human review
 
 ## Scope
 
-$ARGUMENTS
+Optional input arguments describing the scan scope.
 
 If no scope specified, analyze the entire project.
 Examples:
-- `/review-conventions` - Full project scan
-- `/review-conventions src/` - Only src directory
-- `/review-conventions --recent` - Only files changed in last 20 commits
+- `review-conventions` - Full project scan
+- `review-conventions src/` - Only src directory
+- `review-conventions --recent` - Only files changed in last 20 commits
 
 ## Output
 
@@ -45,7 +45,7 @@ This command does NOT create standards automatically. After review:
 ## Example
 
 ```
-/review-conventions src/adapters/
+review-conventions src/adapters/
 ```
 
 Would analyze adapter classes and propose standards for common patterns found.

@@ -13,7 +13,7 @@ disable-model-invocation: true
 Produces a structured `docs/vision.md` file through a guided 7-question dialogue. Every answer
 is validated for present tense, non-blank content, and section-assignment rules before being
 saved. The output is a v1-template vision.md consumed by architecture-scout, review-agent,
-and bead-orchestrator Phase 2.
+and the implementation orchestration workflow in Phase 2.
 
 ---
 

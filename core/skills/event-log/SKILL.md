@@ -1,22 +1,22 @@
 ---
 name: event-log
-description: Query the structured event log for any project. Shows tool use history, session starts, permission decisions, and errors from ~/.claude/events.db. Use when investigating session activity, debugging tool usage patterns, reviewing what happened in a session, or querying across projects.
+description: Query the structured event log for any project. Shows tool use history, session starts, permission decisions, and errors from the centralized harness events database. Use when investigating session activity, debugging tool usage patterns, reviewing what happened in a session, or querying across projects.
 ---
 
 # Event Log Query
 
-Query the centralized event log at `~/.claude/events.db`.
+Query the centralized event log in the active harness state directory.
 
 ## Usage
 
 ```
-/event-log                        # Show last 20 events for current project
-/event-log --tail=N               # Show last N events (default 20)
-/event-log --type=<event_type>    # Filter by event_type (session_start, tool_use, permission_decision, error)
-/event-log --tool=<tool_name>     # Filter by tool name (Read, Write, Bash, etc.)
-/event-log --session=<session_id> # Filter by session ID
-/event-log --bead=<bead_id>       # Filter by bead ID (e.g. claude-qxs3)
-/event-log --project=<name>       # Filter by project name (cross-project queries)
+event-log                        # Show last 20 events for current project
+event-log --tail=N               # Show last N events (default 20)
+event-log --type=<event_type>    # Filter by event_type (session_start, tool_use, permission_decision, error)
+event-log --tool=<tool_name>     # Filter by tool name (Read, Write, Bash, etc.)
+event-log --session=<session_id> # Filter by session ID
+event-log --bead=<bead_id>       # Filter by bead ID (e.g. claude-qxs3)
+event-log --project=<name>       # Filter by project name (cross-project queries)
 ```
 
 ## Process
@@ -24,11 +24,11 @@ Query the centralized event log at `~/.claude/events.db`.
 ### Step 1: Determine DB path and current project
 
 ```bash
-DB="$HOME/.claude/events.db"
+DB="<agent-state-dir>/events.db"
 
 if [[ ! -f "$DB" ]]; then
   echo "No event log found at $DB."
-  echo "Events are recorded when hooks are active and CLAUDE_EVENTS_DB is set (or defaults to ~/.claude/events.db)."
+  echo "Events are recorded when hooks are active and CLAUDE_EVENTS_DB is set (or defaults to the harness events DB)."
   exit 0
 fi
 
@@ -66,7 +66,7 @@ Parse the user's arguments to determine filters:
 Use the `sqlite3` CLI to query the database:
 
 ```bash
-DB="$HOME/.claude/events.db"
+DB="<agent-state-dir>/events.db"
 TAIL=20
 
 # No filters — last N events for current project
@@ -142,7 +142,7 @@ sqlite3 "$DB" "
 Display the results in a human-readable table:
 
 ```
-Event Log: ~/.claude/events.db | project=my-project (last 20 events)
+Event Log: <agent-state-dir>/events.db | project=my-project (last 20 events)
 
 TIMESTAMP            TYPE                 AGENT      TOOL             OUTCOME
 2026-04-05T14:23:01Z session_start        main       -                -
@@ -152,28 +152,28 @@ TIMESTAMP            TYPE                 AGENT      TOOL             OUTCOME
 ```
 
 If no events match the filter, say: "No events found matching filter."
-If DB doesn't exist, say: "No event log found at ~/.claude/events.db. Events are recorded when hooks are active."
+If DB doesn't exist, say: "No event log found in the harness events DB location. Events are recorded when hooks are active."
 
 ## Examples
 
 ### Last 5 events for current project
 ```
-/event-log --tail=5
+event-log --tail=5
 ```
 
 ### All Bash tool calls this session
 ```
-/event-log --tool=Bash
+event-log --tool=Bash
 ```
 
 ### Session start events only
 ```
-/event-log --type=session_start
+event-log --type=session_start
 ```
 
 ### All permission decisions (security audit)
 ```
-/event-log --type=permission_decision
+event-log --type=permission_decision
 ```
 
 Query:
@@ -209,17 +209,17 @@ sqlite3 "$HOME/.claude/events.db" "
 
 ### Specific session
 ```
-/event-log --session=abc12345
+event-log --session=abc12345
 ```
 
 ### All events for a specific bead
 ```
-/event-log --bead=claude-qxs3
+event-log --bead=claude-qxs3
 ```
 
 ### Cross-project: all events today
 ```
-/event-log --project=all
+event-log --project=all
 ```
 
 Query:
@@ -239,12 +239,12 @@ sqlite3 "$HOME/.claude/events.db" "
 
 ### Cross-project: specific project
 ```
-/event-log --project=my-repo
+event-log --project=my-repo
 ```
 
 ## Event Schema Reference
 
-SQLite table `events` at `~/.claude/events.db`:
+SQLite table `events` in the centralized harness events DB:
 
 | Column | Type | Description |
 |--------|------|-------------|
@@ -285,7 +285,7 @@ Note: `outcome` column == `decision` value for permission events (alias for filt
 
 ## Implementation Notes
 
-- The event log is centralized at `~/.claude/events.db` — single DB for all projects
+- The event log is centralized in one harness events DB — single DB for all projects
 - Events are written without requiring a `.beads/` directory in the project
 - WAL mode is enabled for concurrent write safety
 - Override DB path for testing: `CLAUDE_EVENTS_DB=/tmp/test.db`

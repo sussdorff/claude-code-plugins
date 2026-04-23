@@ -24,7 +24,7 @@ Modulare Karriere-Analyse fuer die AI-Aera. Basiert auf Career Collapse, Softwar
 
 ## Argumente
 
-$ARGUMENTS
+Optionale Eingabe-Flags:
 
 | Flag | Wirkung |
 |------|---------|
@@ -219,8 +219,8 @@ Nach Abschluss aller gewaehlten Module: Kompletten Report als Markdown ausgeben.
 ## Beispiel
 
 ```
-/career-check              # Modul-Auswahl anbieten
-/career-check --quick      # Nur Collapse Position Audit
-/career-check --deep       # Alle Module + Bonus
-/career-check --roles      # Nur Role Assessment
+career-check              # Modul-Auswahl anbieten
+career-check --quick      # Nur Collapse Position Audit
+career-check --deep       # Alle Module + Bonus
+career-check --roles      # Nur Role Assessment
 ```

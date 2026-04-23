@@ -25,7 +25,7 @@ Unified skill for the full plugin lifecycle: **Create** -> **Test** -> **Distrib
 | Single command or skill for personal use | Individual component |
 | Need team standardization or enforcement | Plugin |
 | Marketplace distribution desired | Plugin |
-| Simple workflow for small team | Git-shared `.claude/` files |
+| Simple workflow for small team | Git-shared harness component directories |
 
 See `references/when-to-use-plugins.md` for detailed decision guidance.
 
@@ -90,19 +90,19 @@ Local testing workflow for plugins under development.
 ### Install Plugin Locally
 
 ```bash
-# Copy plugin components to .claude/ for testing
-# Commands -> .claude/commands/
-# Skills -> .claude/skills/
+# Copy plugin components to the local harness directories for testing
+# Commands -> local commands dir
+# Skills -> local skills dir
 
 # Manual approach:
-cp -r my-plugin/commands/* .claude/commands/
-cp -r my-plugin/skills/* .claude/skills/
+cp -r my-plugin/commands/* <local-commands-dir>/
+cp -r my-plugin/skills/* <local-skills-dir>/
 ```
 
 ### Test Cycle
 
 1. **Validate structure** - Check plugin.json, verify all referenced files exist
-2. **Install locally** - Copy components to `.claude/` directories
+2. **Install locally** - Copy components to the local harness directories
 3. **Restart Claude Code** - Required after adding new skills/commands
 4. **Test functionality** - Invoke commands, verify skill triggers
 5. **Iterate** - Modify, re-install, re-test
@@ -159,11 +159,11 @@ See `references/team-collaboration.md` for:
 
 ## Do NOT
 
-- Do NOT create a plugin for a single command or skill meant for personal use. WHY: plugins add packaging overhead (plugin.json, distribution) — use individual `.claude/` components for personal workflows.
+- Do NOT create a plugin for a single command or skill meant for personal use. WHY: plugins add packaging overhead (plugin.json, distribution) — use individual local components for personal workflows.
 - Do NOT hardcode absolute paths in plugin components. WHY: plugins are distributed to other machines where paths differ — use relative paths or environment variables.
 - Do NOT skip plugin.json validation before distributing. WHY: invalid manifests cause silent installation failures — consumers see no error, just missing functionality.
-- Do NOT install plugin components into `.claude/` without restarting Claude Code. WHY: skills and commands are only loaded at session start — changes are invisible until restart.
-- Do NOT mix plugin testing with production `.claude/` state without backup. WHY: copying plugin components overwrites existing files — a broken plugin can disable working commands.
+- Do NOT install plugin components into the local harness directories without restarting Claude Code. WHY: skills and commands are only loaded at session start — changes are invisible until restart.
+- Do NOT mix plugin testing with production local harness state without backup. WHY: copying plugin components overwrites existing files — a broken plugin can disable working commands.
 
 ## Reference Materials
 

@@ -15,16 +15,16 @@ Du orchestrierst ein Council aus 4 spezialisierten Agenten die ein Dokument aus 
 ## Usage
 
 ```
-/council <path>                         # File mode: auto-detect document type
-/council requirements <path>            # File mode: explicit type
-/council training <path>                # File mode: training/workshop documents
-/council deliverable <path>             # File mode: concepts, proposals, OKRs
-/council requirements <path> --roles=<yaml_path>   # Custom roles YAML
-/council <bead-id>                      # Bead mode (single bead) or Epic mode (if children)
-/council label:<name>                   # Label mode: all beads with this label
+council <path>                         # File mode: auto-detect document type
+council requirements <path>            # File mode: explicit type
+council training <path>                # File mode: training/workshop documents
+council deliverable <path>             # File mode: concepts, proposals, OKRs
+council requirements <path> --roles=<yaml_path>   # Custom roles YAML
+council <bead-id>                      # Bead mode (single bead) or Epic mode (if children)
+council label:<name>                   # Label mode: all beads with this label
 ```
 
-$ARGUMENTS
+Input arguments passed to this skill entrypoint.
 
 ## Phase 0: Input parsen
 

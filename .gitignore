@@ -36,6 +36,7 @@ issues.jsonl
 # Worktree IPC files (transient, must never be committed)
 .worktree-handoff.json
 .worktree-turns.jsonl
+.wave-orchestrator.lock
 
 # Embedded Dolt runtime state
 embeddeddolt/

@@ -15,7 +15,7 @@ cache_control: ephemeral
 color: purple
 ---
 
-<!-- Codex port: .codex/agents/session-close.toml (bead CCP-9yd)
+<!-- Codex port: dev-tools/codex-agents/session-close.toml -> .codex/agents/session-close.toml (bead CCP-9yd / CCP-olf)
      Drift check: compare developer_instructions in the TOML against this file.
      Source of truth for workflow: this file. -->
 

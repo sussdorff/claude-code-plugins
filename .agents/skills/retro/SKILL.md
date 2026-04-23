@@ -22,9 +22,9 @@ max 3 concrete action beads.
 ## Usage
 
 ```
-/retro                    # Full retrospective with data collection
-/retro --method=4Ls       # Force a specific method (skip signal detection)
-/retro --dry-run          # Print analysis and suggestions without creating beads
+retro                    # Full retrospective with data collection
+retro --method=4Ls       # Force a specific method (skip signal detection)
+retro --dry-run          # Print analysis and suggestions without creating beads
 ```
 
 ## Phase 1: Previous Retro Follow-Up
@@ -47,7 +47,7 @@ Spawn a `researcher` subagent to collect data from three sources in parallel:
 
 1. **open-brain timeline** (last 14 days):
    ```
-   mcp__open-brain__timeline with appropriate date range
+   the open-brain timeline connector with the appropriate date range
    ```
 
 2. **Bead metrics report**:
@@ -155,5 +155,5 @@ If `--dry-run` is set, print proposed actions without creating beads.
 ## Resources
 
 - `standards/retro-methods.yml` — Method catalog with signal mappings and round prompts
-- `/compound` — Compound retrospective for individual bead debriefs (different scope)
-- `/learnings-pipeline` — For materializing retro insights into permanent standards
+- `compound` — Compound retrospective for individual bead debriefs (different scope)
+- `learnings-pipeline` — For materializing retro insights into permanent standards
