@@ -35,7 +35,7 @@ If any condition is NOT met, use the full `bead-orchestrator` instead.
 You are a lightweight orchestration layer. You:
 1. Phase 0 — Claim the bead and gather minimal context
 2. Phase 1 — Spawn ONE Sonnet implementer subagent
-3. Phase 2 — Trigger ONE Codex review via codex-exec.sh
+3. Phase 2 — Trigger ONE Codex review via codex-exec.py
 4. Phase 3 — Handle fix injection (max 2 iterations) or escalate
 5. Phase 4 — Roll up metrics
 6. Phase 5 — **Auto-trigger** `core:session-close` via the Agent tool (MANDATORY, unskippable)
@@ -45,7 +45,7 @@ You do NOT implement code yourself. You do NOT review code yourself. You do NOT 
 ## Single-Pane Design
 
 Quick-fix runs everything in ONE pane. The Codex review happens inline via
-`codex-exec.sh` — no separate review surface. This is the same single-pane model
+`codex-exec.py` — no separate review surface. This is the same single-pane model
 that the full bead-orchestrator now uses (CCP-2vo.4); the old 2-pane review flow
 (`cld -br` + cmux-reviewer) was removed in CCP-2vo.10.
 
@@ -157,6 +157,19 @@ Gather minimal context:
    ```
    Store these values as `CURRENT_BRANCH` and `WORKTREE_MODE` in your context.
 
+5. Create a metrics run (store `RUN_ID` for codex-exec.py calls):
+   ```bash
+   # Locate metrics-start.py (prefer repo-local, fall back to installed)
+   METRICS_START="beads-workflow/scripts/metrics-start.py"
+   if [[ ! -f "$METRICS_START" ]]; then
+     METRICS_START=$(find ~/.claude/plugins -name metrics-start.py -type f 2>/dev/null | sort -r | head -1)
+   fi
+   RUN_ID=$(python3 "$METRICS_START" "<bead_id>" "${WAVE_ID:-}" "quick-fix")
+   export CCP_ORCHESTRATOR_RUN_ID="$RUN_ID"  # Prevents SubagentStop hook from double-writing ad-hoc rows
+   echo "$RUN_ID"
+   ```
+   Store the printed value as `RUN_ID` in your context. If the script is not found, set `RUN_ID=""` — codex-exec.py degrades gracefully when `RUN_ID` is unset.
+
 **Claim the bead** (sets status=in_progress, records metadata.claim, syncs dolt):
 
 Run:
@@ -207,28 +220,28 @@ Wait for the subagent to complete. If it reports failure, STOP and report to use
 
 After the implementer commits, trigger a Codex adversarial review on the diff.
 
-#### Step 1: Locate codex-exec.sh
+#### Step 1: Locate codex-exec.py
 
 ```bash
-# Locate codex-exec.sh (prefer repo-local, fall back to installed)
-CODEX_EXEC="beads-workflow/scripts/codex-exec.sh"
+# Locate codex-exec.py (prefer repo-local, fall back to installed)
+CODEX_EXEC="beads-workflow/scripts/codex-exec.py"
 if [[ ! -f "$CODEX_EXEC" ]]; then
-  CODEX_EXEC=$(find ~/.claude/plugins -name codex-exec.sh -type f 2>/dev/null | sort -r | head -1)
+  CODEX_EXEC=$(find ~/.claude/plugins -name codex-exec.py -type f 2>/dev/null | sort -r | head -1)
 fi
 ```
 
 If not found: **skip review, proceed to Phase 3 with a warning.** Quick fixes should not be
 blocked by missing tooling — log it and move on.
 
-If `RUN_ID` is empty (metrics unavailable): **proceed normally.** `codex-exec.sh` degrades
+If `RUN_ID` is empty (metrics unavailable): **proceed normally.** `codex-exec.py` degrades
 gracefully — it runs codex and skips DB recording. The review still happens; only metrics are lost.
 
 #### Step 2: Run adversarial review (Iteration 1)
 
-Pass `--diff-range` so codex-exec.sh resolves `{{DIFF}}` automatically — inline for small diffs
+Pass `--diff-range` so codex-exec.py resolves `{{DIFF}}` automatically — inline for small diffs
 (≤ 2 files, ≤ 256 KB), self-collect guidance for large ones.
 
-> **Timeout note:** codex-exec.sh enforces a hard timeout (default: 300s, override via
+> **Timeout note:** codex-exec.py enforces a hard timeout (default: 300s, override via
 > `CODEX_EXEC_TIMEOUT=<seconds>`). If Codex exits 124 (timeout) without findings, the prompt
 > is likely too large. The script auto-truncates prompts exceeding `CODEX_EXEC_MAX_PROMPT_CHARS`
 > (default: 32000 chars) — raise the timeout or lower the char limit to tune behavior.
@@ -324,13 +337,13 @@ Non-blocking telemetry. Capture tokens and Codex stats. Do NOT emit an output su
 return here — Phase 5 must fire next, unconditionally.
 
 ```bash
-# Locate metrics-rollup.sh (prefer repo-local, fall back to installed)
-METRICS_ROLLUP="beads-workflow/scripts/metrics-rollup.sh"
+# Locate metrics-rollup.py (prefer repo-local, fall back to installed)
+METRICS_ROLLUP="beads-workflow/scripts/metrics-rollup.py"
 if [[ ! -f "$METRICS_ROLLUP" ]]; then
-  METRICS_ROLLUP=$(find ~/.claude/plugins -name metrics-rollup.sh -type f 2>/dev/null | sort -r | head -1)
+  METRICS_ROLLUP=$(find ~/.claude/plugins -name metrics-rollup.py -type f 2>/dev/null | sort -r | head -1)
 fi
 if [[ -n "$METRICS_ROLLUP" ]]; then
-  "$METRICS_ROLLUP" "{RUN_ID}" "{BEAD_ID}" "{TOTAL_FINDINGS}" "{REGRESSION_COUNT}"
+  python3 "$METRICS_ROLLUP" "{RUN_ID}" "{BEAD_ID}" "{TOTAL_FINDINGS}" "{REGRESSION_COUNT}"
 fi
 ```
 
@@ -504,7 +517,7 @@ The old cmux-send-to-self approach is deprecated — do not reintroduce it.
 - **Skip review gracefully if Codex unavailable.** Quick fixes should not be blocked by missing
   tooling. Log a warning and proceed.
 - **Never use `Skill("codex:...")`.** Those slash-commands have `disable-model-invocation: true`.
-  Always invoke via `RUN_ID=... BEAD_ID=... PHASE_LABEL=... beads-workflow/scripts/codex-exec.sh <prompt>` through Bash.
+  Always invoke via `RUN_ID=... BEAD_ID=... PHASE_LABEL=... python3 beads-workflow/scripts/codex-exec.py <prompt>` through Bash.
 - **Guard rail is mandatory.** If a bead is too large (M+ effort, feature type), refuse and
   redirect to bead-orchestrator. Don't try to quick-fix a complex bead.
 - **Minimal context, not no context.** Read the files mentioned in the bead. Check for obvious
