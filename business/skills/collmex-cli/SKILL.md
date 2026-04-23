@@ -51,19 +51,7 @@ collmex test
 | Create vendor | `collmex vendor-create --company "Supplier GmbH" --city "Berlin" --email "info@supplier.de"` |
 | Update vendor | `collmex vendor-update --vendor-id 123 --street "Neue Str. 1" --vat-id "DE123456789"` |
 
-Full vendor-create options:
-
-```bash
-collmex vendor-create \
-  --company "New Supplier GmbH" \
-  --street "Musterstr. 1" \
-  --zip "10115" \
-  --city "Berlin" \
-  --country DE \
-  --email "info@supplier.de" \
-  --iban "DE89370400440532013000" \
-  --vat-id "DE123456789"
-```
+Full vendor-create options — see [`scripts/vendor-create.sh`](scripts/vendor-create.sh) for the complete multi-flag example.
 
 ### Vendor Matching
 
@@ -109,33 +97,13 @@ collmex unmatched --json
 
 ### Vendor Invoices (Lieferantenrechnungen)
 
-Create a vendor invoice (books expense in accounting):
-
-```bash
-collmex vendor-invoice \
-  --vendor-id 123 \
-  --invoice "INV-2024-001" \
-  --date 2024-01-15 \
-  --net 100.00 \
-  --text "Office supplies"
-```
+Create a vendor invoice (books expense in accounting) — see [`scripts/vendor-invoice.sh`](scripts/vendor-invoice.sh) for a full example with all options.
 
 Optional flags: `--tax <amount>` (auto-calculated if empty), `--account <number>` (default: 3200), `--cost-center <name>`, `--json`.
 
 ### ZUGFeRD XML Generation
 
-Generate EN 16931 compliant XML for a vendor invoice:
-
-```bash
-collmex zugferd-create \
-  --vendor-id 123 \
-  --invoice "INV-2024-001" \
-  --date 2024-01-15 \
-  --desc "Consulting services" \
-  --net 500.00 \
-  --tax-rate 19.0 \
-  --output invoice.xml
-```
+Generate EN 16931 compliant XML for a vendor invoice — see [`scripts/zugferd-create.sh`](scripts/zugferd-create.sh) for a full example.
 
 Optional flags: `--qty <quantity>`, `--buyer-id <id>`, `--due 2024-02-15`, `--notes "..."`.
 
