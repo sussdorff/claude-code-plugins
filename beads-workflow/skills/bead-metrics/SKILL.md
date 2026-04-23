@@ -28,18 +28,10 @@ Parse arguments from `{ARGS}`:
 - If `--adhoc` present, use `query_adhoc_report()`
 - Otherwise pass no arguments (full report)
 
-Run the query script:
+Run the query script, passing the parsed arguments:
 
 ```bash
-uv run python -c "
-import os, sys
-sys.path.insert(0, os.path.join(os.environ['CLAUDE_PLUGIN_ROOT'], 'lib'))
-from orchestrator.metrics import query_report
-# Replace with actual parsed args:
-# e.g. print(query_report(top=5))
-# e.g. print(query_report(bead_id='claude-i7it'))
-print(query_report())
-"
+scripts/run-query.sh [--top=N | --bead=ID | --wave=ID | --adhoc]
 ```
 
 ### Argument Examples

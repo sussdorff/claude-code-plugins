@@ -10,15 +10,10 @@ Optional: $ARGUMENTS (z.B. `--label billing`, `--epic mira-xxx`, `--focus P0`)
 
 ## Phase 1: Daten sammeln
 
-Führe diese Befehle parallel aus:
+Führe `scripts/gather-data.sh` aus, um alle Backlog-Daten zu sammeln:
 
 ```bash
-bd stats
-bd list --status=in_progress -n 0
-bd ready -n 50
-bd blocked | head -40
-bd list --priority 0 --status=open -n 0
-bd list --priority 1 --status=open -n 0
+scripts/gather-data.sh
 ```
 
 Falls `$ARGUMENTS` Label oder Epic Filter enthält, passe die Queries entsprechend an.

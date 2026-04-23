@@ -357,18 +357,10 @@ After DoD gates pass, verify every plan item was actually implemented. This catc
 
 ## Step 9: Commit Changes
 
-Create atomic commits for the implementation:
+Create atomic commits for the implementation using `scripts/commit.sh`:
 
 ```bash
-git add -A
-git commit -m "$(cat <<'EOF'
-<type>(<scope>): <description>
-
-<body explaining what and why>
-
-Refs: <TICKET-ID>
-EOF
-)"
+scripts/commit.sh "<type>(<scope>): <description>" "<body explaining what and why>" "<TICKET-ID>"
 ```
 
 Types: fix, feat, refactor, docs, test, chore

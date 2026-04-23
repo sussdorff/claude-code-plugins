@@ -78,21 +78,15 @@ boundary violations early — when they are cheap to address.
 
 ### How to Spawn
 
-```python
-import os
-scout_input = {
-  "bead_id": "<ticket-id>",
-  "bead_description": "<ticket description or user's input>",
-  "touched_paths": ["<package-or-path-1>", "<package-or-path-2>"],
-  "mode": "<advisor|gate from .claude/project-config.yml, default: advisor>",
-  # CONFORMANCE_SKIP bypass: read env var here (before spawning) and pass it through
-  "conformance_skip": os.environ.get("CONFORMANCE_SKIP") == "1"
-}
-Agent(
-  subagent_type="architecture-trinity:architecture-scout",
-  prompt=json.dumps(scout_input)
-)
+Use `scripts/spawn-scout.py` as a reference for the scout input contract, then spawn inline:
+
+```bash
+# Preview the input JSON that will be passed to the scout agent:
+scripts/spawn-scout.py <ticket-id> "<ticket description>" <package-or-path-1> <package-or-path-2>
 ```
+
+Build the equivalent `scout_input` dict (see `scripts/spawn-scout.py` for field definitions)
+and spawn via `Agent(subagent_type="architecture-trinity:architecture-scout", prompt=json.dumps(scout_input))`.
 
 **Determining `touched_paths`**: Extract package/directory mentions from the ticket
 description, acceptance criteria, or the argument passed to `/plan`. If the ticket
