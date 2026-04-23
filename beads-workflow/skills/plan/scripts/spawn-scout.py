@@ -1,4 +1,9 @@
-#!/usr/bin/env python3
+#!/usr/bin/env -S uv run --quiet --script
+# /// script
+# dependencies = [
+#   "pyyaml>=6.0"
+# ]
+# ///
 """
 Spawn the architecture-scout agent for a given bead.
 
@@ -12,13 +17,25 @@ import json
 import os
 import sys
 
+import yaml
+
+
+def _read_scout_mode() -> str:
+    """Read architecture-scout.mode from .claude/project-config.yml, default 'advisor'."""
+    config_path = ".claude/project-config.yml"
+    if os.path.exists(config_path):
+        with open(config_path) as f:
+            config = yaml.safe_load(f) or {}
+        return config.get("architecture-scout", {}).get("mode", "advisor")
+    return "advisor"
+
 
 def build_scout_input(bead_id: str, bead_description: str, touched_paths: list) -> dict:
     return {
         "bead_id": bead_id,
         "bead_description": bead_description,
         "touched_paths": touched_paths,
-        "mode": os.environ.get("ARCHITECTURE_SCOUT_MODE", "advisor"),
+        "mode": _read_scout_mode(),
         "conformance_skip": os.environ.get("CONFORMANCE_SKIP") == "1",
     }
 
