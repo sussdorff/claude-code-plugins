@@ -160,7 +160,10 @@ else
       sed -i '' "s/\"name\": \(.*\)/\"name\": \1\n  \"version\": \"$NEXT_VERSION\",/" "$PLUGIN_JSON"
     fi
     echo "plugin.json updated: ${PLUGIN_JSON#"$PLUGIN_ROOT"/}"
-    git -C "$REPO_ROOT" add "$PLUGIN_JSON"
+    # Stage in PLUGIN_ROOT (main repo), not REPO_ROOT (worktree). When running
+    # inside a worktree, REPO_ROOT is the worktree path and `git add` cannot
+    # reach files in the main repo — leaving them sed-modified but uncommitted.
+    git -C "$PLUGIN_ROOT" add "$PLUGIN_JSON"
   done < <(find "$PLUGIN_ROOT" -maxdepth 3 -path '*/.claude-plugin/plugin.json' -print0 2>/dev/null)
 
   # Output tag info for the caller (agent creates tag AFTER the version bump commit)
