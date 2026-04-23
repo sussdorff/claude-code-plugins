@@ -1,0 +1,250 @@
+#!/usr/bin/env python3
+"""
+wave-dispatch.py — Set up cmux panes and dispatch cld -b for a wave.
+
+Usage: wave-dispatch.py <bead-id1> <bead-id2> ... [--workspace <id>] [--base-pane <id>]
+         [--wave-id <id>] [--quick <id>] [--skip-scenarios]
+
+Creates ONE pane per bead (1-pane mode). Renames each surface, dispatches cld -b or cld -bq,
+and outputs wave config JSON.
+
+The output JSON can be fed directly into wave-status.py for monitoring.
+"""
+
+import json
+import re
+import subprocess
+import sys
+import time
+from datetime import datetime, timezone
+from pathlib import Path
+
+
+# ---------------------------------------------------------------------------
+# Helpers
+# ---------------------------------------------------------------------------
+
+
+def _cmux_identify() -> dict:
+    """Call cmux identify --json and return parsed JSON."""
+    try:
+        result = subprocess.run(
+            ["cmux", "identify", "--json"],
+            capture_output=True,
+            text=True,
+            timeout=10,
+        )
+        return json.loads(result.stdout)
+    except Exception:
+        return {}
+
+
+def _bd_show_json(bead_id: str) -> dict | None:
+    """Call bd show <id> --json and return parsed JSON."""
+    try:
+        result = subprocess.run(
+            ["bd", "show", bead_id, "--json"],
+            capture_output=True,
+            text=True,
+            timeout=15,
+        )
+        if result.returncode != 0:
+            return None
+        data = json.loads(result.stdout)
+        if isinstance(data, list) and data:
+            return data[0]
+        if isinstance(data, dict):
+            return data
+        return None
+    except Exception:
+        return None
+
+
+def _extract_surface(output: str) -> str:
+    """Extract 'surface:N' from cmux output."""
+    m = re.search(r"surface:[0-9]+", output)
+    return m.group(0) if m else ""
+
+
+def _check_scenario(bead_id: str) -> bool:
+    """Return True if bead has a ## Scenario section."""
+    try:
+        result = subprocess.run(
+            ["bd", "show", bead_id],
+            capture_output=True,
+            text=True,
+            timeout=15,
+        )
+        return bool(re.search(r"^## (Scenario|Szenario)", result.stdout, re.MULTILINE))
+    except Exception:
+        return False
+
+
+# ---------------------------------------------------------------------------
+# Main
+# ---------------------------------------------------------------------------
+
+
+def main() -> int:
+    args = sys.argv[1:]
+
+    bead_ids: list[str] = []
+    quick_ids: list[str] = []
+    workspace = ""
+    base_surface = ""
+    wave_id = ""
+    skip_scenarios = False
+
+    i = 0
+    while i < len(args):
+        arg = args[i]
+        if arg == "--workspace":
+            workspace = args[i + 1]
+            i += 2
+        elif arg == "--base-pane":
+            base_surface = args[i + 1]
+            i += 2
+        elif arg == "--wave-id":
+            wave_id = args[i + 1]
+            i += 2
+        elif arg == "--quick":
+            quick_ids.append(args[i + 1])
+            i += 2
+        elif arg == "--skip-scenarios":
+            skip_scenarios = True
+            i += 1
+        else:
+            bead_ids.append(arg)
+            i += 1
+
+    all_ids = bead_ids + quick_ids
+    quick_set = set(quick_ids)
+
+    # Auto-generate wave_id
+    if not wave_id:
+        wave_id = f"wave-{datetime.now(timezone.utc).strftime('%Y%m%d-%H%M%S')}"
+
+    if not all_ids:
+        print("Error: no bead IDs provided", file=sys.stderr)
+        print(
+            "Usage: wave-dispatch.py <bead-id1> ... [--quick <id>] ... "
+            "[--workspace <id>] [--base-pane <id>] [--skip-scenarios]",
+            file=sys.stderr,
+        )
+        return 1
+
+    # Scenario gate
+    if not skip_scenarios:
+        missing_scenarios: list[str] = []
+        for bid in all_ids:
+            bead_data = _bd_show_json(bid)
+            bead_type = ""
+            if bead_data:
+                bead_type = bead_data.get("type", "") or bead_data.get("issue_type", "")
+            if bead_type == "feature" and not _check_scenario(bid):
+                missing_scenarios.append(bid)
+        if missing_scenarios:
+            print("Error: the following feature bead(s) are missing a ## Scenario section:", file=sys.stderr)
+            for bid in missing_scenarios:
+                print(f"  - {bid}", file=sys.stderr)
+            print("", file=sys.stderr)
+            print("Run the scenario generator for each bead, then retry:", file=sys.stderr)
+            print(
+                f"  Agent(subagent_type='dev-tools:scenario-generator', "
+                f"prompt='Generate scenarios for {' '.join(missing_scenarios)}')",
+                file=sys.stderr,
+            )
+            print("", file=sys.stderr)
+            print("To bypass this check (not recommended): add --skip-scenarios", file=sys.stderr)
+            return 1
+
+    # Determine workspace
+    if not workspace:
+        cmux_info = _cmux_identify()
+        workspace = cmux_info.get("caller", {}).get("workspace_ref", "")
+        if not workspace:
+            print("Error: could not determine workspace. Pass --workspace explicitly.", file=sys.stderr)
+            return 1
+
+    # Determine base surface
+    if not base_surface:
+        cmux_info = _cmux_identify()
+        base_surface = cmux_info.get("caller", {}).get("surface_ref", "")
+        if not base_surface:
+            print("Error: could not determine base surface. Pass --base-pane explicitly.", file=sys.stderr)
+            return 1
+
+    print(f"Workspace: {workspace}, Base surface: {base_surface}", file=sys.stderr)
+
+    dispatch_time = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S")
+    beads_json: list[dict] = []
+
+    for bid in all_ids:
+        is_quick = bid in quick_set
+        cld_flag = "-bq" if is_quick else "-b"
+        surface_suffix = "qf" if is_quick else "impl"
+        short_id = bid.split("-")[-1] if "-" in bid else bid
+
+        # Create new split
+        try:
+            split_result = subprocess.run(
+                ["cmux", "new-split", "right", "--surface", base_surface, "--workspace", workspace],
+                capture_output=True,
+                text=True,
+                timeout=15,
+            )
+            split_output = split_result.stdout + split_result.stderr
+        except Exception as e:
+            print(f"Error: failed to create split for bead {bid}: {e}", file=sys.stderr)
+            continue
+
+        surface = _extract_surface(split_output)
+        if not surface:
+            print(f"Error: failed to create split for bead {bid}. Output: {split_output!r}", file=sys.stderr)
+            continue
+
+        # Wait for surface to be ready
+        time.sleep(3)
+
+        # Rename tab
+        try:
+            subprocess.run(
+                ["cmux", "rename-tab", "--surface", surface, f"{short_id}-{surface_suffix}"],
+                capture_output=True,
+                timeout=10,
+            )
+        except Exception:
+            pass
+
+        # Dispatch
+        try:
+            subprocess.run(
+                ["cmux", "send", "--surface", surface, f"WAVE_ID={wave_id} cld {cld_flag} {bid}"],
+                capture_output=True,
+                timeout=10,
+            )
+            subprocess.run(
+                ["cmux", "send-key", "--surface", surface, "enter"],
+                capture_output=True,
+                timeout=10,
+            )
+        except Exception as e:
+            print(f"Warning: failed to send command to {surface} for bead {bid}: {e}", file=sys.stderr)
+            continue
+
+        mode = "quick" if is_quick else "full"
+        beads_json.append({"id": bid, "surface": surface, "mode": mode})
+        print(f"Dispatched ({cld_flag}): {bid} → {surface} ({short_id}-{surface_suffix})", file=sys.stderr)
+
+    output = {
+        "dispatch_time": dispatch_time,
+        "workspace": workspace,
+        "wave_id": wave_id,
+        "beads": beads_json,
+    }
+    print(json.dumps(output, indent=2))
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())
