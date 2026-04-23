@@ -141,25 +141,8 @@ Compare billing patterns between two doctors in same practice:
 
 ### Running the Review
 
-The billing reviewer can be launched as a subagent:
-
-```bash
-# In Claude Code, use the general-purpose agent type
-Task(
-  subagent_type="general-purpose",
-  description="Billing UI review",
-  prompt="""
-  You are an Abrechnungsspezialistin reviewing MIRA's billing UI.
-
-  Read ~/.claude/skills/billing-reviewer/SKILL.md for the full review process.
-
-  Navigate the frontend at http://localhost:3000/billing and evaluate
-  each feature from the billing specialist's perspective.
-
-  Create beads for every improvement you identify.
-  """
-)
-```
+The billing reviewer can be launched as a subagent.
+Run `scripts/launch-billing-review.sh` for the full invocation reference.
 
 ### Prerequisites
 
