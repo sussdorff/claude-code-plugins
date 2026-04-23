@@ -1,6 +1,9 @@
 #!/usr/bin/env bash
+# TEMPLATE: Choose ONE of Option A or Option B below. Comment out the other.
+
 # Option A: Re-init with shared-server (preserves data if DB name matches)
 bd init --shared-server --database <existing_db> --prefix <name> --force
+exit 0
 
 # Option B: Manual fix
 bd dolt stop 2>/dev/null

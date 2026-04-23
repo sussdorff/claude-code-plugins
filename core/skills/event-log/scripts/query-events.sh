@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
-DB="<agent-state-dir>/events.db"
+DB="${CLAUDE_EVENTS_DB:-$HOME/.claude/events.db}"
 TAIL=20
+PROJECT="${PROJECT:-$(git remote get-url origin 2>/dev/null | sed 's|.*[:/]||; s|\.git$||')}"
 # Sanitize PROJECT once to avoid repeating the tr-pipeline inline in SQL.
 # IMPORTANT: Never interpolate user-supplied values directly into SQL strings.
 # Or better: use Python for queries to avoid shell injection entirely.
