@@ -16,25 +16,7 @@ Use this skill to control non-browser cmux topology and routing.
 
 ## Fast Start
 
-```bash
-# identify current caller context
-cmux identify --json
-
-# list topology
-cmux list-windows
-cmux list-workspaces
-cmux list-panes
-cmux list-pane-surfaces --pane pane:1
-
-# create/focus/move
-cmux new-workspace
-cmux new-split right --panel pane:1
-cmux move-surface --surface surface:7 --pane pane:2 --focus true
-cmux reorder-surface --surface surface:7 --before surface:3
-
-# attention cue
-cmux trigger-flash --surface surface:7
-```
+See [`scripts/fast-start.sh`](scripts/fast-start.sh) for the full set of identify, list, create/focus/move, and flash commands.
 
 ## Handle Model
 
