@@ -346,6 +346,74 @@ def test_prompt_truncation() -> None:
     assert truncated.endswith("A" * 100)
 
 
+def test_resolve_diff_inlines_multi_file_diff_when_under_byte_budget(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Moderate multi-file diffs stay inline instead of degrading to self-collect guidance."""
+    ce = _load_codex_exec()
+
+    class _Result:
+        def __init__(self, *, stdout):
+            self.stdout = stdout
+
+    diff_range = "base...HEAD"
+    diff_text = (
+        "diff --git a/a.py b/a.py\n"
+        "--- a/a.py\n"
+        "+++ b/a.py\n"
+        "@@ -1 +1 @@\n"
+        "-old\n"
+        "+new\n"
+    )
+
+    def fake_run(cmd, capture_output=False, text=False, check=False):
+        if cmd == ["git", "diff", diff_range, "--name-only"]:
+            return _Result(stdout="a.py\nb.py\nc.py\n")
+        if cmd == ["git", "diff", diff_range]:
+            return _Result(stdout=diff_text.encode("utf-8"))
+        if cmd == ["git", "diff", diff_range, "--stat"]:
+            return _Result(stdout=" a.py | 2 +-\n")
+        raise AssertionError(f"Unexpected command: {cmd}")
+
+    monkeypatch.setattr(ce.subprocess, "run", fake_run)
+
+    resolved = ce._resolve_diff(diff_range, "Prompt\n{{DIFF}}\n")
+
+    assert diff_text in resolved
+    assert "authoritative scope for this review" not in resolved
+    assert "git diff base...HEAD -- <file>" not in resolved
+
+
+def test_resolve_diff_large_diff_guidance_stays_bounded(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Large diffs provide changed files plus file-scoped guidance instead of open-ended exploration."""
+    ce = _load_codex_exec()
+
+    class _Result:
+        def __init__(self, *, stdout):
+            self.stdout = stdout
+
+    diff_range = "base...HEAD"
+
+    def fake_run(cmd, capture_output=False, text=False, check=False):
+        if cmd == ["git", "diff", diff_range, "--name-only"]:
+            return _Result(stdout="src/a.py\nsrc/b.py\n")
+        if cmd == ["git", "diff", diff_range]:
+            return _Result(stdout=("x" * 300000).encode("utf-8"))
+        if cmd == ["git", "diff", diff_range, "--stat"]:
+            return _Result(stdout=" src/a.py | 10 +++++\n src/b.py | 12 ++++++\n")
+        raise AssertionError(f"Unexpected command: {cmd}")
+
+    monkeypatch.setattr(ce.subprocess, "run", fake_run)
+
+    resolved = ce._resolve_diff(diff_range, "Prompt\n{{DIFF}}\n")
+
+    assert "Changed files (authoritative scope for this review):" in resolved
+    assert "  - src/a.py" in resolved
+    assert "Diff stat:" in resolved
+    assert "git diff base...HEAD -- <file>" in resolved
+    assert "Do NOT run repo-wide onboarding/discovery commands" in resolved
+    assert "`bd onboard`" in resolved
+    assert "Inspect it directly" not in resolved
+
+
 def test_parse_token_usage() -> None:
     """_parse_token_usage sums tokens from all turn.completed events."""
     ce = _load_codex_exec()

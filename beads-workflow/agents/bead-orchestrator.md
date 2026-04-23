@@ -669,6 +669,11 @@ RUN_ID=<run_id> BEAD_ID=<bead_id> PHASE_LABEL=codex-adversarial ITERATION=1 \
 ## Diff:
 {{DIFF}}
 
+Use the supplied diff context as the primary source of truth. If the diff section says the
+full patch is too large to inline, stay strictly within that diff range and inspect only the
+listed files with file-scoped commands. Do NOT run repo onboarding commands (`bd onboard`,
+`bd prime`) or unrelated repository discovery.
+
 ## Acceptance Criteria:
 <AK list>
 
@@ -717,6 +722,11 @@ RUN_ID=<run_id> BEAD_ID=<bead_id> PHASE_LABEL=codex-fix-check ITERATION=1 \
 
 ## Diff of fixes:
 {{DIFF}}
+
+Use the supplied diff context as the primary source of truth. If the diff section says the
+full patch is too large to inline, stay strictly within that diff range and inspect only the
+listed files with file-scoped commands. Do NOT run repo onboarding commands (`bd onboard`,
+`bd prime`) or unrelated repository discovery.
 
 Original findings: <Phase 7 REGRESSION lines>
 Report: VERIFIED or STILL-BROKEN:<finding>"

@@ -257,6 +257,11 @@ RUN_ID={RUN_ID} BEAD_ID={BEAD_ID} PHASE_LABEL=codex-adversarial ITERATION=1 \
 ## Diff:
 {{DIFF}}
 
+Use the supplied diff context as the primary source of truth. If the diff section says the
+full patch is too large to inline, stay strictly within that diff range and inspect only the
+listed files with file-scoped commands. Do NOT run repo onboarding commands (`bd onboard`,
+`bd prime`) or unrelated repository discovery.
+
 For EACH finding, classify as:
 REGRESSION: <file>:<line> — <description> (new defect in THIS diff — BLOCKING)
 PRE_EXISTING: <file>:<line> — <description> (already present before — NOT blocking)
@@ -319,6 +324,11 @@ RUN_ID={RUN_ID} BEAD_ID={BEAD_ID} PHASE_LABEL=codex-fix-check ITERATION=2 \
 ## Bead: {BEAD_ID}
 ## Diff of fixes:
 {{DIFF}}
+
+Use the supplied diff context as the primary source of truth. If the diff section says the
+full patch is too large to inline, stay strictly within that diff range and inspect only the
+listed files with file-scoped commands. Do NOT run repo onboarding commands (`bd onboard`,
+`bd prime`) or unrelated repository discovery.
 
 Original REGRESSION findings: {Phase 1 REGRESSION lines}
 

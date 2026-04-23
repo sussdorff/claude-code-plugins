@@ -82,7 +82,6 @@ def _detect_model(codex_config_path: str | None) -> str:
 
 def _resolve_diff(diff_range: str, prompt: str) -> str:
     """Resolve {{DIFF}} placeholder in the prompt for the given diff range."""
-    max_inline_files = 2
     max_inline_bytes = 262144  # 256 KB
 
     try:
@@ -92,17 +91,18 @@ def _resolve_diff(diff_range: str, prompt: str) -> str:
             text=True,
             check=False,
         )
-        file_count = len([l for l in names_result.stdout.splitlines() if l.strip()])
+        changed_files = [line.strip() for line in names_result.stdout.splitlines() if line.strip()]
 
-        bytes_result = subprocess.run(
+        diff_result = subprocess.run(
             ["git", "diff", diff_range],
             capture_output=True,
             check=False,
         )
-        diff_bytes = len(bytes_result.stdout)
+        diff_text = diff_result.stdout.decode("utf-8", errors="replace")
+        diff_bytes = len(diff_result.stdout)
 
-        if file_count <= max_inline_files and diff_bytes <= max_inline_bytes:
-            diff_content = bytes_result.stdout.decode("utf-8", errors="replace")
+        if diff_bytes <= max_inline_bytes:
+            diff_content = diff_text
         else:
             stat_result = subprocess.run(
                 ["git", "diff", diff_range, "--stat"],
@@ -110,10 +110,19 @@ def _resolve_diff(diff_range: str, prompt: str) -> str:
                 text=True,
                 check=False,
             )
+            changed_files_text = "\n".join(f"  - {path}" for path in changed_files) or "  [none]"
+            diff_stat = stat_result.stdout.rstrip() or "  [no diff stat available]"
             diff_content = (
-                f"{stat_result.stdout}\n\n"
-                f"The diff is too large to inline ({file_count} files, {diff_bytes} bytes). "
-                f"Inspect it directly:\n  git diff {diff_range}"
+                "Changed files (authoritative scope for this review):\n"
+                f"{changed_files_text}\n\n"
+                "Diff stat:\n"
+                f"{diff_stat}\n\n"
+                f"The full patch is too large to inline ({len(changed_files)} files, {diff_bytes} bytes).\n"
+                "Stay strictly within this diff range. If you need more detail, inspect only "
+                "specific files from the list above with targeted commands such as:\n"
+                f"  git diff {diff_range} -- <file>\n"
+                "Do NOT run repo-wide onboarding/discovery commands (for example `bd onboard`, "
+                "`bd prime`, or broad repository scans)."
             )
     except Exception as e:
         diff_content = f"[Error resolving diff: {e}]"
