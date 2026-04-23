@@ -28,6 +28,15 @@ for arg in "$@"; do
 done
 
 REPO_ROOT="$(git rev-parse --show-toplevel 2>/dev/null)"
+
+# In a git worktree, --show-toplevel returns the worktree dir, not the main repo.
+# Resolve to the main repo root so we can find plugin.json files there.
+GIT_COMMON_DIR="$(git rev-parse --git-common-dir 2>/dev/null || true)"
+PLUGIN_ROOT="$REPO_ROOT"
+if [[ "$GIT_COMMON_DIR" == /* && "$GIT_COMMON_DIR" == */.git ]]; then
+  PLUGIN_ROOT="${GIT_COMMON_DIR%/.git}"
+fi
+
 VERSION_FILE="$REPO_ROOT/VERSION"
 NEXT_VERSION_SCRIPT="$REPO_ROOT/scripts/next-version.sh"
 
@@ -124,8 +133,8 @@ if $DRY_RUN; then
   echo ""
   echo "[DRY-RUN] Would write $NEXT_VERSION to $VERSION_FILE"
   while IFS= read -r -d '' pj; do
-    echo "[DRY-RUN] Would update ${pj#"$REPO_ROOT"/}"
-  done < <(find "$REPO_ROOT" -maxdepth 3 -path '*/.claude-plugin/plugin.json' -print0 2>/dev/null)
+    echo "[DRY-RUN] Would update ${pj#"$PLUGIN_ROOT"/}"
+  done < <(find "$PLUGIN_ROOT" -maxdepth 3 -path '*/.claude-plugin/plugin.json' -print0 2>/dev/null)
   echo "[DRY-RUN] Would create git tag $NEXT_TAG"
 else
   # Write VERSION file
@@ -150,9 +159,9 @@ else
       # Insert version after "name" line
       sed -i '' "s/\"name\": \(.*\)/\"name\": \1\n  \"version\": \"$NEXT_VERSION\",/" "$PLUGIN_JSON"
     fi
-    echo "plugin.json updated: ${PLUGIN_JSON#"$REPO_ROOT"/}"
+    echo "plugin.json updated: ${PLUGIN_JSON#"$PLUGIN_ROOT"/}"
     git -C "$REPO_ROOT" add "$PLUGIN_JSON"
-  done < <(find "$REPO_ROOT" -maxdepth 3 -path '*/.claude-plugin/plugin.json' -print0 2>/dev/null)
+  done < <(find "$PLUGIN_ROOT" -maxdepth 3 -path '*/.claude-plugin/plugin.json' -print0 2>/dev/null)
 
   # Output tag info for the caller (agent creates tag AFTER the version bump commit)
   echo "TAG_PENDING=$NEXT_TAG"
