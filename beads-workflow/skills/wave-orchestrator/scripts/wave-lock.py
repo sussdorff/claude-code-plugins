@@ -31,12 +31,14 @@ Error message on collision:
   Do NOT start another — use beads-workflow:wave-monitor to watch progress.
 """
 
-import fcntl
 import json
 import os
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
+
+# Note: atomic file replace (os.replace) used instead of fcntl.flock for simplicity;
+# POSIX guarantees rename() atomicity.
 
 
 def _now_iso() -> str:

@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """
 Tests for wave-orchestrator Python scripts:
+  - wave_helpers.py
   - arch-signal-detect.py
   - wave-lock.py
   - wave-completion.py
@@ -36,6 +37,66 @@ def _load_module(name: str, path: Path):
 def _asd():
     """Load arch-signal-detect module."""
     return _load_module("arch_signal_detect", _SCRIPTS_DIR / "arch-signal-detect.py")
+
+
+# ---------------------------------------------------------------------------
+# wave_helpers.py tests
+# ---------------------------------------------------------------------------
+
+
+def test_wave_helpers_importable() -> None:
+    """wave_helpers module must be importable and export expected names."""
+    import wave_helpers
+
+    assert hasattr(wave_helpers, "_THINKING_RE")
+    assert hasattr(wave_helpers, "_PROMPT_RE")
+    assert hasattr(wave_helpers, "_DEAD_SURFACE_RE")
+    assert callable(wave_helpers._surface_is_idle)
+    assert callable(wave_helpers._read_surface)
+    assert callable(wave_helpers._bd_status)
+    assert callable(wave_helpers._elapsed_minutes)
+
+
+def test_wave_helpers_surface_is_idle_with_prompt() -> None:
+    """_surface_is_idle returns True when last non-empty line is a shell prompt."""
+    from wave_helpers import _surface_is_idle
+
+    screen = "Some output\n$ \n"
+    assert _surface_is_idle(screen) is True
+
+
+def test_wave_helpers_surface_is_idle_with_thinking() -> None:
+    """_surface_is_idle returns False when preceding lines show Thinking."""
+    from wave_helpers import _surface_is_idle
+
+    screen = "Thinking...\nsome output\n$ \n"
+    assert _surface_is_idle(screen) is False
+
+
+def test_wave_helpers_surface_not_idle_no_prompt() -> None:
+    """_surface_is_idle returns False when last line is not a prompt."""
+    from wave_helpers import _surface_is_idle
+
+    screen = "Some output without prompt\n"
+    assert _surface_is_idle(screen) is False
+
+
+def test_wave_helpers_elapsed_minutes_valid() -> None:
+    """_elapsed_minutes returns a non-negative int for a recent timestamp."""
+    from wave_helpers import _elapsed_minutes
+
+    # Use a recent-past timestamp (a couple minutes ago would give ~2)
+    result = _elapsed_minutes("2020-01-01T00:00:00")
+    assert isinstance(result, int)
+    assert result > 0
+
+
+def test_wave_helpers_elapsed_minutes_invalid() -> None:
+    """_elapsed_minutes returns 0 on parse error."""
+    from wave_helpers import _elapsed_minutes
+
+    result = _elapsed_minutes("not-a-timestamp")
+    assert result == 0
 
 
 # ---------------------------------------------------------------------------

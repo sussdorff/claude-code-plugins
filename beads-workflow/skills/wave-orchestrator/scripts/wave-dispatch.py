@@ -98,6 +98,10 @@ def main() -> int:
     i = 0
     while i < len(args):
         arg = args[i]
+        if arg in ("--workspace", "--base-pane", "--wave-id", "--quick"):
+            if i + 1 >= len(args):
+                print(f"Error: {arg} requires a value", file=sys.stderr)
+                sys.exit(1)
         if arg == "--workspace":
             workspace = args[i + 1]
             i += 2

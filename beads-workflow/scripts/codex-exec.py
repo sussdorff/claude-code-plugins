@@ -353,11 +353,11 @@ def main(argv: list[str] | None = None) -> int:
         # Validate metrics module availability
         sys.path.insert(0, str(metrics_dir))
         try:
-            import importlib
+            import importlib.util
             spec = importlib.util.find_spec("metrics")
             if spec is None:
                 raise ImportError("metrics module not found")
-        except (ImportError, ValueError):
+        except (ImportError, ValueError, AttributeError):
             print(
                 f"codex-exec.py: WARNING: Cannot import metrics module from {metrics_dir} — "
                 "metrics recording skipped",

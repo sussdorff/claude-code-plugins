@@ -230,11 +230,14 @@ def build_envelope(
 
 def write_sidecar(bead_id: str, envelope: dict[str, Any]) -> None:
     """Write envelope as sidecar JSON file to /tmp."""
+    sidecar_path = Path(f"/tmp/{bead_id}.arch-signal.json")
     try:
-        sidecar_path = Path(f"/tmp/{bead_id}.arch-signal.json")
         sidecar_path.write_text(json.dumps(envelope, indent=2))
-    except OSError:
-        pass  # sidecar write failure is non-fatal
+    except OSError as exc:
+        print(
+            f"WARNING: arch-signal-detect.py: failed to write sidecar {sidecar_path}: {exc}",
+            file=sys.stderr,
+        )
 
 
 def main(runner: CommandRunner | None = None) -> int:
@@ -261,9 +264,15 @@ def main(runner: CommandRunner | None = None) -> int:
     envelope_status = "warning" if has_errors else "ok"
     envelope = build_envelope(signal_dicts, status=envelope_status)
 
-    # Write per-bead sidecars (one per bead_id analyzed)
-    for bead_id in bead_ids:
-        write_sidecar(bead_id, envelope)
+    # Write per-bead sidecars (one per bead_id analyzed — each contains only that bead's signals)
+    for result in results:
+        bead_signal = result.to_dict()
+        per_bead_signals = [bead_signal]
+        per_bead_envelope = build_envelope(
+            per_bead_signals,
+            status="warning" if "error" in bead_signal else "ok",
+        )
+        write_sidecar(result.id, per_bead_envelope)
 
     return 0
 

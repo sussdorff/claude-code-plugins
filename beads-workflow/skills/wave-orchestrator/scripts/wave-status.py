@@ -20,74 +20,17 @@ Reads all surfaces in parallel using threading.Thread.
 
 import json
 import re
-import subprocess
 import sys
 import threading
 from datetime import datetime, timezone
 from pathlib import Path
 
-
-# ---------------------------------------------------------------------------
-# Surface idle check (port of Bash _surface_is_idle)
-# ---------------------------------------------------------------------------
-
-_THINKING_RE = re.compile(
-    r"Newspapering|Baking|Crunched|Churned|Thinking|[0-9]+m\s*[0-9]+s|[⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏]"
+from wave_helpers import (
+    _DEAD_SURFACE_RE,
+    _bd_status,
+    _read_surface,
+    _surface_is_idle,
 )
-_PROMPT_RE = re.compile(r"^\s*(\$|❯|➜|%)\s*$")
-_DEAD_SURFACE_RE = re.compile(
-    r"invalid_params|not a terminal|Surface.*not found|no such surface",
-    re.IGNORECASE,
-)
-
-
-def _surface_is_idle(screen_text: str) -> bool:
-    """Return True if the surface looks idle (shell prompt, no active thinking)."""
-    lines = [l for l in screen_text.splitlines() if l.strip()]
-    if not lines:
-        return False
-
-    last_nonempty = lines[-1]
-    if not _PROMPT_RE.match(last_nonempty):
-        return False
-
-    # Check 2 non-empty lines before the prompt for active-thinking markers
-    preceding = lines[-3:-1] if len(lines) >= 3 else lines[:-1]
-    for line in preceding:
-        if _THINKING_RE.search(line):
-            return False
-    return True
-
-
-def _read_surface(surface: str, lines: int = 60, scrollback: bool = False) -> str:
-    """Read a cmux surface. Returns empty string on error."""
-    cmd = ["cmux", "read-screen", "--surface", surface]
-    if scrollback:
-        cmd.append("--scrollback")
-    if lines:
-        cmd += ["--lines", str(lines)]
-    try:
-        result = subprocess.run(cmd, capture_output=True, text=True, timeout=30)
-        return result.stdout + result.stderr
-    except Exception:
-        return ""
-
-
-def _bd_status(bead_id: str) -> str:
-    """Get bd status for a bead. Returns 'unknown' on failure."""
-    try:
-        result = subprocess.run(
-            ["bd", "show", bead_id],
-            capture_output=True,
-            text=True,
-            timeout=15,
-        )
-        m = re.search(r"\b(OPEN|CLOSED|IN_PROGRESS|BLOCKED)\b", result.stdout)
-        if m:
-            return m.group(1).lower()
-    except Exception:
-        pass
-    return "unknown"
 
 
 # ---------------------------------------------------------------------------

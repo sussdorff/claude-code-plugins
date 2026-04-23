@@ -70,7 +70,7 @@ def _envelope(
 
 
 def _find_wave_completion() -> Path | None:
-    """Locate wave-completion.sh — env override first, then ~/.claude, then local."""
+    """Locate wave-completion.py — env override first, then ~/.claude, then local."""
     override = os.environ.get("WAVE_COMPLETION_OVERRIDE")
     if override:
         p = Path(override)
@@ -78,10 +78,10 @@ def _find_wave_completion() -> Path | None:
             return p
 
     # Search ~/.claude tree first
-    completions = list((Path.home() / ".claude").rglob("wave-completion.sh"))
+    completions = list((Path.home() / ".claude").rglob("wave-completion.py"))
     if not completions:
         # Fallback: local directory tree
-        completions = list(Path(".").rglob("wave-completion.sh"))
+        completions = list(Path(".").rglob("wave-completion.py"))
     return completions[0] if completions else None
 
 
@@ -137,11 +137,11 @@ def poll(
             "ambiguous", None, f"Failed to parse wave config: {exc}"
         )
 
-    # Discover wave-completion.sh
+    # Discover wave-completion.py
     completion_script = _find_wave_completion()
     if completion_script is None:
         return _verdict_intervention(
-            "ambiguous", None, "wave-completion.sh not found in ~/.claude or local tree"
+            "ambiguous", None, "wave-completion.py not found in ~/.claude or local tree"
         )
 
     polls = 0
@@ -150,10 +150,11 @@ def poll(
     while True:
         polls += 1
 
-        # Run wave-completion.sh
+        # Run wave-completion.py (invoke via python3; bash for .sh override in tests)
+        invoke = "python3" if str(completion_script).endswith(".py") else "bash"
         try:
             result = subprocess.run(
-                ["bash", str(completion_script), str(wave_config)],
+                [invoke, str(completion_script), str(wave_config)],
                 capture_output=True,
                 text=True,
             )
@@ -162,7 +163,7 @@ def poll(
             stderr = result.stderr.strip()
         except OSError as exc:
             return _verdict_intervention(
-                "ambiguous", None, f"Failed to run wave-completion.sh: {exc}"
+                "ambiguous", None, f"Failed to run wave-completion.py: {exc}"
             )
 
         # exit code 2 = error
@@ -170,7 +171,7 @@ def poll(
             return _verdict_intervention(
                 "ambiguous",
                 None,
-                f"wave-completion.sh exited 2. stderr: {stderr}",
+                f"wave-completion.py exited 2. stderr: {stderr}",
             )
 
         # Validate JSON
@@ -180,7 +181,7 @@ def poll(
             return _verdict_intervention(
                 "ambiguous",
                 None,
-                "wave-completion.sh output not valid JSON",
+                "wave-completion.py output not valid JSON",
             )
 
         # complete=true

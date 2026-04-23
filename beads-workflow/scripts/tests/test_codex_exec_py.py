@@ -16,14 +16,12 @@ Verifies:
 """
 
 import importlib.util
-import io
 import json
 import os
 import stat
 import subprocess
 import sys
 from pathlib import Path
-from unittest.mock import MagicMock, patch
 
 import pytest
 
@@ -364,6 +362,138 @@ def test_parse_token_usage() -> None:
     assert cached == 50  # 50+0
     assert out == 250  # 200+50
     assert reasoning == 25
+
+
+# ---------------------------------------------------------------------------
+# parse_codex_review.py tests
+# ---------------------------------------------------------------------------
+
+_PARSE_CODEX_REVIEW_PY = _SCRIPTS_DIR / "parse_codex_review.py"
+_SCHEMA_PATH = _REPO_ROOT / "core" / "contracts" / "execution-result.schema.json"
+
+_REQUIRED_ENVELOPE_KEYS = {"status", "summary", "data", "errors", "next_steps", "open_items", "meta"}
+
+
+def _load_parse_codex_review():
+    """Load parse_codex_review module."""
+    spec = importlib.util.spec_from_file_location("parse_codex_review", _PARSE_CODEX_REVIEW_PY)
+    assert spec is not None
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)  # type: ignore[union-attr]
+    return mod
+
+
+def _validate_envelope_keys(envelope: dict) -> None:
+    """Verify the envelope has all required top-level keys from execution-result.schema.json."""
+    missing = _REQUIRED_ENVELOPE_KEYS - set(envelope.keys())
+    assert not missing, f"Envelope missing required keys: {missing}"
+
+
+def test_parse_codex_review_regression_found() -> None:
+    """REGRESSION: lines produce warning status with populated regressions list."""
+    pcr = _load_parse_codex_review()
+
+    lines = [
+        "REGRESSION: beads-workflow/scripts/wave-poll.py:82 — references deleted wave-completion.sh",
+        "REGRESSION: beads-workflow/scripts/codex-exec.py:356 — import importlib missing .util",
+    ]
+    envelope = pcr.parse(lines)
+
+    _validate_envelope_keys(envelope)
+    assert envelope["status"] == "warning"
+    assert "2 regression" in envelope["summary"]
+    assert envelope["data"]["total_findings"] == 2
+    assert len(envelope["data"]["regressions"]) == 2
+    assert envelope["data"]["lgtm"] is False
+
+    reg = envelope["data"]["regressions"][0]
+    assert reg["file"] == "beads-workflow/scripts/wave-poll.py"
+    assert reg["line"] == 82
+    assert "wave-completion.sh" in reg["description"]
+
+
+def test_parse_codex_review_lgtm() -> None:
+    """LGTM input produces ok status with empty regressions."""
+    pcr = _load_parse_codex_review()
+
+    lines = ["LGTM — no issues found."]
+    envelope = pcr.parse(lines)
+
+    _validate_envelope_keys(envelope)
+    assert envelope["status"] == "ok"
+    assert envelope["data"]["lgtm"] is True
+    assert envelope["data"]["total_findings"] == 0
+    assert envelope["data"]["regressions"] == []
+
+
+def test_parse_codex_review_empty_input() -> None:
+    """Empty input produces ok status with no regressions."""
+    pcr = _load_parse_codex_review()
+
+    envelope = pcr.parse([])
+
+    _validate_envelope_keys(envelope)
+    assert envelope["status"] == "ok"
+    assert envelope["data"]["total_findings"] == 0
+
+
+def test_parse_codex_review_jsonl_event() -> None:
+    """REGRESSION embedded in codex JSONL event is parsed correctly."""
+    pcr = _load_parse_codex_review()
+
+    jsonl_line = json.dumps({
+        "type": "item.completed",
+        "item": {
+            "id": "item_0",
+            "type": "agent_message",
+            "text": "REGRESSION: src/foo.py:10 — missing import",
+        },
+    })
+    envelope = pcr.parse([jsonl_line])
+
+    _validate_envelope_keys(envelope)
+    assert envelope["status"] == "warning"
+    assert envelope["data"]["total_findings"] == 1
+    assert envelope["data"]["regressions"][0]["file"] == "src/foo.py"
+
+
+def test_parse_codex_review_envelope_against_schema() -> None:
+    """Envelope keys match those required by execution-result.schema.json."""
+    import json as _json
+
+    schema_text = _SCHEMA_PATH.read_text()
+    schema = _json.loads(schema_text)
+    required_by_schema = set(schema.get("required", []))
+
+    pcr = _load_parse_codex_review()
+    envelope = pcr.parse(["LGTM"])
+
+    missing = required_by_schema - set(envelope.keys())
+    assert not missing, f"Envelope missing schema-required keys: {missing}"
+
+    # Also verify meta has required sub-keys
+    meta_required = set(schema["properties"]["meta"].get("required", []))
+    meta_missing = meta_required - set(envelope["meta"].keys())
+    assert not meta_missing, f"meta missing required keys: {meta_missing}"
+
+
+def test_parse_codex_review_via_subprocess(tmp_path: Path) -> None:
+    """Run parse_codex_review.py as a subprocess with a file argument."""
+    import subprocess
+
+    input_file = tmp_path / "codex_output.txt"
+    input_file.write_text("REGRESSION: foo/bar.py:99 — something broke\n")
+
+    result = subprocess.run(
+        ["python3", str(_PARSE_CODEX_REVIEW_PY), str(input_file)],
+        capture_output=True,
+        text=True,
+    )
+    assert result.returncode == 0, f"stderr={result.stderr!r}"
+    envelope = json.loads(result.stdout)
+    _validate_envelope_keys(envelope)
+    assert envelope["status"] == "warning"
+    assert envelope["data"]["total_findings"] == 1
 
 
 if __name__ == "__main__":

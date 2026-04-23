@@ -21,76 +21,13 @@ import sys
 from datetime import datetime, timezone
 from pathlib import Path
 
-
-# ---------------------------------------------------------------------------
-# Helpers (shared with wave-status.py — inline for self-containment)
-# ---------------------------------------------------------------------------
-
-_THINKING_RE = re.compile(
-    r"Newspapering|Baking|Crunched|Churned|Thinking|[0-9]+m\s*[0-9]+s|[⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏]"
+from wave_helpers import (
+    _DEAD_SURFACE_RE,
+    _bd_status,
+    _elapsed_minutes,
+    _read_surface,
+    _surface_is_idle,
 )
-_PROMPT_RE = re.compile(r"^\s*(\$|❯|➜|%)\s*$")
-_DEAD_SURFACE_RE = re.compile(
-    r"invalid_params|not a terminal|Surface.*not found|no such surface",
-    re.IGNORECASE,
-)
-
-
-def _surface_is_idle(screen_text: str) -> bool:
-    """Return True if the surface looks idle (shell prompt, no active thinking)."""
-    lines = [l for l in screen_text.splitlines() if l.strip()]
-    if not lines:
-        return False
-    last_nonempty = lines[-1]
-    if not _PROMPT_RE.match(last_nonempty):
-        return False
-    preceding = lines[-3:-1] if len(lines) >= 3 else lines[:-1]
-    for line in preceding:
-        if _THINKING_RE.search(line):
-            return False
-    return True
-
-
-def _read_surface(surface: str, lines: int = 5, scrollback: bool = False) -> str:
-    """Read a cmux surface. Returns empty string on error."""
-    cmd = ["cmux", "read-screen", "--surface", surface]
-    if scrollback:
-        cmd.append("--scrollback")
-    if lines:
-        cmd += ["--lines", str(lines)]
-    try:
-        result = subprocess.run(cmd, capture_output=True, text=True, timeout=30)
-        return result.stdout + result.stderr
-    except Exception:
-        return ""
-
-
-def _bd_status(bead_id: str) -> str:
-    """Get bd status for a bead. Returns 'unknown' on failure."""
-    try:
-        result = subprocess.run(
-            ["bd", "show", bead_id],
-            capture_output=True,
-            text=True,
-            timeout=15,
-        )
-        m = re.search(r"\b(OPEN|CLOSED|IN_PROGRESS|BLOCKED)\b", result.stdout)
-        if m:
-            return m.group(1).lower()
-    except Exception:
-        pass
-    return "unknown"
-
-
-def _elapsed_minutes(dispatch_time: str) -> int:
-    """Compute elapsed minutes from dispatch_time ISO string. Returns 0 on error."""
-    try:
-        dt = datetime.strptime(dispatch_time.rstrip("Z"), "%Y-%m-%dT%H:%M:%S")
-        now = datetime.now(timezone.utc).replace(tzinfo=None)
-        delta = now - dt
-        return int(delta.total_seconds() / 60)
-    except Exception:
-        return 0
 
 
 # ---------------------------------------------------------------------------
@@ -104,12 +41,14 @@ ACTIVE_WINDOW_MIN = 5
 def _check_recent_activity(bead_id: str, metrics_db: Path, active_window_min: int) -> bool:
     """Return True if there has been recent agent activity for this bead."""
     try:
-        result = sqlite3.connect(str(metrics_db)).execute(
-            "SELECT COUNT(*) FROM agent_calls WHERE bead_id=? "
-            f"AND (strftime('%s','now') - strftime('%s', recorded_at)) < {active_window_min * 60}",
-            (bead_id,),
-        ).fetchone()
-        return bool(result and result[0] > 0)
+        threshold_secs = active_window_min * 60
+        with sqlite3.connect(str(metrics_db)) as conn:
+            row = conn.execute(
+                "SELECT COUNT(*) FROM agent_calls WHERE bead_id=? "
+                "AND (strftime('%s','now') - strftime('%s', recorded_at)) < ?",
+                (bead_id, threshold_secs),
+            ).fetchone()
+        return bool(row and row[0] > 0)
     except Exception:
         return False
 
@@ -219,8 +158,8 @@ def main() -> int:
                             capture_output=True,
                             timeout=15,
                         )
-                    except Exception:
-                        pass
+                    except Exception as exc:
+                        print(f"WARNING: bd update failed for {bead_id}: {exc}", file=sys.stderr)
 
                 stalls.append({"id": bead_id, "detected_at": stall_ts, "elapsed_minutes": elapsed_min})
 
@@ -248,11 +187,10 @@ def main() -> int:
     if metrics_db.exists() and wave_id != "unknown":
         if re.match(r"^[A-Za-z0-9_-]+$", wave_id):
             try:
-                conn = sqlite3.connect(str(metrics_db))
-                row = conn.execute(
-                    "SELECT COUNT(*) FROM bead_runs WHERE wave_id = ?", (wave_id,)
-                ).fetchone()
-                conn.close()
+                with sqlite3.connect(str(metrics_db)) as conn:
+                    row = conn.execute(
+                        "SELECT COUNT(*) FROM bead_runs WHERE wave_id = ?", (wave_id,)
+                    ).fetchone()
                 bead_runs_count = row[0] if row else 0
                 if bead_runs_count == bead_count:
                     metrics_sanity = "ok"
