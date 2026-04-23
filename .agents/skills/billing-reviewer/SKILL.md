@@ -141,18 +141,8 @@ Compare billing patterns between two doctors in same practice:
 
 ### Running the Review
 
-The billing reviewer can be launched as a specialized helper or executed inline:
-
-```text
-You are an Abrechnungsspezialistin reviewing MIRA's billing UI.
-
-Load the billing-reviewer skill instructions from this repository.
-
-Navigate the frontend at http://localhost:3000/billing and evaluate
-each feature from the billing specialist's perspective.
-
-Create beads for every improvement you identify.
-```
+The billing reviewer can be launched as a subagent.
+Run `scripts/launch-billing-review.sh` for the full invocation reference.
 
 ### Prerequisites
 
