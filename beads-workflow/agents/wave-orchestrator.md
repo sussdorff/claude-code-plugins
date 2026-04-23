@@ -895,17 +895,47 @@ TYPE=$(bd show <id> --json | jq -r '.type // ""')
 
 ### Dispatch Command
 
+**You MUST capture your own cmux context FIRST and pass it explicitly as `--workspace`
+and `--base-pane`.** `wave-dispatch.py` no longer auto-detects the workspace — it exits
+with code 2 if either flag is missing. This is intentional: earlier the script silently
+fell back to whatever `cmux identify` returned, which in Agent subagent contexts
+produced the wrong workspace (e.g. the user's currently focused pane, or a stale
+"last active" workspace), and beads got dispatched into unrelated projects.
+
+Capture the orchestrator's own cmux context once, at the top of the dispatch phase:
+
+```bash
+# Run this from the orchestrator's own pane so `caller` = this pane.
+CMUX_INFO=$(cmux identify --json)
+ORCH_WORKSPACE=$(echo "$CMUX_INFO" | jq -r '.caller.workspace_ref // empty')
+ORCH_SURFACE=$(echo "$CMUX_INFO" | jq -r '.caller.surface_ref // empty')
+
+if [[ -z "$ORCH_WORKSPACE" || -z "$ORCH_SURFACE" ]]; then
+  echo "ERROR: cmux identify did not return caller.workspace_ref / caller.surface_ref."
+  echo "The orchestrator must run inside a cmux pane. Aborting."
+  exit 1
+fi
+
+echo "Dispatching into workspace=$ORCH_WORKSPACE, base-pane=$ORCH_SURFACE"
+```
+
+**Never** use `caller.workspace_ref` by parsing it anywhere except from within the
+orchestrator's own shell here, and **never** use `focused.workspace_ref` — that is
+the user's currently focused pane, which is not necessarily where the orchestrator runs.
+
 Build the dispatch command from the Wave Table classifications. Full-mode beads are
-positional args, quick-mode beads use `--quick <id>`:
+positional args, quick-mode beads use `--quick <id>`. `--workspace` and `--base-pane`
+are mandatory:
 
 ```bash
 # Mixed wave: some full, some quick-fix (from Wave Table modes)
-python3 ./scripts/wave-dispatch.py mira-adapters-0al --quick mira-fix-x3r --quick mira-adapters-doq > /tmp/wave-config.json
-```
-
-Or with an explicit workspace:
-```bash
-python3 ./scripts/wave-dispatch.py mira-adapters-0al --quick mira-fix-x3r --workspace workspace:5 > /tmp/wave-config.json
+python3 ./scripts/wave-dispatch.py \
+  mira-adapters-0al \
+  --quick mira-fix-x3r \
+  --quick mira-adapters-doq \
+  --workspace "$ORCH_WORKSPACE" \
+  --base-pane "$ORCH_SURFACE" \
+  > /tmp/wave-config.json
 ```
 
 The script:
@@ -1005,9 +1035,14 @@ One or more panes show error/crash signals (ECONNREFUSED, fatal, panic, tracebac
    cmux read-screen --surface <surface> --lines 30
    ```
 2. **If recoverable** (transient ECONNREFUSED, test setup failure):
-   - Re-dispatch the bead to a new surface:
+   - Re-dispatch the bead to a new surface (reuse `$ORCH_WORKSPACE` /
+     `$ORCH_SURFACE` captured earlier — `--workspace` and `--base-pane`
+     are mandatory):
      ```bash
-     python3 ./scripts/wave-dispatch.py <bead-id> > /tmp/wave-config-updated.json
+     python3 ./scripts/wave-dispatch.py <bead-id> \
+       --workspace "$ORCH_WORKSPACE" \
+       --base-pane "$ORCH_SURFACE" \
+       > /tmp/wave-config-updated.json
      ```
    - Update the wave config path and re-spawn wave-monitor with the updated config
 3. **If not recoverable** (fatal crash, missing dependency, bead in a broken state):

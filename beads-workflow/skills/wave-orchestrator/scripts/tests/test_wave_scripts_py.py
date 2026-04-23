@@ -590,6 +590,58 @@ def test_wave_dispatcher_wave_id_auto_generation() -> None:
     assert output["wave_id"] == generated
 
 
+def test_wave_dispatch_main_requires_workspace_flag() -> None:
+    """wave-dispatch.py main() must exit 2 when --workspace is missing.
+
+    Regression: previously main() silently fell back to `cmux identify` which in
+    Agent subagent contexts returned the wrong workspace and dispatched beads
+    into unrelated projects. --workspace is now mandatory.
+    """
+    result = subprocess.run(
+        [
+            sys.executable,
+            str(_SCRIPTS_DIR / "wave-dispatch.py"),
+            "proj-abc",
+            "--base-pane",
+            "surface:1",
+            "--skip-scenarios",
+        ],
+        capture_output=True,
+        text=True,
+        timeout=15,
+    )
+    assert result.returncode == 2, (
+        f"expected exit 2 without --workspace, got {result.returncode}; "
+        f"stdout={result.stdout!r} stderr={result.stderr!r}"
+    )
+    assert "--workspace is required" in result.stderr
+
+
+def test_wave_dispatch_main_requires_base_pane_flag() -> None:
+    """wave-dispatch.py main() must exit 2 when --base-pane is missing.
+
+    Same rationale as --workspace: silent cmux identify fallback was unsafe.
+    """
+    result = subprocess.run(
+        [
+            sys.executable,
+            str(_SCRIPTS_DIR / "wave-dispatch.py"),
+            "proj-abc",
+            "--workspace",
+            "workspace:5",
+            "--skip-scenarios",
+        ],
+        capture_output=True,
+        text=True,
+        timeout=15,
+    )
+    assert result.returncode == 2, (
+        f"expected exit 2 without --base-pane, got {result.returncode}; "
+        f"stdout={result.stdout!r} stderr={result.stderr!r}"
+    )
+    assert "--base-pane is required" in result.stderr
+
+
 # ---------------------------------------------------------------------------
 # wave-status.py tests
 # ---------------------------------------------------------------------------

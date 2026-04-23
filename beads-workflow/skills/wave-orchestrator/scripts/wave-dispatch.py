@@ -2,13 +2,19 @@
 """
 wave-dispatch.py — Set up cmux panes and dispatch cld -b for a wave.
 
-Usage: wave-dispatch.py <bead-id1> <bead-id2> ... [--workspace <id>] [--base-pane <id>]
+Usage: wave-dispatch.py <bead-id1> <bead-id2> ... --workspace <id> --base-pane <id>
          [--wave-id <id>] [--quick <id>] [--skip-scenarios]
 
 Creates ONE pane per bead (1-pane mode). Renames each surface, dispatches cld -b or cld -bq,
 and outputs wave config JSON.
 
 The output JSON can be fed directly into wave-status.py for monitoring.
+
+**--workspace and --base-pane are REQUIRED.** The orchestrator MUST determine its own
+cmux context (via `cmux identify --json` from within the orchestrator's pane) and pass
+both values explicitly. This prevents the script from silently falling back to an
+unrelated workspace (e.g. the user's currently focused pane, or a stale "last active"
+workspace) and dispatching beads into the wrong location.
 """
 
 import json
@@ -271,21 +277,31 @@ def main() -> int:
 
     dispatcher = WaveDispatcher()
 
-    # Determine workspace
+    # Require explicit workspace and base-pane.
+    #
+    # Rationale: auto-detection via `cmux identify` was unreliable — when the
+    # orchestrator ran as an Agent subagent, the cmux caller context was not
+    # guaranteed to match the orchestrator's actual pane, and the fallback
+    # silently picked unrelated workspaces (e.g. the last active one) and
+    # dispatched beads there. Forcing the orchestrator to determine and pass
+    # its own cmux context up-front makes workspace mis-routing impossible.
     if not workspace:
-        cmux_info = dispatcher.cmux_identify()
-        workspace = cmux_info.get("caller", {}).get("workspace_ref", "")
-        if not workspace:
-            print("Error: could not determine workspace. Pass --workspace explicitly.", file=sys.stderr)
-            return 1
+        print(
+            "Error: --workspace is required. The wave-orchestrator must call "
+            "`cmux identify --json` from within its own pane and pass "
+            "`--workspace <caller.workspace_ref>` explicitly.",
+            file=sys.stderr,
+        )
+        return 2
 
-    # Determine base surface
     if not base_surface:
-        cmux_info = dispatcher.cmux_identify()
-        base_surface = cmux_info.get("caller", {}).get("surface_ref", "")
-        if not base_surface:
-            print("Error: could not determine base surface. Pass --base-pane explicitly.", file=sys.stderr)
-            return 1
+        print(
+            "Error: --base-pane is required. The wave-orchestrator must call "
+            "`cmux identify --json` from within its own pane and pass "
+            "`--base-pane <caller.surface_ref>` explicitly.",
+            file=sys.stderr,
+        )
+        return 2
 
     exit_code, output = dispatcher.dispatch(
         bead_ids=bead_ids,
