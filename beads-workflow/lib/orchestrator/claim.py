@@ -239,8 +239,16 @@ def claim_bead(
     Performs:
       1. Probe current status (read-only)
       2. If not open → return error envelope (no side effects)
-      3. If open → bd update --status=in_progress --assignee=<session_id> --metadata=<json>
-      4. bd dolt commit && bd dolt pull && bd dolt push --force
+      3. If open → bd update --claim --status=in_progress --assignee=<session_id> --metadata=<json>
+      4. Re-probe to detect races (best-effort; not a fully atomic CAS)
+      5. bd dolt commit && bd dolt pull && bd dolt push --force
+
+    NOTE: This is a best-effort race gate. bd has no atomic compare-and-swap for
+    metadata, so a narrow TOCTOU window remains between the initial probe (step 1)
+    and the claim write (step 3). The --claim flag and the post-claim re-probe
+    (step 4) narrow the window and surface conflicts that would otherwise be silent,
+    but two concurrent launchers that both observe 'open' can still both claim the
+    same bead. The envelope data field includes a 'toctou_note' to inform callers.
 
     Returns execution-result envelope conforming to execution-result.schema.json.
     """
@@ -300,12 +308,16 @@ def claim_bead(
             }],
         )
 
-    # Step 3: build claim metadata and update bead
+    # Step 3: build claim metadata and update bead.
+    # --claim uses bd's internal atomicity mechanism (idempotent if already claimed
+    # by the same user). Combined with --assignee and --status, this provides the
+    # best atomicity bd supports for a claim operation.
     claim_meta = _build_claim_meta(session_id=session_id, wave_id=wave_id, run_id=run_id)
     claim_meta_json = json.dumps({"claim": claim_meta})
 
     update_result = runner.run([
         "bd", "update", bead_id,
+        "--claim",
         f"--assignee={session_id}",
         "--status=in_progress",
         f"--metadata={claim_meta_json}",
@@ -324,9 +336,48 @@ def claim_bead(
             }],
         )
 
-    # Step 4: dolt sync
+    # Step 4: Re-probe to detect races (best-effort; not a fully atomic CAS).
+    # If another session claimed between our probe (step 1) and our write (step 3),
+    # the re-read may show in_progress with a different assignee — that is the
+    # detectable race signal. We only flag RACE_DETECTED when we can confirm that
+    # a DIFFERENT session now owns the bead (status=in_progress, assignee≠us and
+    # assignee is non-empty). We do NOT treat a re-probe that still shows "open"
+    # (e.g. due to eventual-consistency propagation) as a race — our update
+    # already returned 0, so the claim was recorded.
+    verify_status, verify_bead = _probe_bead(bead_id, runner)
+    verify_assignee = verify_bead.get("assignee", "") if verify_bead else ""
+    if (
+        verify_status == "in_progress"
+        and verify_assignee
+        and verify_assignee != session_id
+    ):
+        return _envelope(
+            status="error",
+            summary=f"Race detected claiming bead {bead_id}: post-claim re-probe shows "
+                    f"assignee='{verify_assignee}' (expected '{session_id}')",
+            data={
+                "bead_id": bead_id,
+                "current_status": verify_status,
+                "assignee": verify_assignee,
+                "toctou_note": (
+                    "Another session claimed this bead between the initial probe and "
+                    "our update. This is a best-effort detection, not a fully atomic CAS."
+                ),
+            },
+            errors=[{
+                "code": "RACE_DETECTED",
+                "message": (
+                    f"Post-claim re-probe shows assignee='{verify_assignee}' "
+                    f"— expected '{session_id}'. Another session won the race."
+                ),
+                "retryable": False,
+                "suggested_fix": f"bd show {bead_id} --json  # inspect current state",
+            }],
+        )
+
+    # Step 5: dolt sync
     runner.run(["bd", "dolt", "commit", "-m", f"claim: {bead_id} by {session_id}"])
-    runner.run(["bd", "dolt", "pull"])
+    pull_result = runner.run(["bd", "dolt", "pull"])
     push_result = runner.run(["bd", "dolt", "push", "--force"])
 
     result = _envelope(
@@ -337,6 +388,10 @@ def claim_bead(
             "current_status": "in_progress",
             "assignee": session_id,
             "claim": claim_meta,
+            "toctou_note": (
+                "Claim recorded; post-claim re-probe confirmed status. "
+                "A narrow TOCTOU window remains (bd has no atomic CAS)."
+            ),
         },
         next_steps=[{
             "id": "proceed",
@@ -346,8 +401,18 @@ def claim_bead(
         }],
     )
 
+    if pull_result.returncode != 0:
+        # Claim recorded but pull failed — downgrade to warning so caller knows sync state
+        result["status"] = "warning"
+        result["errors"].append({
+            "code": "DOLT_PULL_FAILED",
+            "message": f"dolt pull failed: {pull_result.stderr}",
+            "retryable": True,
+            "suggested_fix": "Run: bd dolt pull && bd dolt push --force",
+        })
+
     if push_result.returncode != 0:
-        # Claim recorded locally but sync failed — add warning so caller can retry push
+        # Claim recorded locally but push failed — add warning so caller can retry push
         result["status"] = "warning"
         result["errors"].append({
             "code": "DOLT_SYNC_FAILED",

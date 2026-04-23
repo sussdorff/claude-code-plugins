@@ -131,8 +131,8 @@ echo "Workspace: $WORKSPACE, Base surface: $BASE_SURFACE" >&2
 DISPATCHABLE=()
 SKIPPED_JSON="[]"
 for id in "${ALL_IDS[@]}"; do
-  _STATUS_JSON=$(bd show "$id" --json 2>/dev/null)
-  _BD_EXIT=$?
+  _BD_EXIT=0
+  _STATUS_JSON=$(bd show "$id" --json 2>/dev/null) || _BD_EXIT=$?
   if [[ $_BD_EXIT -ne 0 ]] || [[ -z "$_STATUS_JSON" ]]; then
     echo "Warning: cannot probe status for $id (bd exit $_BD_EXIT), skipping for safety" >&2
     SKIPPED_JSON=$(echo "$SKIPPED_JSON" | jq --arg id "$id" \
