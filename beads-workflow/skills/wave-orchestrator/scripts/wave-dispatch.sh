@@ -126,6 +126,38 @@ fi
 
 echo "Workspace: $WORKSPACE, Base surface: $BASE_SURFACE" >&2
 
+# Pre-dispatch filter: skip beads that are already in_progress or closed.
+# Runs BEFORE any pane is created so no surfaces are wasted on active beads.
+DISPATCHABLE=()
+SKIPPED_JSON="[]"
+for id in "${ALL_IDS[@]}"; do
+  _BEAD_STATUS=$(bd show "$id" --json 2>/dev/null | python3 -c "import sys,json; d=json.load(sys.stdin); print(d[0].get('status',''))" 2>/dev/null || echo "open")
+  if [[ "$_BEAD_STATUS" == "in_progress" || "$_BEAD_STATUS" == "closed" ]]; then
+    echo "Skipping $id (status=$_BEAD_STATUS)" >&2
+    SKIPPED_JSON=$(echo "$SKIPPED_JSON" | jq --arg id "$id" --arg status "$_BEAD_STATUS" \
+      '. + [{id: $id, status: $status, reason: "already_active"}]')
+  else
+    DISPATCHABLE+=("$id")
+  fi
+done
+
+# Rebuild filtered ID arrays to only include dispatchable beads
+BEAD_IDS_FILTERED=()
+QUICK_IDS_FILTERED=()
+for id in "${BEAD_IDS[@]}"; do
+  for d in "${DISPATCHABLE[@]}"; do
+    [[ "$id" == "$d" ]] && BEAD_IDS_FILTERED+=("$id") && break
+  done
+done
+for id in "${QUICK_IDS[@]}"; do
+  for d in "${DISPATCHABLE[@]}"; do
+    [[ "$id" == "$d" ]] && QUICK_IDS_FILTERED+=("$id") && break
+  done
+done
+BEAD_IDS=("${BEAD_IDS_FILTERED[@]}")
+QUICK_IDS=("${QUICK_IDS_FILTERED[@]}")
+ALL_IDS=("${DISPATCHABLE[@]}")
+
 DISPATCH_TIME=$(date -u +"%Y-%m-%dT%H:%M:%S")
 BEADS_JSON="[]"
 
@@ -181,9 +213,11 @@ jq -n \
   --arg workspace "$WORKSPACE" \
   --arg wave_id "$WAVE_ID" \
   --argjson beads "$BEADS_JSON" \
+  --argjson skipped "$SKIPPED_JSON" \
   '{
     dispatch_time: $dispatch_time,
     workspace: $workspace,
     wave_id: $wave_id,
-    beads: $beads
+    beads: $beads,
+    skipped: $skipped
   }'
