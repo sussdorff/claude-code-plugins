@@ -17,12 +17,8 @@ case "$CMD" in
     ;;
   search)
     QUERY="${1:?search query required}"
-    FIELD="${2:-}"
-    if [[ -n "$FIELD" ]]; then
-      uv run piler search "$QUERY" -f "$FIELD"
-    else
-      uv run piler search "$QUERY"
-    fi
+    shift
+    uv run piler search "$QUERY" "$@"
     ;;
   list)
     uv run piler list "$@"
