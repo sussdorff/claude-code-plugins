@@ -50,16 +50,12 @@ Write your plan to a file, then open it:
 ```bash
 cat > plan.md << 'EOF'
 # Task Plan
-
 ## Steps
-1. Analyze the codebase
-2. Implement the feature
-3. Write tests
-4. Verify the build
 EOF
-
 cmux markdown open plan.md
 ```
+
+See [`scripts/open-plan-file.sh`](scripts/open-plan-file.sh) for the complete example.
 
 ### Updating a plan in real-time
 
