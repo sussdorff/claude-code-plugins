@@ -73,23 +73,6 @@ class MockCommandRunner:
 
 
 # ---------------------------------------------------------------------------
-# Named tuple-style result (internal)
-# ---------------------------------------------------------------------------
-
-
-@dataclass
-class ClaimResult:
-    """Internal representation of a claim attempt result."""
-
-    success: bool
-    bead_id: str
-    current_status: str
-    error_code: str = ""
-    error_message: str = ""
-    claim_meta: dict[str, Any] = field(default_factory=dict)
-
-
-# ---------------------------------------------------------------------------
 # Execution-result envelope helper
 # ---------------------------------------------------------------------------
 
@@ -133,21 +116,38 @@ def _probe_bead(bead_id: str, runner: CommandRunner) -> tuple[str, dict]:
     Query bead status via bd show --json.
 
     Returns (status, raw_bead_dict).
-    status is "" if not found, "error" if bd failed with exit != 0.
+    status is "not_found" if bead doesn't exist, "bd_error" if bd failed.
+
+    Real bd behavior:
+    - Exit code 1 + JSON dict {"error": "..."} when bead not found
+    - Exit code 0 + JSON list with bead record when found
+    - Exit code 127 when bd binary is missing
     """
     result = runner.run(["bd", "show", bead_id, "--json"])
 
     if result.returncode not in (0, 1):
-        # returncode 127 = command not found; other non-zero = bd error
+        # returncode 127 = command not found; other unexpected non-zero = bd error
         return "bd_error", {}
 
+    # Exit code 1 or empty stdout → not found
+    if result.returncode == 1 or not (result.stdout or "").strip():
+        return "not_found", {}
+
     try:
-        records = json.loads(result.stdout or "[]")
+        records = json.loads(result.stdout)
     except (json.JSONDecodeError, ValueError):
         return "bd_error", {}
 
-    if not records:
-        return "", {}
+    # bd returns {"error": "..."} dict when bead not found
+    if isinstance(records, dict) and "error" in records:
+        return "not_found", {}
+
+    # Empty list → not found
+    if isinstance(records, list) and len(records) == 0:
+        return "not_found", {}
+
+    if not isinstance(records, list):
+        return "bd_error", {}
 
     bead = records[0]
     return bead.get("status", ""), bead
@@ -200,7 +200,7 @@ def check_claim_status(
             }],
         )
 
-    if not current_status:
+    if current_status == "not_found":
         return _envelope(
             status="error",
             summary=f"Bead {bead_id} not found",
@@ -261,7 +261,7 @@ def claim_bead(
             }],
         )
 
-    if not current_status:
+    if current_status == "not_found":
         return _envelope(
             status="error",
             summary=f"Bead {bead_id} not found",
@@ -327,9 +327,9 @@ def claim_bead(
     # Step 4: dolt sync
     runner.run(["bd", "dolt", "commit", "-m", f"claim: {bead_id} by {session_id}"])
     runner.run(["bd", "dolt", "pull"])
-    runner.run(["bd", "dolt", "push", "--force"])
+    push_result = runner.run(["bd", "dolt", "push", "--force"])
 
-    return _envelope(
+    result = _envelope(
         status="ok",
         summary=f"Bead {bead_id} claimed by {session_id}",
         data={
@@ -345,3 +345,15 @@ def claim_bead(
             "automatable": True,
         }],
     )
+
+    if push_result.returncode != 0:
+        # Claim recorded locally but sync failed — add warning so caller can retry push
+        result["status"] = "warning"
+        result["errors"].append({
+            "code": "DOLT_SYNC_FAILED",
+            "message": f"Claim recorded locally but dolt push failed: {push_result.stderr}",
+            "retryable": True,
+            "suggested_fix": "Run: bd dolt pull && bd dolt push --force",
+        })
+
+    return result

@@ -117,15 +117,6 @@ Parse: title, description, acceptance criteria, type, priority.
 **Guard rail:** If effort is NOT micro/small, or type is `feature`, STOP:
 > "Bead <id> is too large for quick-fix (effort: <effort>, type: <type>). Use the full bead-orchestrator."
 
-**Claim the bead** (sets status=in_progress, records metadata.claim, syncs dolt):
-
-Run:
-```
-python3 beads-workflow/scripts/claim-bead.py <id> --session-id=$CCP_SESSION_ID
-```
-
-First line `✓ CLAIMED ...` → proceed. First line `✗ ABORT ...` → stop, return that line to user, exit phase.
-
 Gather minimal context:
 1. Read files mentioned in the bead description
 2. Check for project-specific standards (quick scan only):
@@ -138,7 +129,20 @@ Gather minimal context:
    ```
    Store this SHA as `PRE_IMPL_SHA` in your context — you need it for the Codex review base.
 
-4. Capture runtime branch/worktree context:
+4. Create a metrics run (store `RUN_ID` for codex-exec.sh calls and the claim call):
+   ```bash
+   # Locate metrics-start.sh (prefer repo-local, fall back to installed)
+   METRICS_START="beads-workflow/scripts/metrics-start.sh"
+   if [[ ! -f "$METRICS_START" ]]; then
+     METRICS_START=$(find ~/.claude/plugins -name metrics-start.sh -type f 2>/dev/null | sort -r | head -1)
+   fi
+   RUN_ID=$("$METRICS_START" "<bead_id>" "${WAVE_ID:-}" "quick-fix")
+   export CCP_ORCHESTRATOR_RUN_ID="$RUN_ID"  # Prevents SubagentStop hook from double-writing ad-hoc rows
+   echo "$RUN_ID"
+   ```
+   Store the printed value as `RUN_ID` in your context. If the script is not found, set `RUN_ID=""` — codex-exec.sh degrades gracefully when `RUN_ID` is unset.
+
+5. Capture runtime branch/worktree context:
    ```bash
    CURRENT_BRANCH=$(git branch --show-current)
    REPO_ROOT=$(git rev-parse --show-toplevel)
@@ -153,18 +157,14 @@ Gather minimal context:
    ```
    Store these values as `CURRENT_BRANCH` and `WORKTREE_MODE` in your context.
 
-5. Create a metrics run (store `RUN_ID` for codex-exec.sh calls):
-   ```bash
-   # Locate metrics-start.sh (prefer repo-local, fall back to installed)
-   METRICS_START="beads-workflow/scripts/metrics-start.sh"
-   if [[ ! -f "$METRICS_START" ]]; then
-     METRICS_START=$(find ~/.claude/plugins -name metrics-start.sh -type f 2>/dev/null | sort -r | head -1)
-   fi
-   RUN_ID=$("$METRICS_START" "<bead_id>" "${WAVE_ID:-}" "quick-fix")
-   export CCP_ORCHESTRATOR_RUN_ID="$RUN_ID"  # Prevents SubagentStop hook from double-writing ad-hoc rows
-   echo "$RUN_ID"
-   ```
-   Store the printed value as `RUN_ID` in your context. If the script is not found, set `RUN_ID=""` — codex-exec.sh degrades gracefully when `RUN_ID` is unset.
+**Claim the bead** (sets status=in_progress, records metadata.claim, syncs dolt):
+
+Run:
+```
+python3 beads-workflow/scripts/claim-bead.py <id> --session-id=$CCP_SESSION_ID --run-id=$RUN_ID
+```
+
+First line `✓ CLAIMED ...` → proceed. First line `✗ ABORT ...` → stop, return that line to user, exit phase.
 
 ### Phase 1: Spawn Implementer
 

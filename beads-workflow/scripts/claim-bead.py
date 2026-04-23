@@ -38,10 +38,9 @@ import socket
 import sys
 from pathlib import Path
 
-# Locate claim module: prefer repo-local (worktree), then installed ~/.claude
+# Locate claim module: prefer repo-local (worktree), then search installed plugins
 _REPO_ROOTS = [
     Path(__file__).parent.parent / "lib" / "orchestrator",           # repo-local
-    Path.home() / ".claude" / "plugins" / "cache",                   # installed (search)
 ]
 
 _claim_module_dir: Path | None = None
@@ -83,7 +82,7 @@ except ImportError as exc:
             "schema": "core/contracts/execution-result.schema.json",
         },
     }
-    print("✗ ABORT: claim.py module not found", file=sys.stderr)
+    print("✗ ABORT: claim.py module not found")
     print(json.dumps(_err))
     sys.exit(0)
 

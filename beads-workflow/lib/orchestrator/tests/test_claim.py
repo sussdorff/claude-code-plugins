@@ -27,7 +27,6 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 
 import claim as claim_module
 from claim import (
-    ClaimResult,
     CommandRunner,
     MockCommandRunner,
     check_claim_status,
@@ -58,8 +57,12 @@ def _bd_show_json(status: str, bead_id: str = "test-1") -> str:
 
 
 def _bd_show_not_found() -> str:
-    """Return an empty bd show --json response (bead not found)."""
-    return json.dumps([])
+    """Return a bd show --json response matching real bd behavior when bead not found.
+
+    Real bd returns a JSON dict {"error": "..."} with exit code 1 (not an empty list).
+    The test helper returns the dict body; the _make_completed_process caller must set returncode=1.
+    """
+    return json.dumps({"error": "bead not found"})
 
 
 # ---------------------------------------------------------------------------
@@ -253,11 +256,16 @@ class TestClosedBeadRefusal(unittest.TestCase):
 # ---------------------------------------------------------------------------
 
 class TestNotFoundHandling(unittest.TestCase):
-    """claim_bead() returns error when bead not found (empty json array)."""
+    """claim_bead() returns error when bead not found.
+
+    Real bd returns exit code 1 + JSON dict {"error": "..."} for unknown beads.
+    """
 
     def setUp(self):
         self.runner = MockCommandRunner(responses={
-            "bd show ghost-99 --json": _make_completed_process(_bd_show_not_found()),
+            "bd show ghost-99 --json": _make_completed_process(
+                _bd_show_not_found(), returncode=1
+            ),
         })
 
     def test_not_found_returns_error(self):

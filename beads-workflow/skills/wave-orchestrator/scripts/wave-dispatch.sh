@@ -131,7 +131,21 @@ echo "Workspace: $WORKSPACE, Base surface: $BASE_SURFACE" >&2
 DISPATCHABLE=()
 SKIPPED_JSON="[]"
 for id in "${ALL_IDS[@]}"; do
-  _BEAD_STATUS=$(bd show "$id" --json 2>/dev/null | python3 -c "import sys,json; d=json.load(sys.stdin); print(d[0].get('status',''))" 2>/dev/null || echo "open")
+  _STATUS_JSON=$(bd show "$id" --json 2>/dev/null)
+  _BD_EXIT=$?
+  if [[ $_BD_EXIT -ne 0 ]] || [[ -z "$_STATUS_JSON" ]]; then
+    echo "Warning: cannot probe status for $id (bd exit $_BD_EXIT), skipping for safety" >&2
+    SKIPPED_JSON=$(echo "$SKIPPED_JSON" | jq --arg id "$id" \
+      '. + [{id: $id, status: "unknown", reason: "status_probe_failed"}]')
+    continue
+  fi
+  _BEAD_STATUS=$(echo "$_STATUS_JSON" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d[0].get('status','') if isinstance(d, list) and len(d) > 0 else 'not_found')" 2>/dev/null || echo "")
+  if [[ -z "$_BEAD_STATUS" || "$_BEAD_STATUS" == "not_found" ]]; then
+    echo "Warning: cannot determine status for $id (unexpected bd output), skipping for safety" >&2
+    SKIPPED_JSON=$(echo "$SKIPPED_JSON" | jq --arg id "$id" \
+      '. + [{id: $id, status: "unknown", reason: "status_probe_failed"}]')
+    continue
+  fi
   if [[ "$_BEAD_STATUS" == "in_progress" || "$_BEAD_STATUS" == "closed" ]]; then
     echo "Skipping $id (status=$_BEAD_STATUS)" >&2
     SKIPPED_JSON=$(echo "$SKIPPED_JSON" | jq --arg id "$id" --arg status "$_BEAD_STATUS" \
