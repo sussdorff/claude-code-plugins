@@ -1,3 +1,9 @@
+## [Unreleased]
+
+### ⚙️ Miscellaneous Tasks
+
+- *(CCP-xib)* Remove unreliable screen-lock check from session-close; treat git push failure as notification
+
 ## [2026.04.100] - 2026-04-22
 
 ### 🚀 Features
