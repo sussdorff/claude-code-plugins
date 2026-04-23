@@ -14,16 +14,16 @@ Szenario-Generierung fuer Features.
 ## Input
 
 ```
-$ARGUMENTS
+<Beschreibung des Vorhabens> [optionale Flags]
 ```
 
 ---
 
 ## Phase 0: Input parsen
 
-Falls `$ARGUMENTS` leer: Frage "Was soll gemacht werden? Beschreib kurz das Vorhaben."
+Falls kein Vorhabenstext uebergeben wurde: Frage "Was soll gemacht werden? Beschreib kurz das Vorhaben."
 
-Falls `$ARGUMENTS` vorhanden: Verwende als Beschreibung des Vorhabens.
+Falls Vorhabenstext vorhanden: Verwende ihn als Beschreibung des Vorhabens.
 
 ---
 
@@ -149,19 +149,18 @@ Erklaere dem User kurz:
 
 **PFLICHT fuer Features.** Wenn der akzeptierte Typ `feature` ist:
 
-1. Spawne den Scenario-Generator im `bead-scenario` Mode:
+1. Nutze den konfigurierten Scenario-Generator im `bead-scenario` Mode, falls der Harness
+   so einen Helper anbietet. Falls nicht, entwirf die Szenarien inline nach demselben Format:
 
 ```
-Agent(subagent_type="dev-tools:scenario-generator", prompt="
-  Mode: bead-scenario
-  Bead-ID: NOCH_NICHT_ERSTELLT
-  Title: [Titel]
-  Description: [Beschreibung]
+Mode: bead-scenario
+Bead-ID: NOCH_NICHT_ERSTELLT
+Title: [Titel]
+Description: [Beschreibung]
 
-  Generiere Szenarien basierend auf dieser Feature-Beschreibung.
-  Es gibt noch keinen Bead — arbeite mit Titel und Beschreibung statt bd show.
-  Gib die Szenarien als ## Szenario Markdown zurueck.
-")
+Generiere Szenarien basierend auf dieser Feature-Beschreibung.
+Es gibt noch keinen Bead — arbeite mit Titel und Beschreibung statt bd show.
+Gib die Szenarien als ## Szenario Markdown zurueck.
 ```
 
 2. Zeige die generierten Szenarien dem User:

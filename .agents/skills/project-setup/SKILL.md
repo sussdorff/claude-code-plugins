@@ -19,21 +19,21 @@ description: >
 ## Modes
 
 ```
-/project-setup                    # New project: interview + full scaffolding
-/project-setup --upgrade          # Upgrade existing project to current setup version
-/project-setup --audit            # Fleet audit: scan all projects, report drift
-/project-setup --scan-only        # Just detect and report, no changes
+project-setup                    # New project: interview + full scaffolding
+project-setup --upgrade          # Upgrade existing project to current setup version
+project-setup --audit            # Fleet audit: scan all projects, report drift
+project-setup --scan-only        # Just detect and report, no changes
 ```
 
 ## Quick Routing
 
 | Situation | Mode |
 |-----------|------|
-| Brand new project, nothing exists yet | `/project-setup` (init) |
-| Existing repo, never had beads/CLAUDE.md | `/project-setup` (init) |
-| Project exists but setup is outdated | `/project-setup --upgrade` |
-| Want to see what's different across all projects | `/project-setup --audit` |
-| Just curious what would be detected | `/project-setup --scan-only` |
+| Brand new project, nothing exists yet | `project-setup` (init) |
+| Existing repo, never had beads/CLAUDE.md | `project-setup` (init) |
+| Project exists but setup is outdated | `project-setup --upgrade` |
+| Want to see what's different across all projects | `project-setup --audit` |
+| Just curious what would be detected | `project-setup --scan-only` |
 
 ## Project Types
 
@@ -98,7 +98,7 @@ After interview, show a complete plan of what will be created. Get explicit conf
 5. Create remote DB on elysium (via dolt-remote workflow)
 6. `bd dolt remote add origin http://192.168.60.30:8080/beads_<prefix>`
 7. Force-push to establish remote history
-8. Set up `.claude/` symlink via `/claude-config-handler`
+8. Set up the project harness config symlink via `claude-config-handler`
 9. Write `.project-setup-version` with current skill version
 
 #### Type-specific scaffolding
@@ -113,7 +113,7 @@ See `references/claude-md-generation.md` for the full template and rules.
 
 ### Phase 4: Standards Injection
 
-Run `/inject-standards` to load relevant standards based on detected project type.
+Run `inject-standards` to load relevant standards based on detected project type.
 
 ### Phase 5: Verification
 
@@ -171,7 +171,7 @@ Compare what the project has against what the current setup version expects. Che
 | Legacy files | None should exist | Remove (see dolt-remote skill) |
 | `.project-setup-version` | Exists and current | Create/update |
 | `CLAUDE.md` | Exists and structured | Run CLAUDE.md generation if missing |
-| `.claude/` | Symlinked correctly | Fix via claude-config-handler |
+| project harness config dir | Symlinked correctly | Fix via claude-config-handler |
 | Type-specific | See `references/type-recipes.md` | Apply missing pieces |
 
 ### Step 4: Present changes
@@ -245,4 +245,4 @@ The upgrade mode reads this to determine which steps to apply for a given versio
 - **Interview in German, CLAUDE.md in English.** Convention: CLAUDE.md is always English for portability.
 - **Idempotent upgrades.** Running `--upgrade` on an already-current project is a no-op.
 - **Canonical `.gitignore` source:** `/Users/malte/code/claude/.beads/.gitignore`
-- **This skill delegates** to dolt-remote knowledge for Dolt setup and to claude-config-handler for `.claude/` management. It orchestrates, those handle the details.
+- **This skill delegates** to dolt-remote knowledge for Dolt setup and to claude-config-handler for harness config management. It orchestrates, those handle the details.

@@ -21,10 +21,10 @@ Structured 4-stage retrospective for completed beads. Produces three artifact ty
 ## Usage
 
 ```
-/compound --bead=<id>              # Analyze a specific bead
-/compound --bead=<id> --dry-run    # Print artifacts without saving
-/compound --bead=<id> --skip-decisions   # Skip creating decision beads
-/compound --bead=<id> --skip-patterns    # Skip saving patterns to open-brain
+compound --bead=<id>              # Analyze a specific bead
+compound --bead=<id> --dry-run    # Print artifacts without saving
+compound --bead=<id> --skip-decisions   # Skip creating decision beads
+compound --bead=<id> --skip-patterns    # Skip saving patterns to open-brain
 ```
 
 If `--bead` is omitted, ask the user which bead to retrospect before proceeding.
@@ -38,7 +38,7 @@ Run these stages sequentially. Each stage surfaces specific artifact candidates.
 Did the plan match the ticket/acceptance criteria?
 
 - Fetch: `bd show <bead-id>` (acceptance criteria, title, description)
-- Fetch: plan file from `~/.claude/plans/<bead-id>.md` if present
+- Fetch: plan file from the harness plan directory if present
 - Ask: Which acceptance criteria were addressed by the plan? Which were missed or misinterpreted?
 - Artifacts: Traps (misread requirements), Decisions (scope choices made)
 </stage-1>
@@ -85,7 +85,7 @@ bd create --title="[TRAP] <title>" --type=task --priority=3 --labels=trap
 
 ### Patterns (reusable structures)
 
-Save via `mcp__open-brain__save_memory`:
+Save via the open-brain memory connector:
 
 - **title**: Pattern title (max 80 chars)
 - **text**: Pattern description
@@ -159,5 +159,5 @@ Artifacts saved:
 ## Resources
 
 - `references/stages.md` — Detailed per-stage guidance with examples and question banks
-- `/learnings-pipeline` — Learnings pipeline for reviewing extracted patterns
-- `/beads:decision` — Beads decision management skill
+- `learnings-pipeline` — Learnings pipeline for reviewing extracted patterns
+- `beads:decision` — Beads decision management skill

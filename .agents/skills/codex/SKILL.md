@@ -6,13 +6,6 @@ description: |
   your code. Consult: ask codex anything with session continuity for follow-ups.
   The "200 IQ autistic developer" second opinion. Use when asked to "codex review",
   "codex challenge", "ask codex", "second opinion", or "consult codex".
-allowed-tools:
-  - Bash
-  - Read
-  - Write
-  - Glob
-  - Grep
-  - AskUserQuestion
 ---
 
 # /codex — Multi-AI Second Opinion
@@ -65,7 +58,7 @@ Parse the user's input to determine which mode to run:
 3. `/codex` with no arguments — **Auto-detect:**
    - Check for a diff (with fallback if origin isn't available):
      `git diff origin/<base> --stat 2>/dev/null | tail -1 || git diff <base> --stat 2>/dev/null | tail -1`
-   - If a diff exists, use AskUserQuestion:
+   - If a diff exists, ask the user:
      ```
      Codex detected changes against the base branch. What should it do?
      A) Review the diff (code review with pass/fail gate)
@@ -73,8 +66,8 @@ Parse the user's input to determine which mode to run:
      C) Something else — I'll provide a prompt
      ```
    - If no diff, check for plan files scoped to the current project:
-     `ls -t ~/.claude/plans/*.md 2>/dev/null | xargs grep -l "$(basename $(pwd))" 2>/dev/null | head -1`
-     If no project-scoped match, fall back to: `ls -t ~/.claude/plans/*.md 2>/dev/null | head -1`
+     `ls -t <harness-plan-dir>/*.md 2>/dev/null | xargs grep -l "$(basename $(pwd))" 2>/dev/null | head -1`
+     If no project-scoped match, fall back to: `ls -t <harness-plan-dir>/*.md 2>/dev/null | head -1`
      but warn the user: "Note: this plan may be from a different project."
    - If a plan file exists, offer to review it
    - Otherwise, ask: "What would you like to ask Codex?"
@@ -213,7 +206,7 @@ Ask Codex anything about the codebase. Supports session continuity for follow-up
 cat .context/codex-session-id 2>/dev/null || echo "NO_SESSION"
 ```
 
-If a session file exists (not `NO_SESSION`), use AskUserQuestion:
+If a session file exists (not `NO_SESSION`), ask the user:
 ```
 You have an active Codex conversation from earlier. Continue it or start fresh?
 A) Continue the conversation (Codex remembers the prior context)
@@ -228,9 +221,9 @@ TMPERR=$(mktemp /tmp/codex-err-XXXXXX.txt)
 3. **Plan review auto-detection:** If the user's prompt is about reviewing a plan,
 or if plan files exist and the user said `/codex` with no arguments:
 ```bash
-ls -t ~/.claude/plans/*.md 2>/dev/null | xargs grep -l "$(basename $(pwd))" 2>/dev/null | head -1
+ls -t <harness-plan-dir>/*.md 2>/dev/null | xargs grep -l "$(basename $(pwd))" 2>/dev/null | head -1
 ```
-If no project-scoped match, fall back to `ls -t ~/.claude/plans/*.md 2>/dev/null | head -1`
+If no project-scoped match, fall back to `ls -t <harness-plan-dir>/*.md 2>/dev/null | head -1`
 but warn: "Note: this plan may be from a different project — verify before sending to Codex."
 Read the plan file and prepend the persona to the user's prompt:
 "You are a brutally honest technical reviewer. Review this plan for: logical gaps and
