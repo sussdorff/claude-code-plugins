@@ -62,6 +62,11 @@ while [[ $# -gt 0 ]]; do
   esac
 done
 
+DRY_RUN_ARGS=()
+if [[ "$DRY_RUN" == "true" ]]; then
+  DRY_RUN_ARGS=(--dry-run)
+fi
+
 # ---------------------------------------------------------------------------
 # Environment
 # ---------------------------------------------------------------------------
@@ -154,7 +159,7 @@ fi
 echo "==> Step 14: Second merge from main" >&2
 
 MERGE2_OUT=$(bash "$HANDLERS_DIR/merge-from-main.sh" \
-  ${DRY_RUN:+--dry-run} --label "second" 2>&1) || MERGE2_EXIT=$?
+  "${DRY_RUN_ARGS[@]}" --label "second" 2>&1) || MERGE2_EXIT=$?
 MERGE2_EXIT=${MERGE2_EXIT:-0}
 
 MERGE2_RAW=$(echo "$MERGE2_OUT" | grep '^MERGE_FROM_MAIN_STATUS=' | cut -d= -f2)
@@ -204,7 +209,7 @@ if [[ "$IN_WORKTREE" == "true" && "$BRANCH" != "main" && -n "$MAIN_REPO" ]]; the
   MF_OUT=$(bash "$HANDLERS_DIR/merge-feature.sh" \
     --main-repo "$MAIN_REPO" \
     --branch "$BRANCH" \
-    ${DRY_RUN:+--dry-run} 2>&1) || MF_EXIT=$?
+    "${DRY_RUN_ARGS[@]}" 2>&1) || MF_EXIT=$?
   MF_EXIT=${MF_EXIT:-0}
 
   MF_RAW=$(echo "$MF_OUT" | grep '^MERGE_FEATURE_STATUS=' | cut -d= -f2)
@@ -278,7 +283,7 @@ if [[ -n "$EXISTING_TAG" ]]; then
   VERSION_STATUS="ok"
   echo "    HEAD already tagged as $EXISTING_TAG — skipping version bump" >&2
 else
-  VER_OUT=$(bash "$HANDLERS_DIR/version.sh" ${DRY_RUN:+--dry-run} 2>&1) || VER_EXIT=$?
+  VER_OUT=$(bash "$HANDLERS_DIR/version.sh" "${DRY_RUN_ARGS[@]}" 2>&1) || VER_EXIT=$?
   VER_EXIT=${VER_EXIT:-0}
 
   if [[ "$VER_EXIT" -eq 0 ]]; then
@@ -378,7 +383,7 @@ else
   PW_OUT=$(bash "$HANDLERS_DIR/pipeline-watch.sh" \
     --repo-dir "$GIT_WORK_DIR" \
     --sha "$PUSH_SHA" \
-    ${DRY_RUN:+--dry-run} 2>&1) || PW_EXIT=$?
+    "${DRY_RUN_ARGS[@]}" 2>&1) || PW_EXIT=$?
   PW_EXIT=${PW_EXIT:-0}
 
   PIPELINE_STATUS=$(echo "$PW_OUT" | grep '^PIPELINE_STATUS=' | cut -d= -f2 || echo "unknown")
