@@ -97,9 +97,10 @@
           "enum": [
             "passed", "failed", "skipped", "skipped_flag",
             "skipped_no_gh", "skipped_not_authed", "skipped_no_workflow",
-            "skipped_dry_run", "skipped_no_handler", "not_attempted", "unknown"
+            "skipped_dry_run", "skipped_no_handler", "skipped_push_failed",
+            "not_attempted", "unknown"
           ],
-          "description": "passed=CI green, failed=CI red (beads must NOT be closed), skipped_*=non-blocking skip"
+          "description": "passed=CI green, failed=CI red (beads must NOT be closed), skipped_*=non-blocking skip (including skipped_push_failed when prior push did not succeed)"
         },
         "run_url": {
           "type": "string",

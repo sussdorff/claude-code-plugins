@@ -368,7 +368,7 @@ if [[ "$SKIP_PIPELINE" == "true" ]]; then
   PIPELINE_STATUS="skipped_flag"
   echo "    skipped (--skip-pipeline)" >&2
 elif [[ "$PUSH_STATUS" != "ok" ]]; then
-  PIPELINE_STATUS="skipped"
+  PIPELINE_STATUS="skipped_push_failed"
   echo "    skipped (push was not ok: $PUSH_STATUS)" >&2
 elif [[ ! -f "$HANDLERS_DIR/pipeline-watch.sh" ]]; then
   PIPELINE_STATUS="skipped_no_handler"

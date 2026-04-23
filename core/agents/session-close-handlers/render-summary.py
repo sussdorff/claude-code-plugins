@@ -81,11 +81,12 @@ def render(state: dict) -> str:
     # Format push status for readability
     push_display = push_status
     if push_status == "failed" and push_detail:
-        # Truncate detail to avoid overwhelming the summary
-        detail_short = push_detail[:120] + "..." if len(push_detail) > 120 else push_detail
-        push_display = f"FAILED — {detail_short}\n  → retry: git push origin main"
+        # Flatten multi-line git stderr into a single line
+        detail_flat = " | ".join(line.strip() for line in push_detail.splitlines() if line.strip())
+        detail_short = detail_flat[:120] + "..." if len(detail_flat) > 120 else detail_flat
+        push_display = f"FAILED — {detail_short} → retry: git push origin main"
     elif push_status == "failed":
-        push_display = "FAILED — (no detail captured)\n  → retry: git push origin main"
+        push_display = "FAILED — (no detail captured) → retry: git push origin main"
 
     # Format pipeline status for readability
     pipeline_display = pipeline_status
