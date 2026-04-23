@@ -45,20 +45,9 @@ jq -r '.credentials[0].item_id' ~/.config/op/plugins/hcloud.json
 
 ### Switch between projects
 
-```bash
-# Switch to Default project
-jq '.credentials[0].item_id = "xdxjwlnfkgjl2bnkwxq7rqf77u"' \
-  ~/.config/op/plugins/hcloud.json > /tmp/hcloud.json \
-  && mv /tmp/hcloud.json ~/.config/op/plugins/hcloud.json
+Run: `scripts/switch-project.sh <default|shikigami>`
 
-# Switch to Shikigami project
-jq '.credentials[0].item_id = "tmtmfkzwjtrf57bjpp44qiwloq"' \
-  ~/.config/op/plugins/hcloud.json > /tmp/hcloud.json \
-  && mv /tmp/hcloud.json ~/.config/op/plugins/hcloud.json
-
-# Verify switch worked
-hcloud server list
-```
+Rewrites the item_id in `~/.config/op/plugins/hcloud.json` and verifies with `hcloud server list`.
 
 ### Direct API calls (bypasses plugin)
 
@@ -116,24 +105,13 @@ hcloud zone rrset list 817812 --type CNAME
 
 ### Add records
 
+Run: `scripts/add-dns-records.sh <zone-id> <name> <type> <record> [<record>...]`
+
+Examples (direct hcloud invocations for single records):
 ```bash
-# A record
 hcloud zone add-records --record "80.147.143.115" --ttl 300 817812 comics A
-
-# CNAME (trailing dot!)
 hcloud zone add-records --record "example.de." --ttl 3600 817812 www CNAME
-
-# MX (multiple records)
-hcloud zone add-records \
-  --record "10 in1-smtp.messagingengine.com." \
-  --record "20 in2-smtp.messagingengine.com." \
-  --ttl 3600 817812 @ MX
-
-# TXT
 hcloud zone add-records --record '"v=spf1 include:spf.messagingengine.com ?all"' --ttl 3600 817812 @ TXT
-
-# SRV (priority weight port target)
-hcloud zone add-records --record "0 1 993 imap.fastmail.com." --ttl 3600 817812 _imaps._tcp SRV
 ```
 
 **Syntax:** `hcloud zone add-records --record <value> [--record <value>...] [--ttl <seconds>] <zone-id> <name> <type>`
@@ -168,20 +146,9 @@ hcloud zone import-zonefile 817812 --file zone.txt
 
 ### Fallback: Direct API calls
 
-Only use curl if `hcloud zone` doesn't support a specific operation:
+Only use curl if `hcloud zone` doesn't support a specific operation.
 
-```bash
-HCLOUD_TOKEN=$(op item get xdxjwlnfkgjl2bnkwxq7rqf77u --vault "API Keys" --fields token --reveal)
-
-# List RRSets via API
-curl -s -H "Authorization: Bearer ${HCLOUD_TOKEN}" \
-  "https://api.hetzner.cloud/v1/zones/817812/rrsets?per_page=100" \
-  | jq '.rrsets[] | "\(.name) \(.type) \([.records[].value] | join(", "))"' -r
-
-# Delete RRSet via API (if remove-records doesn't suffice)
-curl -s -X DELETE -H "Authorization: Bearer ${HCLOUD_TOKEN}" \
-  "https://api.hetzner.cloud/v1/zones/817812/rrsets/mail/A"
-```
+Run: `scripts/list-rrsets-api.sh <zone-id> [list|delete <name> <type>]`
 
 **WARNING (API only):** PUT often fails silently — returns HTTP 200 but keeps old values.
 Prefer `hcloud zone set-records` over raw API PUT calls.
@@ -277,21 +244,8 @@ When changing A/CNAME records for domains served by Traefik (Let's Encrypt ACME 
 
 ## Reading DNS from cPanel (Serverprofis)
 
-If migrating from a cPanel host, records are base64-encoded:
+If migrating from a cPanel host, records are base64-encoded.
 
-```bash
-SP_TOKEN=$(op read "op://API Keys/SP-Server/Token")
-curl -sk -H "Authorization: cpanel erpproje:${SP_TOKEN}" \
-  "https://cp220.sp-server.net:2083/execute/DNS/parse_zone?zone=example.de" \
-  | python3 -c '
-import json, sys, base64
-data = json.load(sys.stdin)
-for r in data["data"]:
-    if r["type"] != "record": continue
-    name = base64.b64decode(r["dname_b64"]).decode()
-    rtype = r["record_type"]
-    vals = [base64.b64decode(v).decode() for v in r.get("data_b64", [])]
-    if rtype == "SOA": continue
-    print(f"{name:40s} {r.get(chr(116)+chr(116)+chr(108), chr(45)):>6} {rtype:6s} {chr(32).join(vals)}")
-'
-```
+Run: `scripts/parse-cpanel-zone.sh <domain>`
+
+Fetches and decodes the zone via the cPanel API using the `SP-Server` token from 1Password.
