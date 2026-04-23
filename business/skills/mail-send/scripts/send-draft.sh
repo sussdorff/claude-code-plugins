@@ -1,6 +1,7 @@
 #!/bin/bash
 # Create a visible Apple Mail draft with a single recipient and attachment.
 # Usage: SUBJECT="..." BODY="..." TO="recipient@example.com" ATTACHMENT="/abs/path/file.pdf" SENDER="malte.sussdorff@cognovis.de" bash send-draft.sh
+set -euo pipefail
 
 SUBJECT="${SUBJECT:?SUBJECT is required}"
 BODY="${BODY:?BODY is required}"
@@ -8,6 +9,8 @@ TO="${TO:?TO is required}"
 ATTACHMENT="${ATTACHMENT:?ATTACHMENT is required}"
 SENDER="${SENDER:-malte.sussdorff@cognovis.de}"
 
+# NOTE: SUBJECT, BODY, TO, SENDER, and ATTACHMENT are expanded in this heredoc.
+# Values must not contain unescaped: $ ` "
 osascript << APPLESCRIPT
 tell application "Mail"
     activate

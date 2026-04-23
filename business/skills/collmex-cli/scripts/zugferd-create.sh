@@ -2,6 +2,7 @@
 # Generate EN 16931 compliant ZUGFeRD XML for a vendor invoice.
 # Adjust placeholder values before running.
 # Optional flags: --qty <quantity>, --buyer-id <id>, --due 2024-02-15, --notes "..."
+# set -euo pipefail  # Uncomment after filling in all placeholder values
 
 collmex zugferd-create \
   --vendor-id 123 \

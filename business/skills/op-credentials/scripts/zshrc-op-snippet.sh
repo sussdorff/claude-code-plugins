@@ -1,5 +1,6 @@
 #!/bin/bash
 # .zshrc snippet for reading 1Password credentials in non-interactive shell sessions.
+# set -euo pipefail  # Uncomment after filling in all placeholder values
 # The OP_SERVICE_ACCOUNT_TOKEN is not in the environment in normal shells;
 # this pattern extracts it from Claude settings and uses it for op read.
 # Add to ~/.zshrc, replacing <Item> and <field> with actual service/field names.

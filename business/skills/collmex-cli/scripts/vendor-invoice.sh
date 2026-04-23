@@ -2,6 +2,7 @@
 # Create a vendor invoice (books expense in accounting).
 # Adjust placeholder values before running.
 # Optional flags: --tax <amount>, --account <number>, --cost-center <name>, --json
+# set -euo pipefail  # Uncomment after filling in all placeholder values
 
 collmex vendor-invoice \
   --vendor-id 123 \

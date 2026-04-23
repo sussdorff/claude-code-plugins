@@ -1,6 +1,7 @@
 #!/bin/bash
 # Transaction management commands for mm-cli (set-category, set-checkmark, set-comment).
 # Replace <transaction-id> with the actual transaction ID before running.
+# set -euo pipefail  # Uncomment after filling in all placeholder values
 
 cd ~/code/finance-projects/mm-cli
 

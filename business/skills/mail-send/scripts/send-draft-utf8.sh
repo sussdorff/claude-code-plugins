@@ -3,11 +3,14 @@
 # Step 1: Write email body to /tmp/mail-body.txt using the Write tool (UTF-8 encoded).
 # Step 2: Run this script to create the AppleScript file and execute it.
 # Usage: SUBJECT="..." TO="recipient@example.com" SENDER="malte.sussdorff@cognovis.de" bash send-draft-utf8.sh
+set -euo pipefail
 
 SUBJECT="${SUBJECT:?SUBJECT is required}"
 TO="${TO:?TO is required}"
 SENDER="${SENDER:-malte.sussdorff@cognovis.de}"
 
+# NOTE: SUBJECT, TO, and SENDER are expanded in this heredoc.
+# Values must not contain unescaped: $ ` "
 cat << EOF > /tmp/create-draft.applescript
 tell application "Mail"
     activate

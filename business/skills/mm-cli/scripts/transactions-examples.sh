@@ -1,6 +1,7 @@
 #!/bin/bash
 # Transaction query examples for mm-cli.
 # Run individual lines as needed — not intended to be executed as a complete script.
+# set -euo pipefail  # Uncomment after filling in all placeholder values
 
 cd ~/code/finance-projects/mm-cli
 

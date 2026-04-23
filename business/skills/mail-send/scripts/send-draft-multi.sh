@@ -1,6 +1,7 @@
 #!/bin/bash
 # Create a visible Apple Mail draft with multiple recipients and attachments.
 # Adjust placeholder values and recipient/attachment lines before running.
+# set -euo pipefail  # Uncomment after filling in all placeholder values
 
 osascript << 'APPLESCRIPT'
 tell application "Mail"

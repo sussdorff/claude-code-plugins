@@ -1,6 +1,7 @@
 #!/bin/bash
 # Examples for reading credentials from the 1Password "API Keys" vault.
 # Run individual lines as needed — not intended as a complete script.
+# set -euo pipefail  # Uncomment after filling in all placeholder values
 
 # Read a single field
 op read "op://API Keys/<ServiceName>/<FieldName>"

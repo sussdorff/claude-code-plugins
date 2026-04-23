@@ -1,6 +1,7 @@
 #!/bin/bash
 # Create an Apple Mail draft for the Google invoice and send to Buchhaltung.
 # Usage: MONTH=... YEAR=... TOTAL=... PDF_PATH=... XML_PATH=... bash send-to-buchhaltung.sh
+set -euo pipefail
 
 MONTH="${MONTH:?MONTH is required (e.g. März)}"
 YEAR="${YEAR:?YEAR is required}"
@@ -8,6 +9,8 @@ TOTAL="${TOTAL:?TOTAL amount is required}"
 PDF_PATH="${PDF_PATH:?PDF_PATH is required}"
 XML_PATH="${XML_PATH:?XML_PATH is required}"
 
+# NOTE: MONTH, YEAR, TOTAL, PDF_PATH, and XML_PATH are expanded in this heredoc.
+# Values must not contain unescaped: $ ` "
 osascript << APPLESCRIPT
 tell application "Mail"
     activate
