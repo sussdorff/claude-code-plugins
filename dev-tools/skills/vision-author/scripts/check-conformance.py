@@ -14,7 +14,10 @@ repo_root = Path(subprocess.check_output(
 if str(repo_root) not in sys.path:
     sys.path.insert(0, str(repo_root))
 
-vision_path = Path(sys.argv[1]) if len(sys.argv) > 1 else repo_root / "docs/vision.md"
+vision_path = Path(sys.argv[1]) if len(sys.argv) > 1 else Path("docs/vision.md")
+# Resolve relative paths against repo_root
+if not vision_path.is_absolute():
+    vision_path = repo_root / vision_path
 
 if not vision_path.exists():
     print(f"NOT_FOUND: {vision_path}")

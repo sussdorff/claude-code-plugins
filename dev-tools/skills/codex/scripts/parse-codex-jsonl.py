@@ -43,5 +43,5 @@ for line in sys.stdin:
             tokens = usage.get('input_tokens', 0) + usage.get('output_tokens', 0)
             if tokens:
                 print(f'\ntokens used: {tokens}')
-    except json.JSONDecodeError:
+    except (json.JSONDecodeError, AttributeError, TypeError, KeyError):
         continue

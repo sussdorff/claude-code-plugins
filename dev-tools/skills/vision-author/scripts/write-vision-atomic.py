@@ -18,6 +18,7 @@ draft.write_text(content, encoding="utf-8")
 try:
     os.rename(draft, final)
 except Exception as e:
-    draft.unlink(missing_ok=True)
-    raise
+    print(f"ERROR: rename failed: {e}")
+    print(f"Recovery: content is preserved in {draft.absolute()} — copy it manually to {final}")
+    sys.exit(1)
 print("docs/vision.md written (atomic rename from draft)")
