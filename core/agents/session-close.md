@@ -138,7 +138,6 @@ These conditions are **not** defaultable. In non-interactive mode, return a stru
 | Condition | Action |
 |-----------|--------|
 | Merge conflict (Step 3 or Step 14) | Return `BLOCKED: merge conflict — human must resolve` |
-| Screen locked during push | Return `BLOCKED: screen locked — human must unlock` |
 | Pipeline failed (CI ran and failed) | Return `BLOCKED: CI pipeline failed — see run URL` |
 
 ---
@@ -392,7 +391,7 @@ Parse `SHIP_JSON` (see `phase-b-ship.schema.json` for the full schema):
 .merge_feature.status - ok|conflict|skipped|not_attempted
 .version.status       - ok|failed|not_attempted
 .version.tag          - e.g. v2026.04.77
-.push.status          - ok|failed|screen_locked|skipped|not_attempted
+.push.status          - ok|failed|skipped|not_attempted
 .pipeline.status      - passed|failed|skipped_*|not_attempted
 .pipeline.run_url     - GitHub Actions run URL (on passed/failed)
 .plugin_cache.status  - ok|skipped|not_attempted
@@ -410,11 +409,11 @@ Parse `SHIP_JSON` (see `phase-b-ship.schema.json` for the full schema):
 | `failed` + `.pipeline.error == no_run_registered` | Abort. Workflow exists but no run registered. |
 | `skipped_*` | Log reason, proceed to Step 16b. |
 
-**Screen locked:** If `.push.status == screen_locked`: stop, inform user.
+**Push failed:** If `.push.status == failed`: continue — beads are still closed and summary is generated. Show push.status prominently in final summary with instruction to retry manually.
 
 ### Step 16b: Close Beads (phase-b-close-beads.sh)
 
-Run only after `.pipeline.status` is `passed` or `skipped_*`. Skip if `.push.status != ok`.
+Run regardless of push status. Pipeline and plugin-cache steps are skipped when push failed, but beads are still closed and summary is generated.
 
 ```bash
 CLOSE_JSON=$(bash "$HANDLERS_DIR/phase-b-close-beads.sh" \
@@ -520,6 +519,7 @@ print(json.dumps({
   'merge_from_main_second': ship.get('second_merge', {}).get('status', 'skipped'),
   'worktree_merged':        ship.get('merge_feature', {}).get('status') == 'ok',
   'push_status':            ship.get('push', {}).get('status', 'skipped'),
+  'push_detail':            ship.get('push', {}).get('detail', ''),
   'pipeline_status':        ship.get('pipeline', {}).get('status', 'skipped_dry_run'),
   'pipeline_run_url':       ship.get('pipeline', {}).get('run_url', '')
 }))
@@ -541,7 +541,7 @@ Check ALL repos modified during the session (e.g. `~/code/claude/` for skills/st
 | First merge conflict | STOP, report, user resolves |
 | Second merge conflict | STOP, report — previous work preserved on branch |
 | Feature->main merge conflict | STOP, report, do NOT force |
-| Screen locked | STOP, inform user |
+| Push failed | Warn, show push.status in final summary with retry instruction, continue to close beads |
 | Handler script missing | Warn, skip that step, continue |
 | bd command missing | Warn, skip beads steps |
 | git-cliff missing | Warn, skip changelog |

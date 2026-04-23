@@ -4,6 +4,10 @@
 
 - *(CCP-ahs)* Code-layer claim gate: prevent double-launch via claim.py + cld/wave pre-flight
 
+### ⚙️ Miscellaneous Tasks
+
+- *(CCP-xib)* Remove unreliable screen-lock check from session-close; treat git push failure as notification
+
 ## [2026.04.100] - 2026-04-22
 
 ### 🚀 Features
