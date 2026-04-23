@@ -48,28 +48,7 @@ playwright-cli -s=amazon open --profile=~/.local/share/playwright-cli/profiles/a
 
 ### Step 2: Download invoice
 
-```bash
-# Click "Rechnung" button to open dropdown
-playwright-cli -s=amazon snapshot | grep -i "rechnung"
-playwright-cli -s=amazon click eXXX      # button "Rechnung"
-sleep 1
-
-# Extract the PDF download URL
-playwright-cli -s=amazon eval "$(cat <<'JS'
-(() => {
-    const links = [...document.querySelectorAll('a')];
-    return JSON.stringify(links
-        .filter(a => a.href.includes('documents/download'))
-        .map(a => ({text: a.textContent.trim(), href: a.href})));
-})()
-JS
-)"
-
-# Download original PDF via curl + session cookies
-COOKIES=$(playwright-cli -s=amazon cookie-list | jq -r '.[] | "\(.name)=\(.value)"' | paste -sd '; ' -)
-curl -s -L -H "Cookie: $COOKIES" -o "/path/to/output.pdf" "<pdf-url-from-above>"
-file "/path/to/output.pdf"  # verify: "PDF document, version 1.4, ..."
-```
+See [`scripts/download-invoice.sh`](scripts/download-invoice.sh) for the full download workflow (click Rechnung button, extract PDF URL via JS eval, download via curl + session cookies).
 
 WHY: `playwright-cli pdf` renders Chromium's PDF viewer, not the original. curl + cookies gets the actual Amazon PDF.
 

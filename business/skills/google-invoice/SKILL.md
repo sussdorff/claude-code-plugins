@@ -81,35 +81,11 @@ Where YYYY-MM-DD is the invoice date from Step 3.
 
 ### Step 6: Generate ZUGFeRD XML
 
-```bash
-cd ~/code/finance-projects/collmex-cli && uv run collmex zugferd-create \
-  --vendor-id 72163 \
-  --invoice "<invoice-number>" \
-  --date "<YYYY-MM-DD>" \
-  --desc "<description from step 3>" \
-  --net <net-amount> \
-  --tax-rate 19.0 \
-  --buyer-id "9045-3453-2608" \
-  --output "/Users/malte/Documents/cognovis/Buchhaltung/<YYYY>/<YYYY-MM-DD> - cognovis - beleg - google.xml"
-```
+See [`scripts/zugferd-create.sh`](scripts/zugferd-create.sh) for the full zugferd-create command with all required fields (vendor-id 72163, buyer-id, tax-rate 19.0).
 
 ### Step 7: Send to Buchhaltung via Apple Mail
 
-Create a visible draft (never auto-send):
-
-```bash
-osascript << 'APPLESCRIPT'
-tell application "Mail"
-    activate
-    set newMessage to make new outgoing message with properties {subject:"Google AI Pro Rechnung <Monat> <YYYY>", content:"Rechnung Google AI Pro (Google One) <Monat> <YYYY> - EUR <total> brutto", visible:true, sender:"malte.sussdorff@cognovis.de"}
-    tell newMessage
-        make new to recipient at end of to recipients with properties {address:"buchhaltung@cognovis.de"}
-        make new attachment with properties {file name:POSIX file "<pdf-path>"}
-        make new attachment with properties {file name:POSIX file "<xml-path>"}
-    end tell
-end tell
-APPLESCRIPT
-```
+Create a visible draft (never auto-send). See [`scripts/send-to-buchhaltung.sh`](scripts/send-to-buchhaltung.sh) for the full AppleScript Mail draft workflow (attaches both PDF and XML).
 
 ### Step 8: Close browser and report
 

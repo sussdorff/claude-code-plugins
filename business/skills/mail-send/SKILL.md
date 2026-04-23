@@ -60,38 +60,11 @@ end tell
 
 ## Usage Pattern
 
-Run via `osascript` heredoc:
-
-```bash
-osascript << 'APPLESCRIPT'
-tell application "Mail"
-    activate
-    set newMessage to make new outgoing message with properties {subject:"Subject here", content:"Body text here", visible:true, sender:"malte.sussdorff@cognovis.de"}
-    tell newMessage
-        make new to recipient at end of to recipients with properties {address:"recipient@example.com"}
-        make new attachment with properties {file name:POSIX file "/absolute/path/to/attachment.pdf"}
-    end tell
-end tell
-APPLESCRIPT
-```
+Run via `osascript` heredoc. See [`scripts/send-draft.sh`](scripts/send-draft.sh) for the single-recipient, single-attachment pattern.
 
 ## Multiple Recipients and Multiple Attachments
 
-```bash
-osascript << 'APPLESCRIPT'
-tell application "Mail"
-    activate
-    set newMessage to make new outgoing message with properties {subject:"Subject", content:"Body", visible:true, sender:"malte.sussdorff@cognovis.de"}
-    tell newMessage
-        make new to recipient at end of to recipients with properties {address:"first@example.com"}
-        make new to recipient at end of to recipients with properties {address:"second@example.com"}
-        make new cc recipient at end of cc recipients with properties {address:"cc@example.com"}
-        make new attachment with properties {file name:POSIX file "/path/to/file1.pdf"}
-        make new attachment with properties {file name:POSIX file "/path/to/file2.pdf"}
-    end tell
-end tell
-APPLESCRIPT
-```
+See [`scripts/send-draft-multi.sh`](scripts/send-draft-multi.sh) for the multi-recipient, multi-attachment pattern (to, cc, and multiple file attachments).
 
 ## Long Bodies and Umlauts / Special Characters (MANDATORY PATTERN)
 
@@ -117,21 +90,7 @@ Write → /tmp/mail-body.txt  (UTF-8, full email body)
 
 Step 2 — run AppleScript that reads the file with the explicit UTF-8 class
 via a separate `.applescript` file (heredoc + AppleScript heredoc + UTF-8
-marker don't coexist reliably):
-
-```bash
-cat << 'EOF' > /tmp/create-draft.applescript
-tell application "Mail"
-    activate
-    set mailContent to read POSIX file "/tmp/mail-body.txt" as «class utf8»
-    set newMessage to make new outgoing message with properties {subject:"Subject with Umlauts ÄÖÜ", content:mailContent, visible:true, sender:"malte.sussdorff@cognovis.de"}
-    tell newMessage
-        make new to recipient at end of to recipients with properties {address:"recipient@example.com"}
-    end tell
-end tell
-EOF
-osascript /tmp/create-draft.applescript
-```
+marker don't coexist reliably). See [`scripts/send-draft-utf8.sh`](scripts/send-draft-utf8.sh) for the full pattern.
 
 **The `as «class utf8»` clause is non-optional** — omitting it produces the
 MacRoman-interpretation garbage. The guillemets around `class utf8` are part of

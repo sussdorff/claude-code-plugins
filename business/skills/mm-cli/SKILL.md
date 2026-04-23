@@ -61,21 +61,7 @@ uv run mm accounts -g Privat -g Business    # Multiple groups
 
 ### Transactions
 
-Defaults to last 14 days if no date range given.
-
-```bash
-uv run mm transactions                                    # Last 14 days
-uv run mm transactions --days 30                           # Last 30 days
-uv run mm transactions --from 2026-01-01 --to 2026-01-31  # Date range
-uv run mm transactions --category Lebensmittel             # By category
-uv run mm transactions --uncategorized                     # Missing category
-uv run mm transactions --account DE89...                   # By IBAN
-uv run mm transactions --group Privat                      # By account group
-uv run mm transactions --min-amount 50 --max-amount 500    # Amount range
-uv run mm transactions --sort amount                       # Sort: date, amount, name
-uv run mm transactions --sort date --reverse               # Newest first
-uv run mm transactions --checkmark off                     # Unchecked only
-```
+Defaults to last 14 days if no date range given. See [`scripts/transactions-examples.sh`](scripts/transactions-examples.sh) for the full set of filter and sort options (date range, category, IBAN, group, amount range, sort, checkmark).
 
 ### Categories
 
@@ -145,19 +131,7 @@ uv run mm analyze balance-history --group Hauptkonten
 
 ### Transaction Management
 
-```bash
-# Re-categorize a transaction
-uv run mm set-category <transaction-id> Lebensmittel
-uv run mm set-category <transaction-id> Lebensmittel --dry-run
-
-# Checkmark (reconciliation)
-uv run mm set-checkmark <transaction-id> on
-uv run mm set-checkmark <transaction-id> off
-
-# Comments
-uv run mm set-comment <transaction-id> "Reviewed 2026-01"
-uv run mm set-comment <transaction-id> ""                    # Clear
-```
+See [`scripts/transaction-management.sh`](scripts/transaction-management.sh) for the full set of management commands (set-category with --dry-run, set-checkmark on/off, set-comment with clear).
 
 ### Rule Suggestions
 
