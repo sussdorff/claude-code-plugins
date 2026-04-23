@@ -9,9 +9,19 @@ charly-server-dev-tools/
 *.backup
 *~
 
-# Claude Code local configuration (symlink and directory)
-.claude
-.claude/
+# Claude Code local configuration — ignore contents selectively.
+# (Full-dir exclusion would block subpath negation, so we exclude immediate
+# children only and re-include the standards subtree.)
+.claude/*
+# Exceptions: marketplace-meta content is version-controlled.
+# - standards/  — project-local standards loaded by inject-standards
+# - commands/   — project-local slash commands (marketplace install helpers)
+# - agents/     — placeholder for future project-local agents
+# - settings.json — shared hook configuration (bd prime on SessionStart)
+!.claude/standards/
+!.claude/commands/
+!.claude/agents/
+!.claude/settings.json
 
 # JIRA configuration (contains credentials)
 .jira-analyzer.json

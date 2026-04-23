@@ -263,11 +263,14 @@ echo "RUN_ID=$RUN_ID"
 
 Store `RUN_ID` in your agent context — propagate to every subsequent subagent and codex-exec.py call.
 
-**Claim the bead:**
-```bash
-bd update <id> --status=in_progress
-bd dolt commit && bd dolt pull && bd dolt push --force
+**Claim the bead** (sets status=in_progress, records metadata.claim, syncs dolt):
+
+Run:
 ```
+python3 beads-workflow/scripts/claim-bead.py <id> --session-id=$CCP_SESSION_ID --wave-id=${WAVE_ID:-} --run-id=$RUN_ID
+```
+
+First line `✓ CLAIMED ...` → proceed. First line `✗ ABORT ...` → stop, return that line to user, exit phase.
 
 → **Record phase_summary**: sizing decision, effort (pre-set or estimated), routing mode (GSD/PAUL/REROUTE_QUICK_FIX), run_id created, any slicing performed.
 

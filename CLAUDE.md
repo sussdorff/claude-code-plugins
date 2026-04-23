@@ -1,5 +1,31 @@
 # Claude Code Plugins Development Standards
 
+## Harness Authoring Rules
+
+Before writing agent-facing code, skill bodies, or helper scripts, read these two references. They define the canonical patterns for this repo and they are enforced by `validate-skill.py`.
+
+| Rule | Reference | Enforcer |
+|------|-----------|----------|
+| **Script-First** — executable workflow logic lives in `scripts/`, not in skill/agent bodies. Fenced shell blocks >5 real lines or Python blocks >3 real lines in SKILL.md/agent.md are BLOCKING EXTRACTABLE_CODE findings. | `meta/skills/skill-auditor/references/skill-script-first.md` | `meta/skills/skill-auditor/scripts/validate-skill.py` (exit 0/1/2) |
+| **Execution-Result Envelope** — helpers that return multiple fields or distinguish ok/warning/error MUST emit `core/contracts/execution-result.schema.json`. Single atomic values (a UUID, a path, a count) may print bare. | `meta/skills/agent-forge/references/execution-result-contract.md` | Schema validated in `tests/test_skill_auditor_validate_skill.py` and `tests/test_agent_forge_validate_agent.py` |
+
+**Before every skill/agent change:**
+```bash
+python3 meta/skills/skill-auditor/scripts/validate-skill.py <skill-dir>
+```
+
+**Canonical Python homes:**
+- `beads-workflow/lib/orchestrator/` — orchestrator/workflow Python modules (metrics, routing, gate, parse_debrief, aggregate_debriefs). Add new orchestrator logic here as a module; put a thin CLI wrapper in `beads-workflow/scripts/` if needed. See `beads-workflow/lib/orchestrator/README.md`.
+- `core/contracts/` — JSON schemas for cross-script contracts. See `core/contracts/README.md`.
+
+**Reference implementation emitting the envelope:** `beads-workflow/scripts/wave-poll.py`.
+
+**Antipattern signals** (stop and extract to a script/module):
+- A fenced Python block with real control flow inside a SKILL.md or agent `.md`
+- A 10+ line Bash block parsing and chaining tools
+- Prose that says "run X, store it, parse it, then feed it to Y"
+- Inline `python -c` or heredoc glue shaping structured data
+
 ## Python Script Standards
 
 ### Dependency Management Strategy

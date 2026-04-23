@@ -1,0 +1,70 @@
+# Project-Local Standards Index — claude-code-plugins
+# =====================================================
+#
+# Dieses File definiert projekt-spezifische Standards, die via inject-standards
+# in den Kontext geladen werden wenn Trigger gegen den Kontext matchen.
+#
+# Format siehe ~/.claude/standards/index.yml.
+# Projekt-Standards ergaenzen/ueberschreiben globale (siehe Partial-Merge Regeln
+# in core/skills/inject-standards/SKILL.md).
+
+standards:
+  dev-tools/script-first-rule:
+    description: "Script-First authoring rule: executable workflow logic (>5 Zeilen Shell / >3 Zeilen Python / python -c / multi-step tool-call prose) gehoert in scripts/, nicht in SKILL.md oder agent .md Bodies. Enforcer: validate-skill.py (BLOCKING/ADVISORY EXTRACTABLE_CODE). Kanonische Python-Heimat fuer Orchestrator-Logik: beads-workflow/lib/orchestrator/."
+    triggers:
+      - "skill"
+      - "SKILL.md"
+      - "writing skill"
+      - "new skill"
+      - "create skill"
+      - "improve skill"
+      - "rewrite skill"
+      - "agent"
+      - "subagent"
+      - "agent.md"
+      - "new agent"
+      - "create agent"
+      - "helper"
+      - "helper script"
+      - "validate-skill"
+      - "EXTRACTABLE_CODE"
+    path: "dev-tools/script-first-rule.md"
+
+  dev-tools/execution-result-envelope:
+    description: "Execution-Result Envelope Contract: Helfer-Scripts mit Multi-Field-Output emittieren core/contracts/execution-result.schema.json (status/summary/data/errors/next_steps/open_items/meta). Bare stdout nur fuer atomare Einzelwerte. Exit 0 auch bei status=error — Branching via JSON, nicht via Shell-Exit. Referenz-Impl: beads-workflow/scripts/wave-poll.py."
+    triggers:
+      - "execution-result"
+      - "execution result"
+      - "JSON output"
+      - "JSON envelope"
+      - "helper script"
+      - "multi-field"
+      - "core/contracts"
+      - "schema.json"
+      - "subagent output"
+      - "structured output"
+      - "wave-poll"
+      - "orchestrator"
+      - "scripts/"
+    path: "dev-tools/execution-result-envelope.md"
+
+  dev-tools/python-default-bash-exception:
+    description: "Python ist Default fuer alle Scripts. Bash nur als Ausnahme erlaubt: (1) Script manipuliert Shell-Umgebung selbst (PATH-Shims, rc-Dateien), (2) wird vom Shell-Loader als Hook/Completion aufgerufen, (3) triviale Glue ≤10 Zeilen ohne strukturierte Daten / Control-Flow. Kein 'python3 - <<PYEOF'-Heredoc in Bash. Keine Cross-Plugin-Python-Imports. Kanonische Python-Heime: beads-workflow/lib/orchestrator/, core/contracts/ (nur Schemas), <plugin>/lib/, <skill>/scripts/."
+    triggers:
+      - "script"
+      - "scripts/"
+      - ".sh"
+      - "bash script"
+      - "shell script"
+      - "helper script"
+      - "orchestrator"
+      - "wave"
+      - "cmux"
+      - "subprocess"
+      - "heredoc"
+      - "PYEOF"
+      - "new script"
+      - "refactor script"
+      - "migrate to python"
+      - "python default"
+    path: "dev-tools/python-default-bash-exception.md"
