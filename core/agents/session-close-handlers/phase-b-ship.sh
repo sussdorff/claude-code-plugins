@@ -10,7 +10,7 @@
 #   14: Second merge from main (merge-from-main.sh)
 #   15: Merge feature branch into main (merge-feature.sh)
 #   15b: Version bump + create tag (version.sh)
-#   16: Screen-lock check + push + tag push
+#   16: Push + tag push
 #   16a: Pipeline watch (pipeline-watch.sh)
 #   16c: Sync plugin cache (sync-plugin-cache.sh)
 #
