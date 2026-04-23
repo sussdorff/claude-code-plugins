@@ -1,21 +1,13 @@
 ---
 name: dolt
 description: >
-  Troubleshoot and fix beads Dolt problems — push/pull failures, merge conflicts, Access denied
-  errors, database recovery, re-clone, embedded mode fallback, server-to-embedded migration,
-  and reflog restore. Triggers on: any `bd dolt` command that fails or shows errors,
-  "not supported in embedded mode", "Access denied for user", "no common ancestor",
-  "Merge conflict detected", "TLS handshake failed", "database not found", deprecated fields
-  in metadata.json, wrong port in dolt-server.port, rogue local dolt servers, setting up dolt
-  remote for new beads projects, migrating from shared-server to embedded mode, fleet-wide beads
-  cleanup, and recovering lost/dropped local databases. Use this skill whenever .beads/
-  infrastructure, Dolt connectivity, database recovery, beads version upgrades, mode migration,
-  or beads configuration hygiene is involved — even if the user doesn't mention "dolt" explicitly
-  but describes symptoms like "beads won't sync", "can't push issues", "lost my local database",
-  "migrate to embedded", or "beads install". IMPORTANT: Always read the beads changelog first to
-  check for breaking changes between versions. Do NOT use for beads issue tracking
-  (bd create/ready/close — use beads skill), standalone Dolt databases outside beads, or regular
-  git push/pull.
+  Troubleshoot beads Dolt failures: `bd dolt` push/pull errors, merge conflicts,
+  embedded/shared-server mode problems, remote auth issues, local DB recovery, re-clone,
+  reflog restore, and broken .beads Dolt config. Use whenever beads sync or Dolt
+  infrastructure is failing, including symptoms like "beads do not sync", "cannot push
+  issues", "no common ancestor", "not supported in embedded mode", or "lost local
+  database". Read the beads changelog first. Do not use for normal beads tracking (`bd
+  create/ready/close`), standalone Dolt databases, or regular git push/pull.
 ---
 
 # dolt
