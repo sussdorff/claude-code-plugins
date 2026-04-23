@@ -390,7 +390,7 @@ bd update <id> --append-notes="Break analysis: ..."
 
 If running:
 ```bash
-ls malte/skills/council/council.py 2>/dev/null && echo "council available" || echo "fallback"
+ls business/skills/council/council.py 2>/dev/null && echo "council available" || echo "fallback"
 ```
 
 - Council available → invoke council skill with bead ID, title, description, AKs. Timeout: 60s.
