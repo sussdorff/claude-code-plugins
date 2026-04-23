@@ -368,19 +368,14 @@ fi
 
 Skip if `--skip-push`.
 
-1. Screen lock safety check (macOS):
-   ```bash
-   ioreg -c AppleDisplayWakeReason | grep -q IODisplayWrangler && echo "unlocked" || echo "locked"
-   ```
-   If locked: STOP, inform user.
-
-2. Push from main repo (if worktree) or current repo:
+1. Push from main repo (if worktree) or current repo:
    ```bash
    GIT_PUSH_DIR="${MAIN_REPO:-$REPO_ROOT}"
    git -C "$GIT_PUSH_DIR" push origin main
    ```
+   Push failure is non-blocking — session continues to close beads and generate summary. Show push.status prominently in final summary with instruction to retry manually.
 
-3. Push tag:
+2. Push tag:
    ```bash
    LATEST_TAG=$(git -C "$GIT_PUSH_DIR" describe --tags --abbrev=0 2>/dev/null || echo "")
    [ -n "$LATEST_TAG" ] && git -C "$GIT_PUSH_DIR" push origin "$LATEST_TAG"

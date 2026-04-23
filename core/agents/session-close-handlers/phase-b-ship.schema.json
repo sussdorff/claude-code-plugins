@@ -74,8 +74,8 @@
       "properties": {
         "status": {
           "type": "string",
-          "enum": ["ok", "failed", "skipped", "screen_locked", "not_attempted"],
-          "description": "ok=pushed, failed=push error, screen_locked=macOS screen locked (push aborted), skipped=--skip-push or dry-run, not_attempted=prior step failed"
+          "enum": ["ok", "failed", "skipped", "not_attempted"],
+          "description": "ok=pushed, failed=push error (non-blocking, session continues), skipped=--skip-push or dry-run, not_attempted=prior step failed"
         },
         "detail": {
           "type": "string",
