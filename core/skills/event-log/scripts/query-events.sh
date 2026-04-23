@@ -1,12 +1,12 @@
 #!/usr/bin/env bash
 DB="<agent-state-dir>/events.db"
 TAIL=20
+# Sanitize PROJECT once to avoid repeating the tr-pipeline inline in SQL.
+# IMPORTANT: Never interpolate user-supplied values directly into SQL strings.
+# Or better: use Python for queries to avoid shell injection entirely.
+PROJECT_SAFE=$(echo "$PROJECT" | tr -d "'" | tr -d '"')
 
 # No filters — last N events for current project
-# IMPORTANT: $PROJECT must be properly shell-escaped. Never interpolate
-# user-supplied values directly into SQL strings. Safe pattern:
-#   PROJECT_SAFE=$(echo "$PROJECT" | tr -d "'" | tr -d '"')
-# Or better: use Python for queries to avoid shell injection entirely.
 sqlite3 "$DB" "
   SELECT
     substr(timestamp, 1, 19) || 'Z' as ts,
@@ -15,17 +15,16 @@ sqlite3 "$DB" "
     coalesce(tool, '-') as tool,
     coalesce(outcome, '-') as outcome
   FROM events
-  WHERE project = '$(echo "$PROJECT" | tr -d "'" | tr -d '"')'
+  WHERE project = '$PROJECT_SAFE'
   ORDER BY timestamp DESC
   LIMIT $TAIL
 " | column -t -s '|'
 
 # With --type filter
-# Use PROJECT_SAFE=$(echo "$PROJECT" | tr -d "'" | tr -d '"') before interpolating.
 sqlite3 "$DB" "
   SELECT substr(timestamp,1,19)||'Z', event_type, session_id
   FROM events
-  WHERE project = '$(echo "$PROJECT" | tr -d "'" | tr -d '"')'  AND event_type = 'session_start'
+  WHERE project = '$PROJECT_SAFE'  AND event_type = 'session_start'
   ORDER BY timestamp DESC LIMIT $TAIL
 "
 
@@ -33,7 +32,7 @@ sqlite3 "$DB" "
 sqlite3 "$DB" "
   SELECT substr(timestamp,1,19)||'Z', event_type, tool, outcome
   FROM events
-  WHERE project = '$(echo "$PROJECT" | tr -d "'" | tr -d '"')'  AND tool = 'Read'
+  WHERE project = '$PROJECT_SAFE'  AND tool = 'Read'
   ORDER BY timestamp DESC LIMIT $TAIL
 "
 
