@@ -2,8 +2,9 @@
 """Validate answer text against tense gate rules.
 Reads answer text from stdin. Prints violations if any.
 
-Usage: echo "answer text" | python3 validate-tense.py
+Usage: python3 validate-tense.py < answer.txt
 """
+import os
 import subprocess
 import sys
 import tempfile
@@ -29,11 +30,14 @@ with tempfile.NamedTemporaryFile(mode="w", suffix=".md", delete=False, encoding=
     f.write(answer_text)
     tmp_path = f.name
 
-violations = tg.lint_file(Path(tmp_path))
-if violations:
-    for v in violations:
-        print(f"  line {v.line}: [{v.tag}] {v.explanation}")
-        print(f"    Found: '{v.text}'")
-    sys.exit(1)
-else:
-    print("OK: no tense violations")
+try:
+    violations = tg.lint_file(Path(tmp_path))
+    if violations:
+        for lineno, tag, explanation, matched in violations:
+            print(f"  line {lineno}: [{tag}] {explanation}")
+            print(f"    Found: '{matched}'")
+        sys.exit(1)
+    else:
+        print("OK: no tense violations")
+finally:
+    os.unlink(tmp_path)

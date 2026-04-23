@@ -51,7 +51,7 @@ If `--refresh` was passed:
 python3 <skill-dir>/scripts/check-conformance.py docs/vision.md
 ```
 
-Parse result: if output starts with `CONFORMANT`, proceed; if `CONFORMANCE FAILURE:`, print the failure details and exit 1.
+Parse result: if the script exits 0, proceed. If it exits non-zero, print its output and abort.
 
 3. If the check-conformance.py script exits non-zero:
    - Print: "CONFORMANCE FAILURE: Cannot load existing vision.md as defaults."
@@ -98,10 +98,12 @@ Then return and complete this question when you have the answer.
 After STUB detection, run tense gate on every answer:
 
 ```bash
-echo "<answer_text>" | python3 <skill-dir>/scripts/validate-tense.py
+python3 <skill-dir>/scripts/validate-tense.py << 'TENSE_GATE_EOF'
+<answer_text>
+TENSE_GATE_EOF
 ```
 
-Parse output: if `OK: no tense violations`, validation passes; if violations are listed, reject with the violation details.
+Exit 0 = no violations (proceed). Exit 1 = violations listed on stdout (reject the answer, show violations, re-prompt).
 
 If violations > 0, reject:
 ```
