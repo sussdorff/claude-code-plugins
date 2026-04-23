@@ -1,7 +1,0 @@
-{
-  "name": "pvs-charly",
-  "version": "1.0.0",
-  "scripts": {
-    "build": "tsc"
-  }
-}

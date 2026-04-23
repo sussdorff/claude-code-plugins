@@ -1,4 +1,0 @@
-interface:
-  display_name: "Impl"
-  short_description: "Implement plan autonomously with DoD verification"
-  default_prompt: "Use the impl skill to help with this task. Implement plan autonomously with DoD verification"

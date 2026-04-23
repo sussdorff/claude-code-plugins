@@ -1,4 +1,0 @@
-interface:
-  display_name: "Plan"
-  short_description: "Generate implementation plan with context, review, decisions, and test strategy"
-  default_prompt: "Use the plan skill to help with this task. Generate implementation plan with context, review, decisions, and test strategy"

@@ -1,8 +1,0 @@
-{
-  "name": "adapter-common",
-  "version": "1.0.0",
-  "scripts": {
-    "build": "tsc",
-    "check:ids": "ts-node scripts/check-ids.ts"
-  }
-}

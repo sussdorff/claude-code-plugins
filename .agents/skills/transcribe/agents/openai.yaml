@@ -1,4 +1,0 @@
-interface:
-  display_name: "Transcribe"
-  short_description: "Transcribe audio files with speaker diarization via AssemblyAI. Supports local files and Plaud AI cloud recordings."
-  default_prompt: "Use the transcribe skill to help with this task. Transcribe audio files with speaker diarization via AssemblyAI. Supports local files and Plaud AI cloud recordings."

@@ -1,4 +1,0 @@
-interface:
-  display_name: "Agent Forge"
-  short_description: "Create and review agents (subagents). Use when creating specialized AI assistants, reviewing/auditing existing agents, deciding between agent vs skill vs command, or asking about agent best practices, multi-agent pipelines, and model selection. MUST BE USED when the user says \"create agent\", \"new subagent\", \"review agent\", \"audit agent\", \"agent vs skill\", or asks about multi-agent architecture."
-  default_prompt: "Use the agent-forge skill to help with this task. Create and review agents (subagents). Use when creating specialized AI assistants, reviewing/auditing existing agents, deciding between agent vs skill vs command, or asking about agent best practices, multi-agent pipelines, and model selection. MUST BE USED when the user says \"create agent\", \"new subagent\", \"review agent\", \"audit agent\", \"agent vs skill\", or asks about multi-agent architecture."

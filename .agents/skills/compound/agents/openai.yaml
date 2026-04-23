@@ -1,4 +1,0 @@
-interface:
-  display_name: "Compound"
-  short_description: "Structured 4-stage retrospective for completed beads: Requirements vs Strategy, Strategy vs Execution, Iteration Review, Workflow Audit. Creates Trap/Pattern/Decision artifacts. Use when debriefing a bead, capturing session learnings, or running a compound retrospective."
-  default_prompt: "Use the compound skill to help with this task. Structured 4-stage retrospective for completed beads: Requirements vs Strategy, Strategy vs Execution, Iteration Review, Workflow Audit. Creates Trap/Pattern/Decision artifacts. Use when debriefing a bead, capturing session learnings, or running a compound retrospective."

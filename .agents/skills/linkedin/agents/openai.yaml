@@ -1,4 +1,0 @@
-interface:
-  display_name: "Linkedin"
-  short_description: "LinkedIn automation and data analysis via playwright-cli. Use when extracting profiles, reading feeds, writing recommendations, or searching people. Triggers on LinkedIn, profile extraction, connections, feed, LinkedIn search, recommendation."
-  default_prompt: "Use the linkedin skill to help with this task. LinkedIn automation and data analysis via playwright-cli. Use when extracting profiles, reading feeds, writing recommendations, or searching people. Triggers on LinkedIn, profile extraction, connections, feed, LinkedIn search, recommendation."

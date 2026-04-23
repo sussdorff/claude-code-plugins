@@ -1,4 +1,0 @@
-interface:
-  display_name: "Vision Author"
-  short_description: "Guided PO-grade 7-question dialogue producing a structured, present-tense-enforced vision.md with locked sections and 4-column boundary table. Use when starting a new project or formalizing a vision. Triggers on \"vision author\", \"author vision\", \"create vision\", \"vision document\"."
-  default_prompt: "Use the vision-author skill to help with this task. Guided PO-grade 7-question dialogue producing a structured, present-tense-enforced vision.md with locked sections and 4-column boundary table. Use when starting a new project or formalizing a vision. Triggers on \"vision author\", \"author vision\", \"create vision\", \"vision document\"."

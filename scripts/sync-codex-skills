@@ -1,5 +1,12 @@
 #!/usr/bin/env python3
-"""Sync all Codex-exportable skills into repo and user-scoped skill surfaces."""
+"""Sync all Codex-exportable skills into the user-scoped skill directory.
+
+This repository is a development repository — it is NOT a runtime source of truth.
+The only sync target is the user-scoped directory (~/.codex/skills or ~/.agents/skills).
+No in-repo mirror is created or maintained.
+
+See docs/architecture/dev-repo-principle.md for the governing principle.
+"""
 
 from __future__ import annotations
 
@@ -17,9 +24,6 @@ sys.path.insert(0, str(SCRIPT_DIR))
 from codex_skills import build_skill_export, discover_skills, exportable_skills  # noqa: E402
 
 
-REPO_TARGET = REPO_ROOT / ".agents" / "skills"
-
-
 def resolve_user_target() -> Path | None:
     candidates = [Path.home() / ".codex" / "skills", Path.home() / ".agents" / "skills"]
     for candidate in candidates:
@@ -31,11 +35,12 @@ def resolve_user_target() -> Path | None:
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description=(
-            "Sync all Codex-exportable skills into .agents/skills/ and optionally into the "
-            "active user-scoped Codex skills directory."
+            "Sync all Codex-exportable skills into the user-scoped Codex skills directory "
+            "(~/.codex/skills or ~/.agents/skills). "
+            "No in-repo mirror is created — this repo is dev-only. "
+            "See docs/architecture/dev-repo-principle.md."
         )
     )
-    parser.add_argument("--user", action="store_true", help="Also sync to ~/.codex/skills or ~/.agents/skills.")
     parser.add_argument("--check", action="store_true", help="Exit 1 if any target is out of sync.")
     parser.add_argument("--dry-run", action="store_true", help="Print what would change without writing files.")
     parser.add_argument(
@@ -102,13 +107,12 @@ def main() -> None:
     else:
         selected = records
 
-    user_target = None
-    if args.user:
-        user_target = resolve_user_target()
-        if user_target is None:
-            print("WARNING: --user requested but no user-scoped skills directory found.", file=sys.stderr)
-            print("         Checked: ~/.codex/skills, ~/.agents/skills", file=sys.stderr)
-            print("         Skipping user-scoped sync.", file=sys.stderr)
+    user_target = resolve_user_target()
+    if user_target is None:
+        print("WARNING: no user-scoped skills directory found.", file=sys.stderr)
+        print("         Checked: ~/.codex/skills, ~/.agents/skills", file=sys.stderr)
+        print("         Create one of these directories first, then re-run.", file=sys.stderr)
+        raise SystemExit(1)
 
     with tempfile.TemporaryDirectory(prefix="codex-skills-sync-") as temp_dir:
         stage_root = Path(temp_dir)
@@ -120,31 +124,23 @@ def main() -> None:
         if args.check:
             for record in selected:
                 staged = stage_root / record.name
-                repo_destination = REPO_TARGET / record.name
-                if tree_signature(staged) == tree_signature(repo_destination):
-                    print(f"  [ok]   repo-scoped: {record.name}")
+                user_destination = user_target / record.name
+                if tree_signature(staged) == tree_signature(user_destination):
+                    print(f"  [ok]   user-scoped ({user_target}): {record.name}")
                 else:
-                    print(f"  [DIFF] repo-scoped: {record.name}  (run sync-codex-skills to update)")
-                    out_of_sync.append(f"repo:{record.name}")
-
-                if user_target is not None:
-                    user_destination = user_target / record.name
-                    if tree_signature(staged) == tree_signature(user_destination):
-                        print(f"  [ok]   user-scoped ({user_target}): {record.name}")
-                    else:
-                        print(
-                            f"  [DIFF] user-scoped ({user_target}): {record.name}  "
-                            "(run sync-codex-skills --user to update)"
-                        )
-                        out_of_sync.append(f"user:{record.name}")
+                    print(
+                        f"  [DIFF] user-scoped ({user_target}): {record.name}  "
+                        "(run sync-codex-skills to update)"
+                    )
+                    out_of_sync.append(f"user:{record.name}")
 
             if skill_filter is None:
                 expected_names = {record.name for record in selected}
-                actual_names = {path.name for path in REPO_TARGET.iterdir()} if REPO_TARGET.is_dir() else set()
+                actual_names = {path.name for path in user_target.iterdir()} if user_target.is_dir() else set()
                 stale_names = sorted(name for name in actual_names - expected_names if not name.startswith("."))
                 for stale in stale_names:
-                    print(f"  [DIFF] repo-scoped stale skill: {stale}  (run sync-codex-skills to prune)")
-                    out_of_sync.append(f"repo-stale:{stale}")
+                    print(f"  [DIFF] user-scoped stale skill: {stale}  (run sync-codex-skills to prune)")
+                    out_of_sync.append(f"user-stale:{stale}")
 
             print("")
             if out_of_sync:
@@ -159,44 +155,35 @@ def main() -> None:
         if args.dry_run:
             for record in selected:
                 staged = stage_root / record.name
-                print(f"  [dry]  would sync {staged} -> {REPO_TARGET / record.name}")
-                if user_target is not None:
-                    print(f"  [dry]  would sync {staged} -> {user_target / record.name}")
+                print(f"  [dry]  would sync {staged} -> {user_target / record.name}")
 
-            if skill_filter is None and REPO_TARGET.is_dir():
+            if skill_filter is None and user_target.is_dir():
                 expected_names = {record.name for record in selected}
-                actual_names = {path.name for path in REPO_TARGET.iterdir()}
+                actual_names = {path.name for path in user_target.iterdir()}
                 stale_names = sorted(name for name in actual_names - expected_names if not name.startswith("."))
                 for stale in stale_names:
-                    print(f"  [dry]  would remove stale repo-scoped skill {REPO_TARGET / stale}")
+                    print(f"  [dry]  would remove stale user-scoped skill {user_target / stale}")
 
             print("")
             print("Dry-run complete. No files were written.")
             return
 
-        REPO_TARGET.mkdir(parents=True, exist_ok=True)
+        user_target.mkdir(parents=True, exist_ok=True)
         for record in selected:
-            sync_tree(stage_root / record.name, REPO_TARGET / record.name)
-            print(f"  [sync] repo-scoped: {record.name} -> {REPO_TARGET / record.name}")
+            sync_tree(stage_root / record.name, user_target / record.name)
+            print(f"  [sync] user-scoped: {record.name} -> {user_target / record.name}")
 
-        if skill_filter is None and REPO_TARGET.is_dir():
+        if skill_filter is None and user_target.is_dir():
             expected_names = {record.name for record in selected}
-            actual_paths = [path for path in REPO_TARGET.iterdir() if path.is_dir() and not path.name.startswith(".")]
+            actual_paths = [path for path in user_target.iterdir() if path.is_dir() and not path.name.startswith(".")]
             for stale_path in sorted(actual_paths, key=lambda path: path.name):
                 if stale_path.name not in expected_names:
                     shutil.rmtree(stale_path)
-                    print(f"  [sync] repo-scoped: pruned stale {stale_path}")
-
-        if user_target is not None:
-            user_target.mkdir(parents=True, exist_ok=True)
-            for record in selected:
-                sync_tree(stage_root / record.name, user_target / record.name)
-                print(f"  [sync] user-scoped: {record.name} -> {user_target / record.name}")
+                    print(f"  [sync] user-scoped: pruned stale {stale_path}")
 
         print("")
         print("Sync complete.")
-        if user_target is not None:
-            print(f"User-scoped target: {user_target}")
+        print(f"User-scoped target: {user_target}")
 
 
 if __name__ == "__main__":

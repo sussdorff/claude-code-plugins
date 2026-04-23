@@ -40,3 +40,9 @@ issues.jsonl
 
 # Embedded Dolt runtime state
 embeddeddolt/
+
+# In-repo Codex mirrors (dev-repo principle: this repo is dev-only, not a runtime source).
+# Sync targets are user-scoped: ~/.codex/skills, ~/.codex/agents.
+# See docs/architecture/dev-repo-principle.md — these dirs must never be re-committed.
+.agents/
+.codex/

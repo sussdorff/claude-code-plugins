@@ -23,24 +23,26 @@ else:
 
 REPO_ROOT = Path(__file__).parent.parent
 PERSONAL_AGENT_PATH = Path.home() / ".codex" / "agents" / "session-close.toml"
-REPO_AGENT_PATH = REPO_ROOT / ".codex" / "agents" / "session-close.toml"
+# Canonical source: dev-tools/codex-agents/ (not in-repo mirror .codex/agents/).
+# This repo is dev-only — see docs/architecture/dev-repo-principle.md.
+CANONICAL_AGENT_PATH = REPO_ROOT / "dev-tools" / "codex-agents" / "session-close.toml"
 
-# Backwards-compat aliases
+# Test alias pointing to canonical source (used by all structure assertions)
+REPO_AGENT_PATH = CANONICAL_AGENT_PATH
 PERSONAL_AGENT = PERSONAL_AGENT_PATH
-PROJECT_AGENT = REPO_AGENT_PATH
 
 
 class TestAgentFileExists:
-    """AC1: Agent file exists at Codex discovery path."""
+    """AC1: Agent file exists at expected paths."""
 
     def test_personal_agent_file_exists(self):
         assert PERSONAL_AGENT.exists(), (
             f"~/.codex/agents/session-close.toml must exist at {PERSONAL_AGENT}"
         )
 
-    def test_project_agent_file_exists(self):
-        assert PROJECT_AGENT.exists(), (
-            f".codex/agents/session-close.toml must exist in repo at {PROJECT_AGENT}"
+    def test_canonical_source_exists(self):
+        assert CANONICAL_AGENT_PATH.exists(), (
+            f"Canonical agent source must exist at {CANONICAL_AGENT_PATH}"
         )
 
 
@@ -52,8 +54,8 @@ class TestAgentTomlParseable:
         data = tomllib.loads(content.decode())
         assert isinstance(data, dict), "TOML must parse to a dict"
 
-    def test_project_agent_is_valid_toml(self):
-        content = PROJECT_AGENT.read_bytes()
+    def test_canonical_agent_is_valid_toml(self):
+        content = CANONICAL_AGENT_PATH.read_bytes()
         data = tomllib.loads(content.decode())
         assert isinstance(data, dict), "TOML must parse to a dict"
 

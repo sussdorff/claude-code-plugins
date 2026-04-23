@@ -1,4 +1,0 @@
-interface:
-  display_name: "Wave Reviewer"
-  short_description: "Review a wave or epic subtree before dispatch. Finds defects single-bead review misses: dependency ordering, ownership collisions, lifecycle contradictions, validation gaps. Triggers on wave review, review wave, pre-wave review, bead tree review."
-  default_prompt: "Use the wave-reviewer skill to help with this task. Review a wave or epic subtree before dispatch. Finds defects single-bead review misses: dependency ordering, ownership collisions, lifecycle contradictions, validation gaps. Triggers on wave review, review wave, pre-wave review, bead tree review."

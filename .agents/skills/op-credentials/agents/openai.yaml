@@ -1,4 +1,0 @@
-interface:
-  display_name: "Op Credentials"
-  short_description: "Read, list, and create service credentials in 1Password. Use when needing API keys, service passwords, or creating credentials. Triggers on 1password, 1Password, op credentials, api key, service credentials, op read, op://, op item, vault, password speichern. Not for personal logins or SSH keys."
-  default_prompt: "Use the op-credentials skill to help with this task. Read, list, and create service credentials in 1Password. Use when needing API keys, service passwords, or creating credentials. Triggers on 1password, 1Password, op credentials, api key, service credentials, op read, op://, op item, vault, password speichern. Not for personal logins or SSH keys."

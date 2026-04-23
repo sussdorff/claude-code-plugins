@@ -1,4 +1,0 @@
-interface:
-  display_name: "System Prompt Audit"
-  short_description: "Audit Anthropic system prompt changes against the local baseline and review custom prompts for compatibility. Use when checking for new Claude versions, \"run system prompt audit\", \"audit system prompts\", or \"check for prompt updates\"."
-  default_prompt: "Use the system-prompt-audit skill to help with this task. Audit Anthropic system prompt changes against the local baseline and review custom prompts for compatibility. Use when checking for new Claude versions, \"run system prompt audit\", \"audit system prompts\", or \"check for prompt updates\"."

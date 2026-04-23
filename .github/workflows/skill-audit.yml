@@ -4,12 +4,10 @@ on:
   push:
     paths:
       - '**/SKILL.md'
-      - '.agents/skills/skill-auditor/scripts/**'
       - 'meta/skills/skill-auditor/scripts/**'
   pull_request:
     paths:
       - '**/SKILL.md'
-      - '.agents/skills/skill-auditor/scripts/**'
       - 'meta/skills/skill-auditor/scripts/**'
 
 jobs:
@@ -26,8 +24,7 @@ jobs:
 
       - name: Run skill validator on all SKILL.md files
         run: |
-          VALIDATOR=".agents/skills/skill-auditor/scripts/validate-skill.py"
-          SCAN=".agents/skills/skill-auditor/scripts/scan-skills.sh"
+          VALIDATOR="meta/skills/skill-auditor/scripts/validate-skill.py"
 
           if [[ ! -f "$VALIDATOR" ]]; then
             echo "validate-skill.py not found at $VALIDATOR — skipping"
@@ -43,6 +40,8 @@ jobs:
           done < <(find . -name "SKILL.md" \
             -not -path "./.claude/*" \
             -not -path "./.dolt/*" \
+            -not -path "./.agents/*" \
+            -not -path "./.codex/*" \
             -not -path "*/__pycache__/*")
 
           exit $FAILED

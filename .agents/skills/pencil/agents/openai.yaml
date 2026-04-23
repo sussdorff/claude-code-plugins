@@ -1,4 +1,0 @@
-interface:
-  display_name: "Pencil"
-  short_description: "Design UI screens and components in Pencil .pen files via MCP tools. Use when creating designs, editing .pen files, or working with design systems. Triggers on pencil, pen file, design system, design screen, components.pen."
-  default_prompt: "Use the pencil skill to help with this task. Design UI screens and components in Pencil .pen files via MCP tools. Use when creating designs, editing .pen files, or working with design systems. Triggers on pencil, pen file, design system, design screen, components.pen."

@@ -1,4 +1,0 @@
-interface:
-  display_name: "Google Invoice"
-  short_description: "Download Google One AI Pro invoice from payments.google.com, generate ZUGFeRD XML, and send to accounting. Triggers on google rechnung, google invoice, google one beleg, google one rechnung."
-  default_prompt: "Use the google-invoice skill to help with this task. Download Google One AI Pro invoice from payments.google.com, generate ZUGFeRD XML, and send to accounting. Triggers on google rechnung, google invoice, google one beleg, google one rechnung."

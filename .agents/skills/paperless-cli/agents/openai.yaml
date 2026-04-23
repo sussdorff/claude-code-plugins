@@ -1,4 +1,0 @@
-interface:
-  display_name: "Paperless CLI"
-  short_description: "Interact with Paperless-ngx document management via REST API. Use when searching documents, downloading PDFs, uploading scans, or querying tags. Triggers on paperless, scanned document, document archive. Not for email archiving (use piler-cli)."
-  default_prompt: "Use the paperless-cli skill to help with this task. Interact with Paperless-ngx document management via REST API. Use when searching documents, downloading PDFs, uploading scans, or querying tags. Triggers on paperless, scanned document, document archive. Not for email archiving (use piler-cli)."

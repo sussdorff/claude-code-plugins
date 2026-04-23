@@ -1,4 +1,0 @@
-interface:
-  display_name: "Inject Standards"
-  short_description: "Load and merge global and project-specific coding standards into current context. Use when applying standards, patterns, or compliance requirements. Triggers on inject standards, load standards, standards, check patterns, apply patterns."
-  default_prompt: "Use the inject-standards skill to help with this task. Load and merge global and project-specific coding standards into current context. Use when applying standards, patterns, or compliance requirements. Triggers on inject standards, load standards, standards, check patterns, apply patterns."

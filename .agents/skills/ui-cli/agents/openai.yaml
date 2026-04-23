@@ -1,4 +1,0 @@
-interface:
-  display_name: "UI CLI"
-  short_description: "CLI for querying UniFi network infrastructure. Use when finding devices, looking up client MAC/IP, checking network config, or listing WLANs. Triggers on UniFi, network clients, WiFi, AP, switch, gateway, device IP, device MAC."
-  default_prompt: "Use the ui-cli skill to help with this task. CLI for querying UniFi network infrastructure. Use when finding devices, looking up client MAC/IP, checking network config, or listing WLANs. Triggers on UniFi, network clients, WiFi, AP, switch, gateway, device IP, device MAC."

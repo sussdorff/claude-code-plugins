@@ -86,6 +86,9 @@ class TestNoCanonicalSourceRequiresMirrorPaths:
     ALLOWED_FILES = {
         ".gitignore",
         "tests/test_dev_repo_principle.py",
+        "tests/test_codex_pilot.py",            # mentions old paths in docstrings only
+        "tests/test_codex_agents_sync.py",       # mentions old paths in docstrings only
+        "tests/test_codex_agent_session_close.py",  # mentions old path in comment only
         "docs/architecture/dev-repo-principle.md",
         "CHANGELOG.md",
         "docs/codex-skills-rollout-plan.md",
@@ -93,12 +96,17 @@ class TestNoCanonicalSourceRequiresMirrorPaths:
         "docs/codex-skills.md",
     }
 
-    # Patterns that indicate a runtime dependency on the in-repo mirror path
+    # Patterns that indicate a runtime dependency on the in-repo mirror path.
+    # We match the repo-relative path forms (with "./" or no path prefix),
+    # NOT the user-scoped form ("~/.agents/skills" or "~/.codex/agents").
+    # A literal "REPO_TARGET" constant is also prohibited.
     FORBIDDEN_PATTERNS = [
-        # References to .agents/skills as a target that must exist
-        r'\.agents/skills',
-        # References to .codex/agents as a target that must exist
-        r'\.codex/agents',
+        # REPO_TARGET constant (definitional signal that repo mirroring is active)
+        r'\bREPO_TARGET\b',
+        # ./. agents/skills or ".agents/skills" without tilde prefix
+        r'(?<!~/)(?<!\$HOME/)(?<!\$\{HOME\}/)(?<!home/)\.agents/skills',
+        # .codex/agents without tilde prefix
+        r'(?<!~/)(?<!\$HOME/)(?<!\$\{HOME\}/)(?<!home/)\.codex/agents',
     ]
 
     def _get_canonical_files(self) -> list[Path]:

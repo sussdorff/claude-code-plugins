@@ -1,4 +1,0 @@
-interface:
-  display_name: "Refactor Note"
-  short_description: "Refactor Note"
-  default_prompt: "Use the refactor-note skill to help with this task. Refactor Note"

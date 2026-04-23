@@ -1,4 +1,0 @@
-interface:
-  display_name: "Factory Check"
-  short_description: "Evaluate factory-ready spec quality for a bead before autonomous execution"
-  default_prompt: "Use the factory-check skill to help with this task. Evaluate factory-ready spec quality for a bead before autonomous execution"

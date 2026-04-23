@@ -11,24 +11,22 @@ from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 SOURCE_DIR = REPO_ROOT / "dev-tools" / "codex-agents"
-REPO_TARGET = REPO_ROOT / ".codex" / "agents"
 
 
 @dataclass(frozen=True)
 class AgentRecord:
-    """Single tracked Codex agent plus its repo-scoped export path."""
+    """Single tracked Codex agent source.
+
+    This repository is dev-only. Runtime consumers read from ~/.codex/agents/.
+    See docs/architecture/dev-repo-principle.md.
+    """
 
     name: str
     source_file: str
-    repo_file: str
 
     @property
     def source_path(self) -> Path:
         return REPO_ROOT / self.source_file
-
-    @property
-    def repo_path(self) -> Path:
-        return REPO_ROOT / self.repo_file
 
 
 def discover_agents(repo_root: Path = REPO_ROOT) -> list[AgentRecord]:
@@ -42,7 +40,6 @@ def discover_agents(repo_root: Path = REPO_ROOT) -> list[AgentRecord]:
             AgentRecord(
                 name=path.stem,
                 source_file=str(path.relative_to(repo_root)),
-                repo_file=str((Path(".codex") / "agents" / path.name).as_posix()),
             )
         )
     return discovered
@@ -64,7 +61,7 @@ def main() -> None:
         return
 
     for record in records:
-        print(f"{record.name}\t{record.source_file} -> {record.repo_file}")
+        print(f"{record.name}\t{record.source_file}")
 
 
 if __name__ == "__main__":

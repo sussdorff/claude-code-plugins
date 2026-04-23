@@ -12,7 +12,6 @@ import pytest
 
 
 REPO_ROOT = Path(__file__).parent.parent
-AGENTS_SKILLS = REPO_ROOT / ".agents" / "skills"
 USER_CODEX_SKILLS = Path.home() / ".codex" / "skills"
 INVENTORY_SCRIPT = REPO_ROOT / "scripts" / "codex_skills.py"
 SYNC_SCRIPT = REPO_ROOT / "scripts" / "sync-codex-skills"
@@ -38,8 +37,13 @@ GENERATED_METADATA_SKILLS = [
 _user_skills_present = USER_CODEX_SKILLS.is_dir()
 
 
-class TestAgentsSkillsSurface:
-    """Every exportable skill is present in the Codex-facing repo layer."""
+class TestInventorySurface:
+    """Every exportable skill is discoverable by the inventory script.
+
+    This repo is dev-only. The sync target is ~/.codex/skills (or ~/.agents/skills).
+    In-repo mirrors (.agents/skills/) no longer exist. See TestUserScopedSync for runtime checks.
+    See docs/architecture/dev-repo-principle.md.
+    """
 
     def test_inventory_is_nonempty(self):
         assert INVENTORY, "codex_skills.py should discover exportable skills"
@@ -47,65 +51,54 @@ class TestAgentsSkillsSurface:
     def test_pilot_skills_are_still_discoverable(self):
         assert PILOT_SKILLS.issubset(SKILL_NAMES)
 
-    def test_agents_skills_dir_exists(self):
-        assert AGENTS_SKILLS.is_dir(), ".agents/skills/ must exist"
+    def test_generated_metadata_skill_list_nonempty(self):
+        assert GENERATED_METADATA_SKILLS, "Expected at least one generated metadata skill"
 
-    def test_every_discovered_skill_is_exported(self):
-        missing = [skill for skill in SKILL_NAMES if not (AGENTS_SKILLS / skill).is_dir()]
-        assert not missing, f"Missing exported skills: {missing}"
 
-    def test_every_exported_skill_has_skill_md(self):
+@pytest.mark.skipif(
+    not _user_skills_present and not os.environ.get("PILOT_USER_SYNC"),
+    reason="user-scoped sync not available on this machine (run sync-codex-skills or set PILOT_USER_SYNC=1)",
+)
+class TestUserScopedSync:
+    """The user-scoped Codex skills dir contains the full skill fleet.
+
+    This repo is dev-only. The only sync target is ~/.codex/skills (or ~/.agents/skills).
+    See docs/architecture/dev-repo-principle.md.
+    """
+
+    def test_every_discovered_skill_is_in_user_codex_skills(self):
+        missing = [skill for skill in SKILL_NAMES if not (USER_CODEX_SKILLS / skill).is_dir()]
+        assert not missing, (
+            f"Missing user-scoped skills: {missing}\nRun: scripts/sync-codex-skills"
+        )
+
+    def test_user_scoped_skills_have_skill_md(self):
         missing = [
-            skill for skill in SKILL_NAMES if not (AGENTS_SKILLS / skill / "SKILL.md").exists()
+            skill for skill in SKILL_NAMES if not (USER_CODEX_SKILLS / skill / "SKILL.md").exists()
         ]
-        assert not missing, f"Missing SKILL.md in exported skills: {missing}"
+        assert not missing, f"Missing SKILL.md in user-scoped skills: {missing}"
 
-    def test_every_exported_skill_has_openai_yaml(self):
+    def test_user_scoped_skills_have_openai_yaml(self):
         missing = [
             skill
             for skill in SKILL_NAMES
-            if not (AGENTS_SKILLS / skill / "agents" / "openai.yaml").exists()
+            if not (USER_CODEX_SKILLS / skill / "agents" / "openai.yaml").exists()
         ]
-        assert not missing, f"Missing openai.yaml in exported skills: {missing}"
+        assert not missing, f"Missing openai.yaml in user-scoped skills: {missing}"
 
     def test_generated_metadata_covers_non_pilot_skills(self):
-        assert GENERATED_METADATA_SKILLS, "Expected at least one generated metadata skill"
         for skill in GENERATED_METADATA_SKILLS[:5]:
-            yaml_path = AGENTS_SKILLS / skill / "agents" / "openai.yaml"
+            yaml_path = USER_CODEX_SKILLS / skill / "agents" / "openai.yaml"
+            if not yaml_path.exists():
+                continue  # Covered by test_user_scoped_skills_have_openai_yaml
             content = yaml_path.read_text()
             assert "display_name:" in content
             assert "short_description:" in content
             assert "default_prompt:" in content
 
-    def test_full_fleet_repo_sync_check_passes(self):
-        result = subprocess.run(
-            [str(SYNC_SCRIPT), "--check"],
-            cwd=REPO_ROOT,
-            capture_output=True,
-            text=True,
-            check=False,
-        )
-        assert result.returncode == 0, (
-            f"Full-fleet repo sync is out of date:\n{result.stdout}{result.stderr}"
-        )
-
-
-@pytest.mark.skipif(
-    not _user_skills_present and not os.environ.get("PILOT_USER_SYNC"),
-    reason="user-scoped sync not available on this machine (run sync-codex-skills --user or set PILOT_USER_SYNC=1)",
-)
-class TestUserScopedSync:
-    """The user-scoped Codex skills dir mirrors the repo export for the full fleet."""
-
-    def test_every_discovered_skill_is_in_user_codex_skills(self):
-        missing = [skill for skill in SKILL_NAMES if not (USER_CODEX_SKILLS / skill).is_dir()]
-        assert not missing, (
-            f"Missing user-scoped skills: {missing}\nRun: scripts/sync-codex-skills --user"
-        )
-
     def test_full_fleet_user_sync_check_passes(self):
         result = subprocess.run(
-            [str(SYNC_SCRIPT), "--check", "--user"],
+            [str(SYNC_SCRIPT), "--check"],
             cwd=REPO_ROOT,
             capture_output=True,
             text=True,

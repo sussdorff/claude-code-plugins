@@ -1,5 +1,12 @@
 #!/usr/bin/env python3
-"""Sync tracked Codex agents into repo and optional user-scoped targets."""
+"""Sync tracked Codex agents into the user-scoped agent directory.
+
+This repository is a development repository — it is NOT a runtime source of truth.
+The only sync target is the user-scoped directory (~/.codex/agents/).
+No in-repo mirror is created or maintained.
+
+See docs/architecture/dev-repo-principle.md for the governing principle.
+"""
 
 from __future__ import annotations
 
@@ -13,7 +20,7 @@ SCRIPT_DIR = Path(__file__).resolve().parent
 REPO_ROOT = SCRIPT_DIR.parent
 sys.path.insert(0, str(SCRIPT_DIR))
 
-from codex_agents import REPO_TARGET, discover_agents  # noqa: E402
+from codex_agents import discover_agents  # noqa: E402
 
 
 def resolve_user_target() -> Path:
@@ -23,11 +30,11 @@ def resolve_user_target() -> Path:
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description=(
-            "Sync all tracked Codex agents from dev-tools/codex-agents/ into .codex/agents/ "
-            "and optionally into ~/.codex/agents/."
+            "Sync all tracked Codex agents from dev-tools/codex-agents/ into ~/.codex/agents/. "
+            "No in-repo mirror is created — this repo is dev-only. "
+            "See docs/architecture/dev-repo-principle.md."
         )
     )
-    parser.add_argument("--user", action="store_true", help="Also sync to ~/.codex/agents/.")
     parser.add_argument("--check", action="store_true", help="Exit 1 if any target is out of sync.")
     parser.add_argument("--dry-run", action="store_true", help="Print what would change without writing files.")
     parser.add_argument(
@@ -85,37 +92,29 @@ def main() -> None:
     else:
         selected = records
 
-    user_target = resolve_user_target() if args.user else None
+    user_target = resolve_user_target()
     out_of_sync: list[str] = []
 
     if args.check:
         for record in selected:
             source = record.source_path
-            repo_destination = REPO_TARGET / source.name
-            if file_signature(source) == file_signature(repo_destination):
-                print(f"  [ok]   repo-scoped: {record.name}")
+            user_destination = user_target / source.name
+            if file_signature(source) == file_signature(user_destination):
+                print(f"  [ok]   user-scoped ({user_target}): {record.name}")
             else:
-                print(f"  [DIFF] repo-scoped: {record.name}  (run sync-codex-agents to update)")
-                out_of_sync.append(f"repo:{record.name}")
+                print(
+                    f"  [DIFF] user-scoped ({user_target}): {record.name}  "
+                    "(run sync-codex-agents to update)"
+                )
+                out_of_sync.append(f"user:{record.name}")
 
-            if user_target is not None:
-                user_destination = user_target / source.name
-                if file_signature(source) == file_signature(user_destination):
-                    print(f"  [ok]   user-scoped ({user_target}): {record.name}")
-                else:
-                    print(
-                        f"  [DIFF] user-scoped ({user_target}): {record.name}  "
-                        "(run sync-codex-agents --user to update)"
-                    )
-                    out_of_sync.append(f"user:{record.name}")
-
-        if agent_filter is None:
+        if agent_filter is None and user_target.is_dir():
             expected_names = {record.name for record in selected}
-            actual_names = {path.stem for path in REPO_TARGET.glob("*.toml")} if REPO_TARGET.is_dir() else set()
+            actual_names = {path.stem for path in user_target.glob("*.toml")}
             stale_names = sorted(name for name in actual_names - expected_names)
             for stale in stale_names:
-                print(f"  [DIFF] repo-scoped stale agent: {stale}  (run sync-codex-agents to prune)")
-                out_of_sync.append(f"repo-stale:{stale}")
+                print(f"  [DIFF] user-scoped stale agent: {stale}  (run sync-codex-agents to prune)")
+                out_of_sync.append(f"user-stale:{stale}")
 
         print("")
         if out_of_sync:
@@ -130,48 +129,37 @@ def main() -> None:
     if args.dry_run:
         for record in selected:
             source = record.source_path
-            print(f"  [dry]  would sync {source} -> {REPO_TARGET / source.name}")
-            if user_target is not None:
-                print(f"  [dry]  would sync {source} -> {user_target / source.name}")
+            print(f"  [dry]  would sync {source} -> {user_target / source.name}")
 
-        if agent_filter is None and REPO_TARGET.is_dir():
+        if agent_filter is None and user_target.is_dir():
             expected_names = {record.name for record in selected}
-            actual_paths = [path for path in REPO_TARGET.glob("*.toml") if path.is_file()]
+            actual_paths = [path for path in user_target.glob("*.toml") if path.is_file()]
             for stale_path in sorted(actual_paths, key=lambda path: path.name):
                 if stale_path.stem not in expected_names:
-                    print(f"  [dry]  would remove stale repo-scoped agent {stale_path}")
+                    print(f"  [dry]  would remove stale user-scoped agent {stale_path}")
 
         print("")
         print("Dry-run complete. No files were written.")
         return
 
-    REPO_TARGET.mkdir(parents=True, exist_ok=True)
+    user_target.mkdir(parents=True, exist_ok=True)
     for record in selected:
         source = record.source_path
-        repo_destination = REPO_TARGET / source.name
-        sync_file(source, repo_destination)
-        print(f"  [sync] repo-scoped: {record.name} -> {repo_destination}")
+        user_destination = user_target / source.name
+        sync_file(source, user_destination)
+        print(f"  [sync] user-scoped: {record.name} -> {user_destination}")
 
-    if agent_filter is None and REPO_TARGET.is_dir():
+    if agent_filter is None and user_target.is_dir():
         expected_names = {record.name for record in selected}
-        actual_paths = [path for path in REPO_TARGET.glob("*.toml") if path.is_file()]
+        actual_paths = [path for path in user_target.glob("*.toml") if path.is_file()]
         for stale_path in sorted(actual_paths, key=lambda path: path.name):
             if stale_path.stem not in expected_names:
                 stale_path.unlink()
-                print(f"  [sync] repo-scoped: pruned stale {stale_path}")
-
-    if user_target is not None:
-        user_target.mkdir(parents=True, exist_ok=True)
-        for record in selected:
-            source = record.source_path
-            user_destination = user_target / source.name
-            sync_file(source, user_destination)
-            print(f"  [sync] user-scoped: {record.name} -> {user_destination}")
+                print(f"  [sync] user-scoped: pruned stale {stale_path}")
 
     print("")
     print("Sync complete.")
-    if user_target is not None:
-        print(f"User-scoped target: {user_target}")
+    print(f"User-scoped target: {user_target}")
 
 
 if __name__ == "__main__":

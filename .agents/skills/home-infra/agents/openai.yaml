@@ -1,4 +1,0 @@
-interface:
-  display_name: "Home Infra"
-  short_description: "Home infrastructure overview - hardware, network, services, and CLI tools. Use when finding what runs where, choosing CLI tools, or planning infra changes. Triggers on home infra, home network, what devices, home server, infrastructure."
-  default_prompt: "Use the home-infra skill to help with this task. Home infrastructure overview - hardware, network, services, and CLI tools. Use when finding what runs where, choosing CLI tools, or planning infra changes. Triggers on home infra, home network, what devices, home server, infrastructure."

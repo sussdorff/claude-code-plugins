@@ -1,21 +1,29 @@
 # Codex Agents
 
 This document covers the tracked Codex agent sync path in this repository.
-For the related skill surface, see
-[`docs/codex-skills.md`](codex-skills.md).
+For the related skill surface, see [`docs/codex-skills.md`](codex-skills.md).
+For the governing architectural principle, see
+[`docs/architecture/dev-repo-principle.md`](architecture/dev-repo-principle.md).
+
+## Dev-Repo Principle
+
+This repository is **dev-only**. Running `rm -rf $(pwd)` MUST leave Codex fully
+operational. The only sync target is the user-scoped Codex agents directory:
+`~/.codex/agents/`.
+
+There is **no in-repo mirror**. `.codex/agents/` no longer exists in this repo
+and is gitignored. The mirror pattern caused drift — see CCP-h8h.
 
 ## Layout
 
-Codex agents use a three-surface layout:
+Codex agents use a two-surface layout:
 
 - `dev-tools/codex-agents/`
-  Tracked source of truth. Edit custom Codex agent TOMLs here.
-- `.codex/agents/`
-  Repo-scoped export surface. This is the project-local Codex discovery path.
+  Canonical source of truth. Edit custom Codex agent TOMLs here.
 - `~/.codex/agents/`
-  Optional user-scoped mirror for the local machine.
+  User-scoped runtime directory. Codex CLI reads from here.
 
-Edit once in `dev-tools/codex-agents/`, then sync the repo and user targets.
+Edit once in `dev-tools/codex-agents/`, then sync to `~/.codex/agents/`.
 
 ## Discovery Helper
 
@@ -28,19 +36,12 @@ python3 scripts/codex_agents.py --json
 
 ## sync-codex-agents
 
-`scripts/sync-codex-agents` copies every tracked agent source into
-`.codex/agents/` and optionally into `~/.codex/agents/`.
+`scripts/sync-codex-agents` copies every tracked agent source into `~/.codex/agents/`.
 
-### Basic repo sync
+### Sync to user-scoped Codex directory
 
 ```bash
 scripts/sync-codex-agents
-```
-
-### Also sync the user-scoped Codex agent directory
-
-```bash
-scripts/sync-codex-agents --user
 ```
 
 ### Sync a subset
@@ -53,39 +54,35 @@ scripts/sync-codex-agents --agents session-close,bead-orchestrator
 
 ```bash
 scripts/sync-codex-agents --dry-run
-scripts/sync-codex-agents --user --dry-run
 ```
 
 ### Check mode
 
-`--check` verifies that the tracked sources match the repo and optional user
-targets without writing files. It exits 0 when all selected agents are in sync
-and 1 when any selected target differs.
+`--check` verifies that the tracked sources match the user-scoped target without
+writing files. It exits 0 when all selected agents are in sync and 1 when any
+selected target differs.
 
 ```bash
 scripts/sync-codex-agents --check
-scripts/sync-codex-agents --check --user
 ```
 
 Example output when out of sync:
 
 ```text
-  [ok]   repo-scoped: session-close
-  [DIFF] repo-scoped: bead-orchestrator  (run sync-codex-agents to update)
+  [ok]   user-scoped (/Users/you/.codex/agents): session-close
+  [DIFF] user-scoped (/Users/you/.codex/agents): bead-orchestrator  (run sync-codex-agents to update)
 
 Out of sync (1 target(s)):
-  - repo:bead-orchestrator
+  - user:bead-orchestrator
 ```
 
 ## Relationship To Skill Sync
 
-Claude and Codex parity now uses two parallel sync flows:
+Claude and Codex parity uses two parallel sync flows:
 
 - `scripts/sync-codex-skills`
-  Portable skill cores from the monorepo into `.agents/skills/` and optionally
-  `~/.codex/skills/`
+  Portable skill cores from the monorepo into `~/.codex/skills/`
 - `scripts/sync-codex-agents`
-  Tracked custom Codex agents into `.codex/agents/` and optionally
-  `~/.codex/agents/`
+  Tracked custom Codex agents into `~/.codex/agents/`
 
 Run both when changing shared Codex surfaces.

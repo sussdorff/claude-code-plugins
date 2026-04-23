@@ -1,4 +1,0 @@
-interface:
-  display_name: "Sync Standards"
-  short_description: "Synchronize global standards and commands into the current project for team sharing. Use when sharing standards with a team or copying conventions to a project. Triggers on sync standards, share standards, team standards, sync conventions."
-  default_prompt: "Use the sync-standards skill to help with this task. Synchronize global standards and commands into the current project for team sharing. Use when sharing standards with a team or copying conventions to a project. Triggers on sync standards, share standards, team standards, sync conventions."

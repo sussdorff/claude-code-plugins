@@ -49,15 +49,14 @@ case "$REPO_NAME" in
       fi
     done
 
-    # Mirror the full discovered skill fleet into the Codex user directory so
-    # Claude Code and Codex stay in sync across releases. Non-blocking — any failure here
-    # must NOT abort session-close. See scripts/sync-codex-skills --help for
-    # the discovery rules and Phase 0 target discovery (~/.codex/skills ->
-    # ~/.agents/skills).
+    # Sync the full discovered skill fleet into the user-scoped Codex directory.
+    # This is the ONLY sync target — this repo is dev-only (no in-repo mirror).
+    # Non-blocking — any failure here must NOT abort session-close.
+    # See docs/architecture/dev-repo-principle.md and scripts/sync-codex-skills --help.
     CODEX_SYNC="$REPO_ROOT/scripts/sync-codex-skills"
     if [ -x "$CODEX_SYNC" ]; then
-      echo "sync-plugin-cache: syncing Codex skill fleet to user dir"
-      if CODEX_OUTPUT=$("$CODEX_SYNC" --user 2>&1); then
+      echo "sync-plugin-cache: syncing Codex skill fleet to user-scoped target"
+      if CODEX_OUTPUT=$("$CODEX_SYNC" 2>&1); then
         echo "  ✔ codex skills synced"
       else
         echo "  ✘ codex sync failed (non-blocking)"

@@ -1,4 +1,0 @@
-interface:
-  display_name: "Mail Send"
-  short_description: "Send emails with attachments via Apple Mail AppleScript automation. Prepares a visible draft for user review before sending. Use when sending emails with file attachments. Triggers on send email, mail send, email with attachment, mail schicken."
-  default_prompt: "Use the mail-send skill to help with this task. Send emails with attachments via Apple Mail AppleScript automation. Prepares a visible draft for user review before sending. Use when sending emails with file attachments. Triggers on send email, mail send, email with attachment, mail schicken."

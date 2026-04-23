@@ -1,4 +1,0 @@
-interface:
-  display_name: "Hook Creator"
-  short_description: "Create and manage Claude Code hooks across all 8 hook types. Use when adding automated behaviors, troubleshooting hooks, or learning best practices. Triggers on create hook, hooks, PreToolUse, PostToolUse, security hook. Enforces the three-tier exit code convention (0=info/pass, 1=hook-error, 2=block) — see malte/standards/dev-tools/hook-exit-codes.md for the full standard."
-  default_prompt: "Use the hook-creator skill to help with this task. Create and manage Claude Code hooks across all 8 hook types. Use when adding automated behaviors, troubleshooting hooks, or learning best practices. Triggers on create hook, hooks, PreToolUse, PostToolUse, security hook. Enforces the three-tier exit code convention (0=info/pass, 1=hook-error, 2=block) — see malte/standards/dev-tools/hook-exit-codes.md for the full standard."

@@ -1,4 +1,0 @@
-interface:
-  display_name: "Plugin Management"
-  short_description: "Create, test, and distribute Claude Code plugins. Use when building plugins, converting skills to packages, or managing marketplace distribution. Triggers on create plugin, plugin, marketplace, distribute plugin, test plugin, plugin.json."
-  default_prompt: "Use the plugin-management skill to help with this task. Create, test, and distribute Claude Code plugins. Use when building plugins, converting skills to packages, or managing marketplace distribution. Triggers on create plugin, plugin, marketplace, distribute plugin, test plugin, plugin.json."

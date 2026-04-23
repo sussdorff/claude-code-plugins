@@ -1,4 +1,0 @@
-interface:
-  display_name: "Claude Md Pruner"
-  short_description: "Review CLAUDE.md files for instructions that newer models handle natively and suggest removals. Use after model updates to prune outdated instructions. Triggers on \"prune claude-md\", \"post-update review\", \"prune instructions\", \"model update cleanup\"."
-  default_prompt: "Use the claude-md-pruner skill to help with this task. Review CLAUDE.md files for instructions that newer models handle natively and suggest removals. Use after model updates to prune outdated instructions. Triggers on \"prune claude-md\", \"post-update review\", \"prune instructions\", \"model update cleanup\"."

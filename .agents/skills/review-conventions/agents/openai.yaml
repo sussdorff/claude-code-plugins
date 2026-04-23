@@ -1,4 +1,0 @@
-interface:
-  display_name: "Review Conventions"
-  short_description: "Review Conventions"
-  default_prompt: "Use the review-conventions skill to help with this task. Review Conventions"

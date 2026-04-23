@@ -26,6 +26,21 @@ python3 meta/skills/skill-auditor/scripts/validate-skill.py <skill-dir>
 - Prose that says "run X, store it, parse it, then feed it to Y"
 - Inline `python -c` or heredoc glue shaping structured data
 
+## Architectural Principle: Dev-Only Repository
+
+This repository is where plugins are **developed**. It is **NOT** a runtime source of truth.
+
+**Core invariant:** `rm -rf $(pwd)` MUST leave Codex and Claude Code fully operational.
+Runtime consumers read from `~/.codex/skills/`, `~/.codex/agents/`, `~/.claude/plugins/` —
+never from paths inside this repo.
+
+**Key rules:**
+- `.agents/` and `.codex/` are gitignored and must not be re-committed. They were in-repo mirrors — that pattern was eliminated (CCP-h8h).
+- `scripts/sync-codex-skills` and `scripts/sync-codex-agents` sync to user-scoped targets only.
+- CI scans canonical paths (`*/skills/<name>/SKILL.md`, `meta/skills/skill-auditor/`) — not mirrors.
+
+**Full principle:** `docs/architecture/dev-repo-principle.md`
+
 ## Wave-Orchestrator Freeze
 
 As of 2026-04-23, the custom `wave-orchestrator` is in **feature freeze**.

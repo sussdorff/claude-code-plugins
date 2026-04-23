@@ -1,4 +1,0 @@
-interface:
-  display_name: "Summarize"
-  short_description: "Content extraction and summarization via summarize CLI and Crawl4AI. Use for extracting web content, YouTube transcripts, podcasts, and generating AI summaries."
-  default_prompt: "Use the summarize skill to help with this task. Content extraction and summarization via summarize CLI and Crawl4AI. Use for extracting web content, YouTube transcripts, podcasts, and generating AI summaries."
