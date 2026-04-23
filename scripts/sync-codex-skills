@@ -1,240 +1,203 @@
-#!/usr/bin/env bash
-# sync-codex-skills — sync pilot skills from plugin-scoped source into
-# repo-scoped .agents/skills/ and optionally into a user-scoped Codex directory.
-#
-# USAGE
-#   sync-codex-skills [OPTIONS]
-#
-# OPTIONS
-#   --user            Also sync to the resolved user-scoped skills directory.
-#   --check           Diff source vs target(s), exit 1 if any file differs.
-#                     Suitable for pre-commit hooks and CI. No files are written.
-#   --dry-run         Print what would be copied without doing it.
-#   --skills LIST     Comma-separated skill names to sync (default: all pilots).
-#                     Example: --skills project-context,bug-triage
-#                     Empty tokens (e.g. leading/trailing commas) are an error.
-#                     A missing source directory is a fatal error (exit 2).
-#   -h, --help        Show this help and exit.
-#
-# SCOPES
-#   repo-scoped   .agents/skills/<name>/   (always written unless --check)
-#   user-scoped   Resolved via Phase 0 discovery (see below). Only written
-#                 when --user is passed or --check is used with --user.
-#
-# PHASE 0 DISCOVERY (user-scoped target)
-#   The script auto-detects the user Codex skills directory in this order:
-#     1. ~/.codex/skills/
-#     2. ~/.agents/skills/
-#   If neither exists, user-scoped sync is skipped with a warning (no failure).
-#
-# EXIT CODES
-#   0   All targets are in sync (or sync completed without errors).
-#   1   --check: one or more files are out of sync.
-#   2   Usage / argument error.
+#!/usr/bin/env python3
+"""Sync all Codex-exportable skills into repo and user-scoped skill surfaces."""
 
-set -euo pipefail
+from __future__ import annotations
 
-# ---------------------------------------------------------------------------
-# Configuration
-# ---------------------------------------------------------------------------
+import argparse
+import hashlib
+import shutil
+import sys
+import tempfile
+from pathlib import Path
 
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+SCRIPT_DIR = Path(__file__).resolve().parent
+REPO_ROOT = SCRIPT_DIR.parent
+sys.path.insert(0, str(SCRIPT_DIR))
 
-DEFAULT_SKILLS="project-context,spec-developer,bug-triage,project-health,binary-explorer,entropy-scan,nbj-audit,system-prompt-audit,vision,infra-principles,skill-auditor,token-cost,agent-forge"
-PLUGIN_BASE="$REPO_ROOT/dev-tools/skills"
-REGISTRY="$SCRIPT_DIR/skills-registry.json"
-REPO_TARGET="$REPO_ROOT/.agents/skills"
+from codex_skills import build_skill_export, discover_skills, exportable_skills  # noqa: E402
 
-# ---------------------------------------------------------------------------
-# Argument parsing
-# ---------------------------------------------------------------------------
 
-OPT_USER=false
-OPT_CHECK=false
-OPT_DRY_RUN=false
-OPT_SKILLS="$DEFAULT_SKILLS"
+REPO_TARGET = REPO_ROOT / ".agents" / "skills"
 
-while [[ $# -gt 0 ]]; do
-  case "$1" in
-    --user)      OPT_USER=true; shift ;;
-    --check)     OPT_CHECK=true; shift ;;
-    --dry-run)   OPT_DRY_RUN=true; shift ;;
-    --skills)
-      if [[ -z "${2-}" ]]; then
-        echo "ERROR: --skills requires a value" >&2
-        exit 2
-      fi
-      OPT_SKILLS="$2"; shift 2 ;;
-    --skills=*)  OPT_SKILLS="${1#--skills=}"; shift ;;
-    -h|--help)
-      sed -n '2,/^set -/{ /^#/{ s/^# \?//; p }; /^set -/q }' "${BASH_SOURCE[0]}"
-      exit 0 ;;
-    *)
-      echo "ERROR: unknown option: $1" >&2
-      exit 2 ;;
-  esac
-done
 
-# ---------------------------------------------------------------------------
-# Phase 0: resolve user-scoped target
-# ---------------------------------------------------------------------------
+def resolve_user_target() -> Path | None:
+    candidates = [Path.home() / ".codex" / "skills", Path.home() / ".agents" / "skills"]
+    for candidate in candidates:
+        if candidate.is_dir():
+            return candidate
+    return None
 
-USER_TARGET=""
-if $OPT_USER; then
-  if [[ -d "$HOME/.codex/skills" ]]; then
-    USER_TARGET="$HOME/.codex/skills"
-  elif [[ -d "$HOME/.agents/skills" ]]; then
-    USER_TARGET="$HOME/.agents/skills"
-  else
-    echo "WARNING: --user requested but no user-scoped skills directory found." >&2
-    echo "         Checked: ~/.codex/skills, ~/.agents/skills" >&2
-    echo "         Skipping user-scoped sync." >&2
-  fi
-fi
 
-# ---------------------------------------------------------------------------
-# Helpers
-# ---------------------------------------------------------------------------
+def parse_args() -> argparse.Namespace:
+    parser = argparse.ArgumentParser(
+        description=(
+            "Sync all Codex-exportable skills into .agents/skills/ and optionally into the "
+            "active user-scoped Codex skills directory."
+        )
+    )
+    parser.add_argument("--user", action="store_true", help="Also sync to ~/.codex/skills or ~/.agents/skills.")
+    parser.add_argument("--check", action="store_true", help="Exit 1 if any target is out of sync.")
+    parser.add_argument("--dry-run", action="store_true", help="Print what would change without writing files.")
+    parser.add_argument(
+        "--skills",
+        help="Comma-separated subset of skill names to sync or check. Default: all exportable skills.",
+    )
+    return parser.parse_args()
 
-# pick rsync if available, otherwise fall back to cp -a
-copy_tree() {
-  local src="$1" dst="$2"
-  if command -v rsync &>/dev/null; then
-    rsync -a --delete "$src/" "$dst/"
-  else
-    rm -rf "$dst"
-    cp -a "$src" "$dst"
-  fi
-}
 
-# returns 0 if src and dst are identical, 1 otherwise
-dirs_in_sync() {
-  local src="$1" dst="$2"
-  if [[ ! -d "$dst" ]]; then
-    return 1
-  fi
-  if command -v rsync &>/dev/null; then
-    # --checksum avoids timestamp-only false positives
-    local out
-    out=$(rsync -rcn --checksum --out-format="%n" "$src/" "$dst/" 2>&1)
-    [[ -z "$out" ]]
-  else
-    diff -rq "$src" "$dst" &>/dev/null
-  fi
-}
+def parse_skill_filter(raw_value: str | None) -> list[str] | None:
+    if raw_value is None:
+        return None
+    names = [item.strip() for item in raw_value.split(",")]
+    if any(not item for item in names):
+        raise ValueError("empty skill name in --skills list")
+    return names
 
-# ---------------------------------------------------------------------------
-# Main sync loop
-# ---------------------------------------------------------------------------
 
-IFS=',' read -ra SKILLS <<< "$OPT_SKILLS"
-OUT_OF_SYNC=()
+def sha256_file(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as handle:
+        for chunk in iter(lambda: handle.read(65536), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
 
-for skill in "${SKILLS[@]}"; do
-  skill="${skill// /}"  # trim whitespace
 
-  # Guard: reject empty skill tokens (e.g. from "--skills ,bug-triage" or "a,,b")
-  if [[ -z "$skill" ]]; then
-    echo "ERROR: empty skill name in --skills list" >&2
-    exit 2
-  fi
+def tree_signature(root: Path) -> dict[str, str] | None:
+    if not root.is_dir():
+        return None
+    signature: dict[str, str] = {}
+    for path in sorted(root.rglob("*")):
+        if path.is_dir():
+            continue
+        rel = path.relative_to(root)
+        if "__pycache__" in rel.parts:
+            continue
+        signature[str(rel)] = sha256_file(path)
+    return signature
 
-  # Resolve source from registry if available, otherwise fall back to PLUGIN_BASE
-  if [[ -f "$REGISTRY" ]] && command -v python3 &>/dev/null; then
-    registry_path=$(python3 -c "
-import json, sys
-try:
-    reg = json.load(open(sys.argv[1]))
-    val = reg.get(sys.argv[2], '')
-    if val and not val.startswith('_'):
-        print(val)
-except Exception as e:
-    print(f'WARNING: Failed to read skills registry: {e}', file=sys.stderr)
-" "$REGISTRY" "$skill" 2>/dev/null)
-    if [[ -n "$registry_path" ]]; then
-      src="$REPO_ROOT/$registry_path"
-    else
-      src="$PLUGIN_BASE/$skill"
-    fi
-  else
-    src="$PLUGIN_BASE/$skill"
-  fi
 
-  # Guard: missing source is fatal — prevents silent drift in CI/pre-commit
-  if [[ ! -d "$src" ]]; then
-    echo "ERROR: skill source not found: $src" >&2
-    exit 2
-  fi
+def sync_tree(source: Path, destination: Path) -> None:
+    if destination.exists():
+        shutil.rmtree(destination)
+    shutil.copytree(source, destination)
 
-  # ---- repo-scoped --------------------------------------------------------
-  repo_dst="$REPO_TARGET/$skill"
 
-  # Guard: refuse to sync if repo_dst resolves to the skills root itself
-  if [[ "$(realpath "$repo_dst" 2>/dev/null || echo "$repo_dst")" == "$(realpath "$REPO_TARGET" 2>/dev/null || echo "$REPO_TARGET")" ]]; then
-    echo "ERROR: refusing to sync to skills root (empty or '.' skill name?)" >&2
-    exit 2
-  fi
+def main() -> None:
+    args = parse_args()
+    try:
+        skill_filter = parse_skill_filter(args.skills)
+    except ValueError as exc:
+        print(f"ERROR: {exc}", file=sys.stderr)
+        raise SystemExit(2) from exc
 
-  if $OPT_CHECK; then
-    if dirs_in_sync "$src" "$repo_dst"; then
-      echo "  [ok]   repo-scoped: $skill"
-    else
-      echo "  [DIFF] repo-scoped: $skill  (run sync-codex-skills to update)"
-      OUT_OF_SYNC+=("repo:$skill")
-    fi
-  elif $OPT_DRY_RUN; then
-    echo "  [dry]  would sync $src -> $repo_dst"
-  else
-    mkdir -p "$repo_dst"
-    copy_tree "$src" "$repo_dst"
-    echo "  [sync] repo-scoped: $skill -> $repo_dst"
-  fi
+    records = exportable_skills(discover_skills())
+    records_by_name = {record.name: record for record in records}
 
-  # ---- user-scoped --------------------------------------------------------
-  if [[ -n "$USER_TARGET" ]]; then
-    user_dst="$USER_TARGET/$skill"
+    if skill_filter is not None:
+        missing = [name for name in skill_filter if name not in records_by_name]
+        if missing:
+            print(f"ERROR: unknown or non-exportable skills: {', '.join(missing)}", file=sys.stderr)
+            raise SystemExit(2)
+        selected = [records_by_name[name] for name in skill_filter]
+    else:
+        selected = records
 
-    if $OPT_CHECK; then
-      if dirs_in_sync "$src" "$user_dst"; then
-        echo "  [ok]   user-scoped ($USER_TARGET): $skill"
-      else
-        echo "  [DIFF] user-scoped ($USER_TARGET): $skill  (run sync-codex-skills --user to update)"
-        OUT_OF_SYNC+=("user:$skill")
-      fi
-    elif $OPT_DRY_RUN; then
-      echo "  [dry]  would sync $src -> $user_dst"
-    else
-      mkdir -p "$user_dst"
-      copy_tree "$src" "$user_dst"
-      echo "  [sync] user-scoped: $skill -> $user_dst"
-    fi
-  fi
-done
+    user_target = None
+    if args.user:
+        user_target = resolve_user_target()
+        if user_target is None:
+            print("WARNING: --user requested but no user-scoped skills directory found.", file=sys.stderr)
+            print("         Checked: ~/.codex/skills, ~/.agents/skills", file=sys.stderr)
+            print("         Skipping user-scoped sync.", file=sys.stderr)
 
-# ---------------------------------------------------------------------------
-# Summary / exit
-# ---------------------------------------------------------------------------
+    with tempfile.TemporaryDirectory(prefix="codex-skills-sync-") as temp_dir:
+        stage_root = Path(temp_dir)
+        for record in selected:
+            build_skill_export(record, stage_root / record.name)
 
-if $OPT_CHECK; then
-  echo ""
-  if [[ ${#OUT_OF_SYNC[@]} -eq 0 ]]; then
-    echo "All targets in sync."
-    exit 0
-  else
-    echo "Out of sync (${#OUT_OF_SYNC[@]} target(s)):"
-    for item in "${OUT_OF_SYNC[@]}"; do
-      echo "  - $item"
-    done
-    exit 1
-  fi
-elif $OPT_DRY_RUN; then
-  echo ""
-  echo "Dry-run complete. No files were written."
-else
-  echo ""
-  echo "Sync complete."
-  if [[ -n "$USER_TARGET" ]]; then
-    echo "User-scoped target: $USER_TARGET"
-  fi
-fi
+        out_of_sync: list[str] = []
+
+        if args.check:
+            for record in selected:
+                staged = stage_root / record.name
+                repo_destination = REPO_TARGET / record.name
+                if tree_signature(staged) == tree_signature(repo_destination):
+                    print(f"  [ok]   repo-scoped: {record.name}")
+                else:
+                    print(f"  [DIFF] repo-scoped: {record.name}  (run sync-codex-skills to update)")
+                    out_of_sync.append(f"repo:{record.name}")
+
+                if user_target is not None:
+                    user_destination = user_target / record.name
+                    if tree_signature(staged) == tree_signature(user_destination):
+                        print(f"  [ok]   user-scoped ({user_target}): {record.name}")
+                    else:
+                        print(
+                            f"  [DIFF] user-scoped ({user_target}): {record.name}  "
+                            "(run sync-codex-skills --user to update)"
+                        )
+                        out_of_sync.append(f"user:{record.name}")
+
+            if skill_filter is None:
+                expected_names = {record.name for record in selected}
+                actual_names = {path.name for path in REPO_TARGET.iterdir()} if REPO_TARGET.is_dir() else set()
+                stale_names = sorted(name for name in actual_names - expected_names if not name.startswith("."))
+                for stale in stale_names:
+                    print(f"  [DIFF] repo-scoped stale skill: {stale}  (run sync-codex-skills to prune)")
+                    out_of_sync.append(f"repo-stale:{stale}")
+
+            print("")
+            if out_of_sync:
+                print(f"Out of sync ({len(out_of_sync)} target(s)):")
+                for item in out_of_sync:
+                    print(f"  - {item}")
+                raise SystemExit(1)
+
+            print("All targets in sync.")
+            return
+
+        if args.dry_run:
+            for record in selected:
+                staged = stage_root / record.name
+                print(f"  [dry]  would sync {staged} -> {REPO_TARGET / record.name}")
+                if user_target is not None:
+                    print(f"  [dry]  would sync {staged} -> {user_target / record.name}")
+
+            if skill_filter is None and REPO_TARGET.is_dir():
+                expected_names = {record.name for record in selected}
+                actual_names = {path.name for path in REPO_TARGET.iterdir()}
+                stale_names = sorted(name for name in actual_names - expected_names if not name.startswith("."))
+                for stale in stale_names:
+                    print(f"  [dry]  would remove stale repo-scoped skill {REPO_TARGET / stale}")
+
+            print("")
+            print("Dry-run complete. No files were written.")
+            return
+
+        REPO_TARGET.mkdir(parents=True, exist_ok=True)
+        for record in selected:
+            sync_tree(stage_root / record.name, REPO_TARGET / record.name)
+            print(f"  [sync] repo-scoped: {record.name} -> {REPO_TARGET / record.name}")
+
+        if skill_filter is None and REPO_TARGET.is_dir():
+            expected_names = {record.name for record in selected}
+            actual_paths = [path for path in REPO_TARGET.iterdir() if path.is_dir() and not path.name.startswith(".")]
+            for stale_path in sorted(actual_paths, key=lambda path: path.name):
+                if stale_path.name not in expected_names:
+                    shutil.rmtree(stale_path)
+                    print(f"  [sync] repo-scoped: pruned stale {stale_path}")
+
+        if user_target is not None:
+            user_target.mkdir(parents=True, exist_ok=True)
+            for record in selected:
+                sync_tree(stage_root / record.name, user_target / record.name)
+                print(f"  [sync] user-scoped: {record.name} -> {user_target / record.name}")
+
+        print("")
+        print("Sync complete.")
+        if user_target is not None:
+            print(f"User-scoped target: {user_target}")
+
+
+if __name__ == "__main__":
+    main()

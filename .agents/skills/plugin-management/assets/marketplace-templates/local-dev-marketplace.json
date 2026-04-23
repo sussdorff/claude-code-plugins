@@ -1,0 +1,22 @@
+{
+  "name": "local-dev",
+  "owner": {
+    "name": "Developer Name",
+    "email": "developer@example.com"
+  },
+  "metadata": {
+    "description": "Local marketplace for plugin development and testing",
+    "version": "1.0.0",
+    "pluginRoot": "./plugins"
+  },
+  "plugins": [
+    {
+      "name": "example-plugin",
+      "source": "./example-plugin",
+      "description": "Example plugin for testing",
+      "version": "1.0.0",
+      "category": "development",
+      "keywords": ["example", "test"]
+    }
+  ]
+}

@@ -1,0 +1,4 @@
+interface:
+  display_name: "Project Health"
+  short_description: "Run a quick quality assessment on a project and produce a traffic-light scorecard. Triggers on: project health, projekt check, health check, project quality, wie gesund ist das projekt, code health check."
+  default_prompt: "Use the project-health skill to help with this task. Run a quick quality assessment on a project and produce a traffic-light scorecard. Triggers on: project health, projekt check, health check, project quality, wie gesund ist das projekt, code health check."

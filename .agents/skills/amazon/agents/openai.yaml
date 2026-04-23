@@ -1,0 +1,4 @@
+interface:
+  display_name: "Amazon"
+  short_description: "Amazon.de automation via playwright-cli with local purchases database. Use for downloading invoices, searching order history, or querying past purchases. Triggers on amazon rechnung, amazon bestellung, amazon order, was habe ich gekauft."
+  default_prompt: "Use the amazon skill to help with this task. Amazon.de automation via playwright-cli with local purchases database. Use for downloading invoices, searching order history, or querying past purchases. Triggers on amazon rechnung, amazon bestellung, amazon order, was habe ich gekauft."

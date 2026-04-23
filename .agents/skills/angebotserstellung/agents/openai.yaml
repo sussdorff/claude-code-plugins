@@ -1,0 +1,4 @@
+interface:
+  display_name: "Angebotserstellung"
+  short_description: "Professionelle Angebote fuer IT-Projekte und Beratungsleistungen erstellen. Use when writing proposals, revising offers, or calculating project pricing. Triggers on Angebot, proposal, Preiskalkulation, Angebotserstellung, offer, Beratungsangebot."
+  default_prompt: "Use the angebotserstellung skill to help with this task. Professionelle Angebote fuer IT-Projekte und Beratungsleistungen erstellen. Use when writing proposals, revising offers, or calculating project pricing. Triggers on Angebot, proposal, Preiskalkulation, Angebotserstellung, offer, Beratungsangebot."

@@ -1,0 +1,4 @@
+interface:
+  display_name: "Brand Forge"
+  short_description: "Create, review, and manage voice/brand profiles for Claude Code skills. Use when creating brands, reviewing quality, or applying voice profiles. Triggers on create brand, voice profile, review brand, change tone. Not for skill creation."
+  default_prompt: "Use the brand-forge skill to help with this task. Create, review, and manage voice/brand profiles for Claude Code skills. Use when creating brands, reviewing quality, or applying voice profiles. Triggers on create brand, voice profile, review brand, change tone. Not for skill creation."

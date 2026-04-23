@@ -178,43 +178,46 @@ the CCP-c2p pilot results. See `docs/codex-pilot-evidence.md` for invocation evi
 
 ### 1. Source of Truth
 
-**Decision:** `dev-tools/skills/{name}/` remains the source of truth.
-`.agents/skills/` is a committed build artifact derived by `scripts/sync-codex-skills`.
+**Decision:** The checked-in plugin skill directories remain the source of truth:
+`beads-workflow/`, `business/`, `content/`, `core/`, `dev-tools/`, `infra/`,
+`medical/`, and `meta/`. `.agents/skills/` is a committed build artifact derived
+by `scripts/sync-codex-skills`.
 
-**Rationale:** The plugin-folder layout gives skills their canonical place in the
-monorepo. `.agents/skills/` is the Codex-facing export layer. Keeping dev-tools as
-source prevents double-maintenance: edit once (dev-tools), sync once, commit both.
-`scripts/sync-codex-skills --check` enforces that the export layer never drifts.
+**Rationale:** The monorepo already has canonical plugin-scoped skill homes.
+Moving Codex to a full-fleet export should not create a second authoring surface.
+Edit the source skill once, sync once, commit both. `scripts/sync-codex-skills --check`
+enforces that the export layer never drifts.
 
-**Rule:** Never edit `.agents/skills/` directly. Edit `dev-tools/skills/{name}/`
-and run `scripts/sync-codex-skills` to propagate.
+**Rule:** Never edit `.agents/skills/` directly. Edit the canonical source skill
+directory and run `scripts/sync-codex-skills` to propagate.
 
 ### 2. Sync Mechanism
 
-**Decision:** `scripts/sync-codex-skills` (rsync-based copy script) is the canonical
-sync mechanism.
+**Decision:** `scripts/sync-codex-skills` is the canonical sync mechanism.
 
-**Rationale:** An explicit copy keeps the export layer as inspectable, diffable,
-committable state. Symlinks would hide changes; a project-setup hook would add ceremony.
-The script covers repo-scoped sync (default) and user-scoped sync (`--user`).
+**Rationale:** An explicit copy keeps the export layer inspectable, diffable, and
+committable. The script discovers the full skill fleet dynamically, builds any
+missing Codex metadata, and covers repo-scoped sync (default) plus user-scoped
+sync (`--user`).
 
 **User-scoped path:** `~/.codex/skills/` — Phase 0 verified: this is the active Codex
 load path on this machine (Codex v0.121.0, 2026-04-20). `~/.agents/skills/` does not
 exist and was never needed.
 
 **CI enforcement:** `scripts/sync-codex-skills --check` exits 1 when `.agents/skills/`
-diverges from `dev-tools/skills/`. Wire into pre-commit or CI to prevent drift.
+diverges from the generated full-fleet export. Wire into pre-commit or CI to prevent drift.
 
 ### 3. Metadata Depth
 
-**Decision:** Minimum Codex metadata for each pilot skill is `agents/openai.yaml` with
+**Decision:** The minimum Codex metadata contract remains `agents/openai.yaml` with
 three fields under `interface`: `display_name`, `short_description`, `default_prompt`.
-These live in `dev-tools/skills/{name}/agents/openai.yaml` (source) and are synced
-automatically to `.agents/skills/` and `~/.codex/skills/`.
+When a source skill already ships `agents/openai.yaml`, the export preserves it.
+When it does not, `scripts/sync-codex-skills` generates a minimal file in the export
+layer automatically.
 
-**Rationale:** The `frontend-skill` reference confirms this schema is sufficient for
-Codex UI integration. No additional `model`, `tags`, or extra keys are required for the
-pilot. Richer metadata (e.g. `argument-hint`) can be added per skill as needs emerge.
+**Rationale:** This keeps source skills lightweight and portable while ensuring the
+Codex-facing surface is complete across the full fleet. Richer metadata can still
+be authored per skill where the default generated form is not sufficient.
 
 ## Nächste Beads
 

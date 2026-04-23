@@ -1,0 +1,4 @@
+interface:
+  display_name: "Standards"
+  short_description: "Manage coding standards lifecycle - list, inject, create, sync, review. Use when loading standards, checking compliance, creating new standards, or syncing standards to projects. Triggers on standards, inject standards, load standards, check compliance, create standard, sync standards, review conventions, check patterns, apply patterns."
+  default_prompt: "Use the standards skill to help with this task. Manage coding standards lifecycle - list, inject, create, sync, review. Use when loading standards, checking compliance, creating new standards, or syncing standards to projects. Triggers on standards, inject standards, load standards, check compliance, create standard, sync standards, review conventions, check patterns, apply patterns."

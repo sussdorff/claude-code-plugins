@@ -1,0 +1,4 @@
+interface:
+  display_name: "Portless"
+  short_description: "Set up named local dev server URLs (e.g. myapp.localhost) via portless proxy. Use when configuring dev server names, resolving port conflicts, or setting up .localhost domains. Triggers on portless, EADDRINUSE, dev server URL, localhost, dev proxy."
+  default_prompt: "Use the portless skill to help with this task. Set up named local dev server URLs (e.g. myapp.localhost) via portless proxy. Use when configuring dev server names, resolving port conflicts, or setting up .localhost domains. Triggers on portless, EADDRINUSE, dev server URL, localhost, dev proxy."

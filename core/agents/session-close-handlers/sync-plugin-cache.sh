@@ -49,14 +49,14 @@ case "$REPO_NAME" in
       fi
     done
 
-    # Mirror curated skill subset into the Codex user directory so CC and
-    # Codex stay in sync across releases. Non-blocking — any failure here
+    # Mirror the full discovered skill fleet into the Codex user directory so
+    # Claude Code and Codex stay in sync across releases. Non-blocking — any failure here
     # must NOT abort session-close. See scripts/sync-codex-skills --help for
-    # the pilot list and Phase 0 target discovery (~/.codex/skills ->
+    # the discovery rules and Phase 0 target discovery (~/.codex/skills ->
     # ~/.agents/skills).
     CODEX_SYNC="$REPO_ROOT/scripts/sync-codex-skills"
     if [ -x "$CODEX_SYNC" ]; then
-      echo "sync-plugin-cache: syncing curated skills to Codex user dir"
+      echo "sync-plugin-cache: syncing Codex skill fleet to user dir"
       if CODEX_OUTPUT=$("$CODEX_SYNC" --user 2>&1); then
         echo "  ✔ codex skills synced"
       else

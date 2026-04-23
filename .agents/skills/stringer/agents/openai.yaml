@@ -1,0 +1,4 @@
+interface:
+  display_name: "Stringer"
+  short_description: "/stringer — Codebase archaeology and tech debt scanning"
+  default_prompt: "Use the stringer skill to help with this task. /stringer — Codebase archaeology and tech debt scanning"

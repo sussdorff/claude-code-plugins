@@ -1,0 +1,4 @@
+interface:
+  display_name: "Token Cost"
+  short_description: "Measure static context token overhead for agent sessions. Use when auditing context window usage, checking skill/agent/conventions token costs, or generating a ranked report of heaviest context contributors."
+  default_prompt: "Use the token-cost skill to help with this task. Measure static context token overhead for agent sessions. Use when auditing context window usage, checking skill/agent/conventions token costs, or generating a ranked report of heaviest context contributors."

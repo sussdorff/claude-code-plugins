@@ -1,0 +1,4 @@
+interface:
+  display_name: "Adr Gap"
+  short_description: "Audit a repo for ADR hoist debt and pre-trinity packages. Triggers on: adr gap, hoist debt, adr audit, pre-trinity packages, architecture drift."
+  default_prompt: "Use the adr-gap skill to help with this task. Audit a repo for ADR hoist debt and pre-trinity packages. Triggers on: adr gap, hoist debt, adr audit, pre-trinity packages, architecture drift."

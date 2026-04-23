@@ -1,0 +1,4 @@
+interface:
+  display_name: "Collmex CLI"
+  short_description: "CLI wrapper for Collmex Buchhaltung Pro API. Use when managing vendors, invoices, open items, bookings, or generating ZUGFeRD XML. Triggers on Collmex, accounting, invoices, payables, vendors, Buchhaltung, Lieferanten, offene Posten."
+  default_prompt: "Use the collmex-cli skill to help with this task. CLI wrapper for Collmex Buchhaltung Pro API. Use when managing vendors, invoices, open items, bookings, or generating ZUGFeRD XML. Triggers on Collmex, accounting, invoices, payables, vendors, Buchhaltung, Lieferanten, offene Posten."

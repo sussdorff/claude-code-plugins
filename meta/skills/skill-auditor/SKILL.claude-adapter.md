@@ -35,3 +35,13 @@ Usage:
 ```bash
 python <eval-viewer-path> workspace/{skill-name} --skill-name {skill-name}
 ```
+
+## Fleet Audit Dispatch (Claude)
+
+Claude dispatches the full fleet audit to the dedicated subagent:
+
+```python
+Agent(subagent_type='meta:skill-auditor', prompt=$ARGUMENTS)
+```
+
+The subagent runs on Opus with an isolated context window.

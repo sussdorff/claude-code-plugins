@@ -6,6 +6,8 @@ and that adapter files exist.
 """
 import json
 import re
+import subprocess
+import sys
 from pathlib import Path
 
 SKILL_ROOTS = [
@@ -70,6 +72,20 @@ def test_claude_adapter_exists_for_each_skill():
         content = adapter_file.read_text()
         assert "harness: claude" in content, f"Adapter {adapter_file} missing 'harness: claude' frontmatter"
 
+
+def test_codex_inventory_discovers_unique_skill_names():
+    inventory_script = Path("scripts/codex_skills.py")
+    result = subprocess.run(
+        [sys.executable, str(inventory_script), "--json"],
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+    inventory = json.loads(result.stdout)
+    names = [item["name"] for item in inventory]
+    assert len(names) == len(set(names)), "codex skill discovery must produce unique names"
+    assert "my-skill" not in names, "test fixtures must not leak into the export inventory"
+
 def test_codex_skills_candidates_doc_exists():
     """CCP-50y AC1/AC2: docs/codex-skills-candidates.md must exist and contain required sections."""
     doc = Path("docs/codex-skills-candidates.md")
@@ -92,37 +108,13 @@ def test_codex_skills_candidates_doc_exists():
     )
 
 
-def test_skills_registry_entries_resolve():
-    """CCP-50y: Every skill in DEFAULT_SKILLS must have a registry entry pointing to an existing directory."""
-    registry_file = Path("scripts/skills-registry.json")
-    assert registry_file.exists(), "scripts/skills-registry.json does not exist"
-    registry = json.loads(registry_file.read_text())
-    # Parse DEFAULT_SKILLS from sync-codex-skills script
+def test_sync_script_uses_dynamic_discovery_not_default_allowlist():
+    """CCP-wyi: sync-codex-skills must use dynamic discovery instead of a hardcoded pilot set."""
     sync_script = Path("scripts/sync-codex-skills")
     assert sync_script.exists(), "scripts/sync-codex-skills does not exist"
-    default_skills_line = next(
-        line for line in sync_script.read_text().splitlines()
-        if line.startswith("DEFAULT_SKILLS=")
-    )
-    default_skills_value = default_skills_line.split("=", 1)[1].strip('"')
-    default_skills = [s.strip() for s in default_skills_value.split(",") if s.strip()]
-
-    missing_entries = []
-    missing_dirs = []
-    for skill in default_skills:
-        if skill not in registry or registry[skill].startswith("_"):
-            missing_entries.append(skill)
-        else:
-            skill_dir = Path(registry[skill])
-            if not skill_dir.exists():
-                missing_dirs.append(f"{skill} -> {registry[skill]}")
-
-    assert not missing_entries, (
-        f"Skills in DEFAULT_SKILLS missing from registry: {missing_entries}"
-    )
-    assert not missing_dirs, (
-        f"Registry entries pointing to non-existent directories: {missing_dirs}"
-    )
+    content = sync_script.read_text()
+    assert "DEFAULT_SKILLS" not in content
+    assert "skills-registry.json" not in content
 
 
 def test_portability_rules_doc_exists():

@@ -1,0 +1,4 @@
+interface:
+  display_name: "Intake"
+  short_description: "/intake — Transkript zu Beads Pipeline"
+  default_prompt: "Use the intake skill to help with this task. /intake — Transkript zu Beads Pipeline"

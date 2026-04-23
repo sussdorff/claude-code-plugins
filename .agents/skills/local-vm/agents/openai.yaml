@@ -1,0 +1,4 @@
+interface:
+  display_name: "Local Vm"
+  short_description: "Manage local and remote VMs across Parallels, Hyper-V, QEMU, and Proxmox. Use when SSH fails due to stopped VMs, or to start/stop/check VM status. Triggers on VM not running, SSH failed, start vm, parallels, hyper-v, qemu, proxmox."
+  default_prompt: "Use the local-vm skill to help with this task. Manage local and remote VMs across Parallels, Hyper-V, QEMU, and Proxmox. Use when SSH fails due to stopped VMs, or to start/stop/check VM status. Triggers on VM not running, SSH failed, start vm, parallels, hyper-v, qemu, proxmox."

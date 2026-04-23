@@ -1,0 +1,4 @@
+interface:
+  display_name: "Playwright CLI"
+  short_description: "Browser automation via playwright-cli. ALWAYS use instead of Chrome MCP tools. Use when opening websites, scraping pages, filling forms, or interacting with web UIs. Triggers on any URL, website name, open page, browse, navigate, scrape, fill form."
+  default_prompt: "Use the playwright-cli skill to help with this task. Browser automation via playwright-cli. ALWAYS use instead of Chrome MCP tools. Use when opening websites, scraping pages, filling forms, or interacting with web UIs. Triggers on any URL, website name, open page, browse, navigate, scrape, fill form."

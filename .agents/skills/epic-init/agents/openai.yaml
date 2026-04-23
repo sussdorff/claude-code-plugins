@@ -1,0 +1,4 @@
+interface:
+  display_name: "Epic Init"
+  short_description: "Guided planning dialog for larger initiatives producing Beads epics with sub-tasks. Use when planning features or multi-task initiatives needing structured breakdown. Triggers on epic init, plan epic, create epic, plan feature, break down feature."
+  default_prompt: "Use the epic-init skill to help with this task. Guided planning dialog for larger initiatives producing Beads epics with sub-tasks. Use when planning features or multi-task initiatives needing structured breakdown. Triggers on epic init, plan epic, create epic, plan feature, break down feature."

@@ -1,0 +1,4 @@
+interface:
+  display_name: "Retro"
+  short_description: "Run a data-driven bi-weekly retrospective using open-brain timeline, bead metrics, and git history. Detects signals, selects a matching retro method, and guides 4 reflection rounds. Use when running a retro, sprint review, or bi-weekly reflection."
+  default_prompt: "Use the retro skill to help with this task. Run a data-driven bi-weekly retrospective using open-brain timeline, bead metrics, and git history. Detects signals, selects a matching retro method, and guides 4 reflection rounds. Use when running a retro, sprint review, or bi-weekly reflection."

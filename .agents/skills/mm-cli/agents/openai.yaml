@@ -1,0 +1,4 @@
+interface:
+  display_name: "Mm CLI"
+  short_description: "CLI for MoneyMoney macOS finance app via AppleScript. Use when querying accounts, balances, transactions, cashflow, or spending. Triggers on MoneyMoney, bank accounts, transactions, cashflow, spending, balance, portfolio, financial analysis."
+  default_prompt: "Use the mm-cli skill to help with this task. CLI for MoneyMoney macOS finance app via AppleScript. Use when querying accounts, balances, transactions, cashflow, or spending. Triggers on MoneyMoney, bank accounts, transactions, cashflow, spending, balance, portfolio, financial analysis."

@@ -1,0 +1,4 @@
+interface:
+  display_name: "Career Check"
+  short_description: "Modulare Karriere-Analyse fuer die AI-Aera mit Collapse Position Audit und Role Assessment. Use when evaluating career positioning or assessing AI impact. Triggers on career check, career analysis, career collapse, AI career, role assessment."
+  default_prompt: "Use the career-check skill to help with this task. Modulare Karriere-Analyse fuer die AI-Aera mit Collapse Position Audit und Role Assessment. Use when evaluating career positioning or assessing AI impact. Triggers on career check, career analysis, career collapse, AI career, role assessment."

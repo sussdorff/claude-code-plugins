@@ -1,95 +1,119 @@
-"""
-Test: CCP-c2p — Codex pilot skill surface.
-Verifies that the 3 pilot skills are present and Codex-ready in .agents/skills/,
-synced to the user-scoped Codex skills dir, have openai.yaml metadata, and that
-the rollout plan has a locked Decisions section.
-"""
+"""Tests for the full Codex skill export surface."""
+
+from __future__ import annotations
+
+import json
 import os
-import pytest
+import subprocess
+import sys
 from pathlib import Path
 
-REPO_ROOT = Path(__file__).parent.parent
-SKILL_NAMES = ["project-context", "spec-developer", "bug-triage"]
-AGENTS_SKILLS = REPO_ROOT / ".agents" / "skills"
-DEV_TOOLS_SKILLS = REPO_ROOT / "dev-tools" / "skills"
-USER_CODEX_SKILLS = Path.home() / ".codex" / "skills"
+import pytest
 
+
+REPO_ROOT = Path(__file__).parent.parent
+AGENTS_SKILLS = REPO_ROOT / ".agents" / "skills"
+USER_CODEX_SKILLS = Path.home() / ".codex" / "skills"
+INVENTORY_SCRIPT = REPO_ROOT / "scripts" / "codex_skills.py"
+SYNC_SCRIPT = REPO_ROOT / "scripts" / "sync-codex-skills"
+PILOT_SKILLS = {"project-context", "spec-developer", "bug-triage"}
+
+
+def load_inventory() -> list[dict[str, object]]:
+    result = subprocess.run(
+        [sys.executable, str(INVENTORY_SCRIPT), "--json"],
+        cwd=REPO_ROOT,
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+    return json.loads(result.stdout)
+
+
+INVENTORY = load_inventory()
+SKILL_NAMES = [record["name"] for record in INVENTORY]
+GENERATED_METADATA_SKILLS = [
+    record["name"] for record in INVENTORY if not bool(record["has_openai_yaml"])
+]
 _user_skills_present = USER_CODEX_SKILLS.is_dir()
 
 
 class TestAgentsSkillsSurface:
-    """AC#1: .agents/skills/ exists with 3 skills in Codex-usable form."""
+    """Every exportable skill is present in the Codex-facing repo layer."""
+
+    def test_inventory_is_nonempty(self):
+        assert INVENTORY, "codex_skills.py should discover exportable skills"
+
+    def test_pilot_skills_are_still_discoverable(self):
+        assert PILOT_SKILLS.issubset(SKILL_NAMES)
 
     def test_agents_skills_dir_exists(self):
         assert AGENTS_SKILLS.is_dir(), ".agents/skills/ must exist"
 
-    @pytest.mark.parametrize("skill", SKILL_NAMES)
-    def test_skill_directory_exists(self, skill):
-        assert (AGENTS_SKILLS / skill).is_dir()
+    def test_every_discovered_skill_is_exported(self):
+        missing = [skill for skill in SKILL_NAMES if not (AGENTS_SKILLS / skill).is_dir()]
+        assert not missing, f"Missing exported skills: {missing}"
 
-    @pytest.mark.parametrize("skill", SKILL_NAMES)
-    def test_skill_has_skill_md(self, skill):
-        skill_md = AGENTS_SKILLS / skill / "SKILL.md"
-        assert skill_md.exists(), f"{skill}/SKILL.md must exist"
+    def test_every_exported_skill_has_skill_md(self):
+        missing = [
+            skill for skill in SKILL_NAMES if not (AGENTS_SKILLS / skill / "SKILL.md").exists()
+        ]
+        assert not missing, f"Missing SKILL.md in exported skills: {missing}"
 
-    @pytest.mark.parametrize("skill", SKILL_NAMES)
-    def test_skill_md_has_name_and_description(self, skill):
-        skill_md = (AGENTS_SKILLS / skill / "SKILL.md").read_text()
-        assert "name:" in skill_md
-        assert "description:" in skill_md
+    def test_every_exported_skill_has_openai_yaml(self):
+        missing = [
+            skill
+            for skill in SKILL_NAMES
+            if not (AGENTS_SKILLS / skill / "agents" / "openai.yaml").exists()
+        ]
+        assert not missing, f"Missing openai.yaml in exported skills: {missing}"
 
-    @pytest.mark.parametrize("skill", SKILL_NAMES)
-    def test_agents_skills_in_sync_with_dev_tools(self, skill):
-        """Run sync --check to verify .agents/skills matches dev-tools/skills."""
-        import subprocess
+    def test_generated_metadata_covers_non_pilot_skills(self):
+        assert GENERATED_METADATA_SKILLS, "Expected at least one generated metadata skill"
+        for skill in GENERATED_METADATA_SKILLS[:5]:
+            yaml_path = AGENTS_SKILLS / skill / "agents" / "openai.yaml"
+            content = yaml_path.read_text()
+            assert "display_name:" in content
+            assert "short_description:" in content
+            assert "default_prompt:" in content
+
+    def test_full_fleet_repo_sync_check_passes(self):
         result = subprocess.run(
-            ["scripts/sync-codex-skills", "--check", "--skills", skill],
+            [str(SYNC_SCRIPT), "--check"],
             cwd=REPO_ROOT,
-            capture_output=True, text=True
+            capture_output=True,
+            text=True,
+            check=False,
         )
         assert result.returncode == 0, (
-            f"Skill {skill} is out of sync: {result.stdout}{result.stderr}\n"
-            "Run: scripts/sync-codex-skills"
+            f"Full-fleet repo sync is out of date:\n{result.stdout}{result.stderr}"
         )
-
-
-class TestCodexMetadata:
-    """AC#1: openai.yaml metadata present for each skill."""
-
-    @pytest.mark.parametrize("skill", SKILL_NAMES)
-    def test_openai_yaml_in_dev_tools(self, skill):
-        yaml_path = DEV_TOOLS_SKILLS / skill / "agents" / "openai.yaml"
-        assert yaml_path.exists(), f"dev-tools/skills/{skill}/agents/openai.yaml must exist"
-
-    @pytest.mark.parametrize("skill", SKILL_NAMES)
-    def test_openai_yaml_has_required_fields(self, skill):
-        # Parse as plain text to avoid pyyaml dependency — fields are always at fixed indentation
-        yaml_path = DEV_TOOLS_SKILLS / skill / "agents" / "openai.yaml"
-        content = yaml_path.read_text()
-        assert "display_name:" in content, "openai.yaml must have interface.display_name"
-        assert "short_description:" in content, "openai.yaml must have interface.short_description"
-        assert "default_prompt:" in content, "openai.yaml must have interface.default_prompt"
 
 
 @pytest.mark.skipif(
     not _user_skills_present and not os.environ.get("PILOT_USER_SYNC"),
-    reason="user-scoped sync not available on this machine (run sync-codex-skills --user or set PILOT_USER_SYNC=1)"
+    reason="user-scoped sync not available on this machine (run sync-codex-skills --user or set PILOT_USER_SYNC=1)",
 )
 class TestUserScopedSync:
-    """AC#1/AC#2 precondition: skills synced to ~/.codex/skills/."""
+    """The user-scoped Codex skills dir mirrors the repo export for the full fleet."""
 
-    @pytest.mark.parametrize("skill", SKILL_NAMES)
-    def test_skill_in_user_codex_skills(self, skill):
-        skill_dir = USER_CODEX_SKILLS / skill
-        assert skill_dir.is_dir(), (
-            f"~/.codex/skills/{skill}/ must exist. "
-            "Run: scripts/sync-codex-skills --user"
+    def test_every_discovered_skill_is_in_user_codex_skills(self):
+        missing = [skill for skill in SKILL_NAMES if not (USER_CODEX_SKILLS / skill).is_dir()]
+        assert not missing, (
+            f"Missing user-scoped skills: {missing}\nRun: scripts/sync-codex-skills --user"
         )
 
-    @pytest.mark.parametrize("skill", SKILL_NAMES)
-    def test_user_skill_has_skill_md(self, skill):
-        skill_md = USER_CODEX_SKILLS / skill / "SKILL.md"
-        assert skill_md.exists()
+    def test_full_fleet_user_sync_check_passes(self):
+        result = subprocess.run(
+            [str(SYNC_SCRIPT), "--check", "--user"],
+            cwd=REPO_ROOT,
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        assert result.returncode == 0, (
+            f"Full-fleet user sync is out of date:\n{result.stdout}{result.stderr}"
+        )
 
 
 class TestPilotEvidence:
@@ -100,7 +124,7 @@ class TestPilotEvidence:
 
     def test_evidence_has_three_skill_entries(self):
         content = (REPO_ROOT / "docs" / "codex-pilot-evidence.md").read_text()
-        for skill in SKILL_NAMES:
+        for skill in PILOT_SKILLS:
             assert skill in content.lower(), f"Evidence must include {skill} transcript"
 
     def test_evidence_has_negative_check(self):

@@ -1,0 +1,4 @@
+interface:
+  display_name: "Billing Reviewer"
+  short_description: "Billing reviewer agent for evaluating MIRA billing UI as Abrechnungsspezialistin. Use when reviewing billing features or running scenario-based evaluations. Triggers on billing review, Abrechnungsprueferin, billing UI review."
+  default_prompt: "Use the billing-reviewer skill to help with this task. Billing reviewer agent for evaluating MIRA billing UI as Abrechnungsspezialistin. Use when reviewing billing features or running scenario-based evaluations. Triggers on billing review, Abrechnungsprueferin, billing UI review."

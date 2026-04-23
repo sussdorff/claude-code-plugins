@@ -1,0 +1,4 @@
+interface:
+  display_name: "Piler CLI"
+  short_description: "CLI for searching and reading emails from Mailpiler archive on Proxmox. Use when querying archived emails, searching mail history, or reading past messages. Triggers on mailpiler, mail archive, piler search, alte mails, mail suchen, email archiv."
+  default_prompt: "Use the piler-cli skill to help with this task. CLI for searching and reading emails from Mailpiler archive on Proxmox. Use when querying archived emails, searching mail history, or reading past messages. Triggers on mailpiler, mail archive, piler search, alte mails, mail suchen, email archiv."

@@ -1,0 +1,4 @@
+interface:
+  display_name: "Bead Metrics"
+  short_description: "Query per-bead token cost metrics from ~/.claude/metrics.db. Shows cost table, impl:review ratios, most expensive beads, cost trend over time. Triggers on: bead metrics, token cost report, bead costs, /bead-metrics."
+  default_prompt: "Use the bead-metrics skill to help with this task. Query per-bead token cost metrics from ~/.claude/metrics.db. Shows cost table, impl:review ratios, most expensive beads, cost trend over time. Triggers on: bead metrics, token cost report, bead costs, /bead-metrics."

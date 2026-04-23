@@ -33,13 +33,30 @@ Exit 2 = file not found / parse error.
 See `references/skill-script-first.md` for the full script-first authoring rule,
 allowed exceptions, and when to use JSON vs bare value output contracts.
 
-## Fleet Audit Dispatch
+## Codex Compatibility Inventory
 
-```python
-Agent(subagent_type='meta:skill-auditor', prompt=$ARGUMENTS)
+For Codex rollout work, audit the full fleet with:
+
+```bash
+python3 meta/skills/skill-auditor/scripts/scan-codex-compat.py
+python3 meta/skills/skill-auditor/scripts/scan-codex-compat.py --fail-on-needs-fix
+python3 meta/skills/skill-auditor/scripts/scan-codex-compat.py --skills beads,codex
 ```
 
-All audit logic, scoring dimensions, tier budgets, grade thresholds, improve-mode workflow,
-and eval-viewer integration live in the subagent at `meta/agents/skill-auditor.md`.
+The scanner classifies each skill as one of:
 
-The subagent runs on Opus for deterministic reasoning quality and an isolated context window.
+- `works-as-is` — no obvious Codex portability hazards detected
+- `needs-fix` — portable core still contains Claude-specific mechanics
+- `cc-only` — explicitly excluded from Codex export via `codex-support: disabled`
+
+Use this scan before widening Codex sync scope or marking a skill intentionally
+Claude-only.
+
+## Fleet Audit Dispatch
+
+All fleet-audit logic, scoring dimensions, tier budgets, grade thresholds,
+improve-mode workflow, and eval-viewer integration live in the dedicated
+skill-auditor agent at `meta/agents/skill-auditor.md`.
+
+See your harness adapter for the exact dispatch mechanism and runtime-specific
+invocation syntax.
