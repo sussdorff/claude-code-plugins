@@ -14,7 +14,7 @@ Evaluate each principle in a project's `vision.md` against current reality. Prod
 
 ## Overview
 
-Vision Review is a cadence-triggered enforcer-reactive skill. It does not modify `vision.md` directly — it creates auditable draft ADRs in `docs/adr/drafts/` and a review report in `docs/`. The skill drives an interactive per-principle dialog with the user, invokes `/council` (or degrades gracefully), and delegates all file I/O to `scripts/vision_review.py`.
+Vision Review is a cadence-triggered enforcer-reactive skill. It does not modify `vision.md` directly — it creates auditable draft ADRs in `docs/adr/drafts/` and a review report in `docs/`. The skill drives an interactive per-principle dialog with the user, invokes the council review workflow when available (or degrades gracefully), and delegates all file I/O to `scripts/vision_review.py`.
 
 **Trinity role**: Enforcer-Reactive — checks existing vision against current reality after the fact.
 
@@ -24,9 +24,9 @@ Vision Review is a cadence-triggered enforcer-reactive skill. It does not modify
 - "vision health" / "vision health check"
 - "re-evaluate vision" / "vision health score"
 - Quarterly or after major architecture changes
-- After `/vision-author` to validate alignment
+- After `vision-author` to validate alignment
 
-Do NOT use for: editing vision.md directly (use `/vision-author --refresh`), creating new visions (use `/vision-author`), or non-vision document reviews.
+Do NOT use for: editing vision.md directly (use `vision-author --refresh`), creating new visions (use `vision-author`), or non-vision document reviews.
 
 ## Workflow
 
@@ -57,10 +57,9 @@ Evidence (why it holds or why it is contested):
 
 ### Step 3: Council Integration
 
-For each contested principle (confirmed = N), invoke `/council` for a second opinion:
+For each contested principle (confirmed = N), invoke the council review workflow for a second opinion:
 
-```python
-Agent(subagent_type="business:council", prompt=f"""
+```text
 Architecture vision review — contested principle:
 
 **{principle_id}**: {principle_text}
@@ -69,7 +68,6 @@ User evidence: {evidence}
 
 Assess whether this principle should be revised, removed, or kept as-is.
 Focus on architectural coherence, not stylistic preference.
-""")
 ```
 
 **Degraded mode**: If the council Agent raises an exception or is unavailable, fall back to a single-perspective Haiku critique:

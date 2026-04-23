@@ -146,7 +146,7 @@ cmux browser surface:7 snapshot --interactive
 
 | Situation | Tool |
 |-----------|------|
-| Agent runs inside cmux (bead-orchestrator, wave-orchestrator) | **cmux-browser** — native, zero-overhead |
+| Agent runs inside cmux (implementation orchestrator, wave orchestrator) | **cmux-browser** — native, zero-overhead |
 | CI/CD pipeline or headless testing | **playwright-cli** — cross-platform, Chromium engine |
 | Need viewport emulation, network mocking, offline mode | **playwright-cli** — WKWebView doesn't support these |
 | Visual verification during implementation (pre-commit gate) | **cmux-browser** preferred, playwright-cli fallback |

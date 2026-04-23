@@ -2,14 +2,14 @@
 name: bead-metrics
 model: sonnet
 description: >-
-  Query per-bead token cost metrics from ~/.claude/metrics.db.
+  Query per-bead token cost metrics from the local agent metrics database.
   Shows cost table, impl:review ratios, most expensive beads, cost trend over time.
   Triggers on: bead metrics, token cost report, bead costs, /bead-metrics.
 ---
 
 # Bead Metrics Report
 
-Query `~/.claude/metrics.db` and output a formatted cost report.
+Query the local agent metrics database and output a formatted cost report.
 
 ## Arguments
 
@@ -128,5 +128,5 @@ Avg impl:review ratio: 2.8:1
 
 If the script fails (import error, DB locked), report the error message. Common causes:
 - `CLAUDE_PLUGIN_ROOT` env var not set — the beads-workflow plugin is not active
-- `~/.claude/metrics.db` does not exist — no bead has been tracked yet
+- The local agent metrics database does not exist — no bead has been tracked yet
 - `orchestrator.metrics` import fails — the `lib/` directory inside the plugin is missing or corrupt

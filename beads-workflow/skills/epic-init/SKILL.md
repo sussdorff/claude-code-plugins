@@ -24,7 +24,7 @@ Workflow: Ziel -> Zerlegung -> Constraints+WHY -> Handshake -> Beads anlegen
 
 ## Argumente
 
-$ARGUMENTS
+Optionale Eingabe eines vorbelegten Ziels.
 
 | Flag | Wirkung |
 |------|---------|
@@ -33,9 +33,9 @@ $ARGUMENTS
 
 Beispiele:
 ```
-/epic-init
-/epic-init "FHIR Patient Intake implementieren"
-/epic-init "CLI Tool fuer Log-Rotation"
+epic-init
+epic-init "FHIR Patient Intake implementieren"
+epic-init "CLI Tool fuer Log-Rotation"
 ```
 
 ---
@@ -59,7 +59,7 @@ Beispiele:
 
 **Kontext laden:**
 
-2. Lies `~/.claude/CLAUDE.md` (globales Profil — wer ist der User, wie arbeitet er)
+2. Lies das globale Profil des aktiven Harness (wer ist der User, wie arbeitet er)
 3. Lies `./CLAUDE.md` (Projekt-Kontext — Tech-Stack, Architektur, Konventionen)
 4. Lade offene und aktive Beads (falls verfügbar):
    ```bash
@@ -101,7 +101,7 @@ Beispiele:
 
 ### Phase 1: Ziel
 
-**Falls `$ARGUMENTS` ein Ziel enthaelt:** Ueberspringe diese Phase, verwende das Argument als Ziel.
+**Falls bereits ein Ziel uebergeben wurde:** Ueberspringe diese Phase, verwende das Argument als Ziel.
 
 **Sonst:**
 - Frage: "Was willst du erreichen? Beschreib das Ziel in 1-2 Saetzen."
@@ -209,7 +209,7 @@ Falls die Break Analysis echte Risiken aufdeckt: Aenderungen am Plan vorschlagen
 
 Fuehre den Architecture Scout fuer jede entworfene Sub-Task durch, BEVOR du die Bestaetigungsfrage stellst:
 
-**Mode** (read from `.claude/project-config.yml` → `architecture-scout.mode`):
+**Mode** (read from the project config → `architecture-scout.mode`):
 - **Advisor mode** (default): BLOCKING findings surface as `⛔ DECIDE:` items in the handshake output. User confirms with full awareness and can modify the plan before confirmation.
 - **Gate mode**: If ANY sub-task scout returns `status: VIOLATION` (BLOCKING findings), halt Phase 4 entirely. Do NOT ask "Stimmt das so?" — Phase 5 is not entered until resolved.
 - **CONFORMANCE_SKIP=1**: Pass `conformance_skip: true` in scout input; proceed as advisor mode.
@@ -223,16 +223,12 @@ For each drafted sub-task:
 
 - **Scout step B** — Spawn architecture-scout:
   ```
-  Agent(
-    subagent_type="architecture-trinity:architecture-scout",
-    prompt=json.dumps({
-      "bead_id": "<epic-id>/<subtask-title>",
-      "bead_description": "<sub-task title and description>",
-      "touched_paths": ["<extracted-path-1>", "<extracted-path-2>"],
-      "mode": "<advisor|gate>",
-      "conformance_skip": os.environ.get("CONFORMANCE_SKIP") == "1"
-    })
-  )
+  Invoke the configured architecture-scout helper with:
+    bead_id: "<epic-id>/<subtask-title>"
+    bead_description: "<sub-task title and description>"
+    touched_paths: ["<extracted-path-1>", "<extracted-path-2>"]
+    mode: "<advisor|gate>"
+    conformance_skip: os.environ.get("CONFORMANCE_SKIP") == "1"
   ```
 
 - **Scout step C** — Collect results for all sub-tasks.

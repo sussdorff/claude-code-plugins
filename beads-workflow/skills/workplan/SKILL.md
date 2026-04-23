@@ -1,12 +1,12 @@
 ---
 name: workplan
-description: /workplan — Beads-Backlog analysieren, priorisieren und verbessern
+description: workplan — Beads-Backlog analysieren, priorisieren und verbessern
 ---
-# /workplan — Beads-Backlog analysieren, priorisieren und verbessern
+# workplan — Beads-Backlog analysieren, priorisieren und verbessern
 
 Analysiere das Beads-Backlog, erstelle einen priorisierten Arbeitsplan und schlage Verbesserungen zur Backlog-Organisation vor (Duplikate, Business-Domain-Labels, Epic-Gruppierung).
 
-Optional: $ARGUMENTS (z.B. `--label billing`, `--epic mira-xxx`, `--focus P0`)
+Optional: Eingabeargumente (z.B. `--label billing`, `--epic mira-xxx`, `--focus P0`)
 
 ## Phase 1: Daten sammeln
 
@@ -16,7 +16,7 @@ Führe `scripts/gather-data.sh` aus, um alle Backlog-Daten zu sammeln:
 scripts/gather-data.sh
 ```
 
-Falls `$ARGUMENTS` Label oder Epic Filter enthält, passe die Queries entsprechend an.
+Falls die Eingabeargumente Label- oder Epic-Filter enthalten, passe die Queries entsprechend an.
 
 ## Phase 2: Analyse
 
@@ -48,7 +48,7 @@ Scoring:
 
 Für Autonomie-Scoring: Lade Details der Top-10 Ready-Beads via `bd show <id>` (parallel), um Akzeptanzkriterien, Description, MoC-Tabelle und NLSpec zu prüfen.
 
-> **Detaillierte Spec-Analyse**: Für einzelne Beads mit hohem Score `/factory-check <id>` ausführen — bewertet alle 6 factory-ready Kriterien und gibt eine klare FACTORY READY / NEEDS INTERACTIVE WORK Empfehlung.
+> **Detaillierte Spec-Analyse**: Für einzelne Beads mit hohem Score `factory-check <id>` ausführen — bewertet alle 6 factory-ready Kriterien und gibt eine klare FACTORY READY / NEEDS INTERACTIVE WORK Empfehlung.
 
 ## Phase 3b: Duplikat- und Overlap-Erkennung
 

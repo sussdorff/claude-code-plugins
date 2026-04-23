@@ -12,7 +12,7 @@ This command covers everything from writing code to a verified, committed result
 ## Workflow Position
 
 ```
-/plan (interactive) -> /impl (autonomous) -> "session close" (ship via agent)
+plan (interactive) -> impl (autonomous) -> "session close" (ship via agent)
 ```
 
 ## Prerequisites
@@ -107,7 +107,7 @@ When TDD is skipped, Step 3 runs as a sequential test pass after implementation.
 
 If the plan explicitly marks tasks as non-TDD, or if changes are purely config/docs:
 
-1. **Use TodoWrite** to track each task from "Step by Step Tasks"
+1. **Track tasks explicitly** from "Step by Step Tasks" using the current harness's task-tracking facility
 2. **Execute each task** in order:
    - Read relevant files before modifying
    - Make surgical changes (minimal diffs)
@@ -160,9 +160,9 @@ If tests fail:
 
 Execute integration tests from the Test Plan to validate user-facing behavior.
 
-**Option A: Project has integration-test-runner agent**
+**Option A: Project has a dedicated integration-test helper**
 ```
-Use Task tool with subagent_type="dev-tools:integration-test-runner"
+Invoke the configured integration-test helper.
 Prompt: "Run integration tests. Test Plan: [section]. Changed files: [list]."
 ```
 
@@ -196,9 +196,9 @@ If the plan affects user-visible behavior:
 2. Add entry to appropriate changelog section
 3. Use existing changelog format
 
-Use the `doc-changelog-updater` agent if available:
+Use the changelog/documentation helper if available:
 ```
-Task with subagent_type="beads-workflow:doc-changelog-updater"
+Invoke the configured changelog/documentation helper.
 ```
 
 ### User Documentation
@@ -248,14 +248,14 @@ Analyze code changes for vulnerabilities:
 
 ### Gate 3: Test Coverage & TDD Verification
 
-Use `test-engineer` agent to verify:
+Use a dedicated test-review helper to verify:
 - Unit tests exist for all new/modified functions
 - Tests actually test behavior (not mock return values)
 - Tests mock dependencies, not the function under test
 - Tests are environment-independent
 
 ```
-Task with subagent_type="dev-tools:test-engineer"
+Invoke the configured test-review helper.
 Prompt: "Verify unit tests exist and adequately cover all changed behavior.
 Changed files: [list from git diff --name-only]. Report any gaps."
 ```
@@ -273,13 +273,13 @@ git log --oneline | head -20
 
 ### Gate 4: Documentation Consistency
 
-Use `doc-changelog-updater` agent to verify:
+Use the changelog/documentation helper to verify:
 - Documentation matches actual code changes
 - Changelog entries are accurate
 - No inconsistencies between docs and implementation
 
 ```
-Task with subagent_type="beads-workflow:doc-changelog-updater"
+Invoke the configured changelog/documentation helper.
 Prompt: "Verify documentation accurately reflects code changes. Report inconsistencies."
 ```
 
@@ -405,7 +405,7 @@ After successful implementation, append architectural rationale to the bead:
   bd update <id> --append-notes="Approach: [brief 'why it was built this way']"
 
 ### Next
-Say "session close" to push, tag, and optionally create MR/PR (spawns session-close agent).
+Say "session close" to push, tag, and optionally create MR/PR (spawns the configured closeout agent).
 ```
 
 ## Error Handling Summary

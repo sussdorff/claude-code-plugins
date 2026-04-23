@@ -6,7 +6,7 @@ model: haiku
 
 # Inject Standards
 
-Lade relevante Standards in den aktuellen Kontext. Merged global (~/.claude/standards/) und projekt-spezifische (.claude/standards/) Standards mit Partial-Merge Semantik.
+Lade relevante Standards in den aktuellen Kontext. Merged globale und projekt-spezifische Standards mit Partial-Merge Semantik.
 
 ## When to Use
 
@@ -19,28 +19,28 @@ Lade relevante Standards in den aktuellen Kontext. Merged global (~/.claude/stan
 
 ```
 # Auto-Suggest (matched gegen Konversation)
-/inject-standards
+inject-standards
 
 # Explicit (direkt laden, kein Matching)
-/inject-standards python/dataprovider-test-patterns
+inject-standards python/dataprovider-test-patterns
 
 # Multiple
-/inject-standards compliance/check-structure python/abc-structure
+inject-standards compliance/check-structure python/abc-structure
 
 # Glob-Pattern
-/inject-standards python/*        # Alle in python/
-/inject-standards */test*         # Alle mit "test" im Namen
+inject-standards python/*        # Alle in python/
+inject-standards */test*         # Alle mit "test" im Namen
 
 # Mit explizitem Kontext
-/inject-standards --context="migration test compliance"
+inject-standards --context="migration test compliance"
 
 # Mit Dateipfaden als Kontext
-/inject-standards --files="src/zahnrad/compliance/*.py"
+inject-standards --files="src/zahnrad/compliance/*.py"
 
 # Output-Modus erzwingen
-/inject-standards --mode=paths    # Nur Pfade (fuer Subagents)
-/inject-standards --mode=refs     # @-Referenzen (fuer Skills/Plans)
-/inject-standards --mode=full     # Volltext (Default)
+inject-standards --mode=paths    # Nur Pfade (fuer delegierte Helfer)
+inject-standards --mode=refs     # @-Referenzen (fuer Skills/Plans)
+inject-standards --mode=full     # Volltext (Default)
 ```
 
 ## Prozess
@@ -48,8 +48,8 @@ Lade relevante Standards in den aktuellen Kontext. Merged global (~/.claude/stan
 ### Schritt 1: Index laden und mergen
 
 Lade beide index.yml Dateien:
-- Global: `~/.claude/standards/index.yml`
-- Projekt: `.claude/standards/index.yml` (falls vorhanden)
+- Global: `<global-standards-dir>/index.yml`
+- Projekt: `<project-standards-dir>/index.yml` (falls vorhanden)
 
 **Partial-Merge Regeln:**
 | Szenario | Verhalten |
@@ -103,18 +103,18 @@ Fuer jeden Standard validiere:
 - Datei muss existieren
 
 Base-Path wird aus `_source` bestimmt:
-- `global` → `~/.claude/standards/`
-- `project` / `project-override` → `.claude/standards/`
+- `global` → `<global-standards-dir>/`
+- `project` / `project-override` → `<project-standards-dir>/`
 
 ### Schritt 5: Szenario erkennen (fuer Output-Modus)
 
 Falls kein `--mode` angegeben:
 1. Plan Mode aktiv → `refs`
-2. Skill-Erstellung (`.claude/skills/` im Kontext) → `refs`
-3. Subagent-Prompt (Task-Tool Aufruf) → `paths`
+2. Skill-Erstellung (`<project-skills-dir>/` im Kontext) → `refs`
+3. Delegierter Helfer-Prompt → `paths`
 4. Sonst → `full`
 
-Falls unklar, frage mit AskUserQuestion:
+Falls unklar, frage den User:
 ```
 Wie soll ich die Standards formatieren?
 
@@ -161,8 +161,8 @@ Wie soll ich die Standards formatieren?
 ```markdown
 Fuege diese Referenzen ein:
 
-@.claude/standards/python/dataprovider-test-patterns.md
-@~/.claude/standards/python/dependency-injection.md
+@<project-standards-dir>/python/dataprovider-test-patterns.md
+@<global-standards-dir>/python/dependency-injection.md
 
 Diese Standards decken ab:
 - MockSystemDataProvider mit typisierten Daten fuer Tests
@@ -172,8 +172,8 @@ Diese Standards decken ab:
 #### Modus: paths (Subagent)
 ```markdown
 ## Standards (lies diese zuerst)
-- .claude/standards/python/dataprovider-test-patterns.md
-- .claude/standards/compliance/check-structure.md
+- <project-standards-dir>/python/dataprovider-test-patterns.md
+- <project-standards-dir>/compliance/check-structure.md
 ```
 
 ## Glob-Pattern Syntax
@@ -188,7 +188,7 @@ Diese Standards decken ab:
 
 | Fehler | Meldung |
 |--------|---------|
-| Keine index.yml | "Keine Standards konfiguriert. Erstelle ~/.claude/standards/index.yml" |
+| Keine index.yml | "Keine Standards konfiguriert. Erstelle <global-standards-dir>/index.yml" |
 | YAML invalid | "Parse-Fehler in {file}, Zeile {n}: {detail}" |
 | Path traversal | "Ungültiger Pfad (../ nicht erlaubt): {path}" |
 | Absolute path | "Absolute Pfade nicht erlaubt: {path}" |
@@ -203,7 +203,7 @@ Diese Standards decken ab:
 ```
 User: "Schreibe Tests fuer den DHCP Lease Scanner"
 
-/inject-standards
+inject-standards
 
 → Analysiert Kontext: "test", "scanner"
 → Matched: python/dataprovider-test-patterns (Score 6)
@@ -213,7 +213,7 @@ User: "Schreibe Tests fuer den DHCP Lease Scanner"
 
 ### Explicit mit Glob
 ```
-/inject-standards python/*
+inject-standards python/*
 
 → Laedt: python/style, python/dataprovider-test-patterns,
          python/mock-command-runner, python/abc-structure,
@@ -225,18 +225,18 @@ User: "Schreibe Tests fuer den DHCP Lease Scanner"
 
 ### Fuer Subagent-Prompt
 ```
-/inject-standards --mode=paths compliance/check-structure python/abc-structure
+inject-standards --mode=paths compliance/check-structure python/abc-structure
 
 → Output:
 ## Standards (lies diese zuerst)
-- .claude/standards/compliance/check-structure.md
-- .claude/standards/python/abc-structure.md
+- <project-standards-dir>/compliance/check-structure.md
+- <project-standards-dir>/python/abc-structure.md
 ```
 
 ## Integration
 
 Dieser Command wird intern verwendet von:
-- Manuell: `/inject-standards` fuer bewusste Standard-Injection
+- Manuell: `inject-standards` fuer bewusste Standard-Injection
 - Skills: Standards als Referenzen einbinden
 - Plan Mode: Standards beim Planen laden
 - Subagents: Standard-Pfade in Task-Prompts

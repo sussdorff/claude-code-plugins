@@ -19,7 +19,7 @@ Fuehrt ein strukturiertes Self-Assessment durch um die eigene AI-Readiness in 6 
 
 ## Argumente
 
-$ARGUMENTS
+Optionale Eingabe-Flags:
 
 | Flag | Wirkung |
 |------|---------|
@@ -260,6 +260,6 @@ Zeige die vollstaendige Scorecard im folgenden Format:
 ## Beispiel
 
 ```
-/ai-readiness           # Volles Assessment starten (6 Dimensionen, ~15-25 Min)
-/ai-readiness --quick   # Kurzversion (3 Dimensionen, ~8-12 Min)
+ai-readiness           # Volles Assessment starten (6 Dimensionen, ~15-25 Min)
+ai-readiness --quick   # Kurzversion (3 Dimensionen, ~8-12 Min)
 ```

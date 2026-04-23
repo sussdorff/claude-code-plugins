@@ -12,7 +12,7 @@ This command covers everything before writing code: gathering context, generatin
 ## Workflow Position
 
 ```
-/plan (interactive) -> /impl (autonomous) -> "session close" (ship via agent)
+plan (interactive) -> impl (autonomous) -> "session close" (ship via agent)
 ```
 
 ## Modes
@@ -84,14 +84,11 @@ scout_input = {
   "bead_id": "<ticket-id>",
   "bead_description": "<ticket description or user's input>",
   "touched_paths": ["<package-or-path-1>", "<package-or-path-2>"],
-  "mode": "<advisor|gate from .claude/project-config.yml, default: advisor>",
+  "mode": "<advisor|gate from project config, default: advisor>",
   # CONFORMANCE_SKIP bypass: read env var here (before spawning) and pass it through
   "conformance_skip": os.environ.get("CONFORMANCE_SKIP") == "1"
 }
-Agent(
-  subagent_type="architecture-trinity:architecture-scout",
-  prompt=json.dumps(scout_input)
-)
+Invoke the configured architecture-scout helper with `scout_input`.
 ```
 
 **Determining `touched_paths`**: Extract package/directory mentions from the ticket
@@ -124,7 +121,7 @@ Continue to Step 1 normally.
 3. For ADVISORY findings: append inline notes in the Coverage Matrix (no separate DECIDE item)
 4. Continue to Step 1 (do NOT block the plan)
 
-**In gate mode** (`.claude/project-config.yml` → `architecture-scout.mode: gate`):
+**In gate mode** (project config → `architecture-scout.mode: gate`):
 
 - If the scout returns `status: VIOLATION` (BLOCKING findings exist):
   ```
@@ -306,7 +303,7 @@ Before the independent review, stress-test the plan with a targeted pre-mortem:
 Launch a separate agent to review the plan:
 
 ```
-Use Task tool with subagent_type="beads-workflow:plan-reviewer"
+Invoke a separate plan-review helper if the harness provides one.
 
 Prompt: "Review the implementation plan at [PLAN_PATH].
 Read the ticket context at [CONTEXT_SOURCE].
@@ -326,7 +323,7 @@ The review produces:
 For each open question from the Independent Review, ask the developer:
 
 ```
-Use AskUserQuestion tool with:
+Ask the user directly with:
 - question: The specific question
 - header: Short context (e.g., "Edge case", "Scope", "Testing")
 - options: 2-4 reasonable options based on codebase context
@@ -472,7 +469,7 @@ When invoked with `--label <label>`, run these phases instead of Steps 0-7.
 1. Run `bd list --label=<label> --status=open` to get all matching beads
 2. If zero results: print "No open beads with label '<label>'" and exit
 3. Display a numbered summary table of all beads (id, title, type, priority)
-4. Use AskUserQuestion: "Proceed with all N beads, or select a subset?"
+4. Ask the user: "Proceed with all N beads, or select a subset?"
    - Options: "All", "Select subset", "Cancel"
    - If subset: ask user for comma-separated numbers to include
 
@@ -480,7 +477,7 @@ When invoked with `--label <label>`, run these phases instead of Steps 0-7.
 
 Before planning any bead, scan the full set for merge candidates:
 - **Detection signals**: title similarity, shared file references in descriptions, one-blocks-the-other dependency
-- For each candidate pair, use AskUserQuestion:
+- For each candidate pair, ask the user:
   - "Merge into one bead"
   - "Keep separate"
   - "Skip both"
@@ -493,14 +490,14 @@ For each bead in sequence:
 
 1. **Show overview**: Bead header with id, title, type, priority, and description excerpt
 
-2. **Check for existing plan**: If `malte/plans/<id>.md` exists, use AskUserQuestion:
+2. **Check for existing plan**: If `malte/plans/<id>.md` exists, ask the user:
    - "Re-plan from scratch"
    - "Skip this bead"
    - "View existing plan"
 
 3. **Handle missing description**: If bead has no description, ask user to provide context or skip
 
-4. **Autonomy pre-check** (key addition): Use AskUserQuestion:
+4. **Autonomy pre-check** (key addition): Ask the user:
    - "What decisions or guidelines does the agent need to implement this autonomously?"
    - Options: "Provide decision rules", "No constraints — agent decides freely", "Skip this bead"
    - If decision rules provided: pre-populate the plan's "Developer Decisions" section
@@ -532,18 +529,18 @@ After all beads are processed:
 
 ```
 # Plan from ticket ID
-/plan CH2-12345
-/plan #42
-/plan PROJ-123
+plan CH2-12345
+plan #42
+plan PROJ-123
 
 # Plan from description
-/plan Fix the login timeout issue when session expires
-/plan Add CSV export to the reports page
+plan Fix the login timeout issue when session expires
+plan Add CSV export to the reports page
 
 # Plan from bead
-/plan claude-pa3
+plan claude-pa3
 
 # Batch plan all beads with a label
-/plan --label tips
-/plan --label sprint-42
+plan --label tips
+plan --label sprint-42
 ```
