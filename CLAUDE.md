@@ -268,13 +268,13 @@ This project uses the **Architecture Trinity** model to classify architectural t
 | **makeIdHelper** | Enforcer-Proactive | Generates typed ID accessor functions — the generated API only accepts the correct type; passing a raw string is a compile-time error. |
 | **no-raw-id-concat** | Enforcer-Reactive | An ESLint rule that flags raw string concatenation of IDs. Catches violations in existing code during lint/CI. |
 
-## Codex / codex-exec.sh
+## Codex / codex-exec.py
 
-All Codex adversarial reviews run through `beads-workflow/scripts/codex-exec.sh`.
+All Codex adversarial reviews run through `beads-workflow/scripts/codex-exec.py`.
 
 ### Timeout Threshold
 
-`CODEX_EXEC_TIMEOUT` controls the hard timeout (in seconds) passed to `timeout`/`gtimeout`:
+`CODEX_EXEC_TIMEOUT` controls the hard timeout (in seconds) via Python `threading.Timer`:
 
 | Variable | Default | Notes |
 |----------|---------|-------|
@@ -283,7 +283,7 @@ All Codex adversarial reviews run through `beads-workflow/scripts/codex-exec.sh`
 
 **Override syntax:**
 ```bash
-CODEX_EXEC_TIMEOUT=600 BEAD_ID=... PHASE_LABEL=... beads-workflow/scripts/codex-exec.sh ...
+CODEX_EXEC_TIMEOUT=600 BEAD_ID=... PHASE_LABEL=... python3 beads-workflow/scripts/codex-exec.py ...
 ```
 
 **When to raise the timeout:**

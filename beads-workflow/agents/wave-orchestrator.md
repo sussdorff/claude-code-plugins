@@ -18,18 +18,18 @@ bead IDs, sorts them into dependency waves, ensures preconditions (scenarios for
 sets up cmux panes, dispatches `cld -b <id>` into each, and monitors until completion.
 
 **Bundled scripts** (in `scripts/` relative to the wave-orchestrator skill):
-- `wave-dispatch.sh` — Creates panes, names surfaces, dispatches `cld -b`, outputs wave config JSON
-- `wave-status.sh` — Reads all surfaces in parallel, pattern-matches status, returns structured JSON
-- `wave-completion.sh` — Quick check: all beads closed + all panes idle? Returns JSON + exit code
-- `wave-lock.sh` — Single-instance guard: prevents two wave orchestrators from running concurrently
+- `wave-dispatch.py` — Creates panes, names surfaces, dispatches `cld -b`, outputs wave config JSON
+- `wave-status.py` — Reads all surfaces in parallel, pattern-matches status, returns structured JSON
+- `wave-completion.py` — Quick check: all beads closed + all panes idle? Returns JSON + exit code
+- `wave-lock.py` — Single-instance guard: prevents two wave orchestrators from running concurrently
 
 These scripts replace manual per-surface cmux calls. Use them instead of invoking cmux
 directly for dispatch, monitoring, and completion checks.
 
 **Finding scripts:** Locate them via:
 ```bash
-find ~/.claude/skills -name "wave-dispatch.sh" 2>/dev/null | head -1
-find . -path "*/wave-orchestrator/scripts/wave-dispatch.sh" 2>/dev/null | head -1
+find ~/.claude/skills -name "wave-dispatch.py" 2>/dev/null | head -1
+find . -path "*/wave-orchestrator/scripts/wave-dispatch.py" 2>/dev/null | head -1
 ```
 
 ## Arguments
@@ -65,10 +65,10 @@ running concurrently. The lock is stored at `$MAIN_REPO_ROOT/.wave-orchestrator.
 ### Acquiring the lock
 
 ```bash
-# Locate wave-lock.sh
-WAVE_LOCK_SH=$(find ~/.claude/skills -name "wave-lock.sh" 2>/dev/null | head -1)
+# Locate wave-lock.py
+WAVE_LOCK_SH=$(find ~/.claude/skills -name "wave-lock.py" 2>/dev/null | head -1)
 if [[ -z "$WAVE_LOCK_SH" ]]; then
-  WAVE_LOCK_SH=$(find . -path "*/wave-orchestrator/scripts/wave-lock.sh" 2>/dev/null | head -1)
+  WAVE_LOCK_SH=$(find . -path "*/wave-orchestrator/scripts/wave-lock.py" 2>/dev/null | head -1)
 fi
 
 MAIN_REPO_ROOT=$(git rev-parse --show-toplevel 2>/dev/null || echo "$HOME")
@@ -78,7 +78,7 @@ LOCK_FILE="$MAIN_REPO_ROOT/.wave-orchestrator.lock"
 WAVE_ID="wave-$(date -u +%Y%m%d-%H%M%S)"
 
 # Acquire: fail-fast if another live orchestrator holds the lock
-bash "$WAVE_LOCK_SH" acquire "$LOCK_FILE" "$WAVE_ID" "${CMUX_SURFACE:-unknown}"
+python3 "$WAVE_LOCK_SH" acquire "$LOCK_FILE" "$WAVE_ID" "${CMUX_SURFACE:-unknown}"
 ```
 
 **Fail-fast behavior:**
@@ -95,13 +95,13 @@ bash "$WAVE_LOCK_SH" acquire "$LOCK_FILE" "$WAVE_ID" "${CMUX_SURFACE:-unknown}"
 Release on clean exit (after Phase 7 completes or on user-requested abort):
 
 ```bash
-bash "$WAVE_LOCK_SH" release "$LOCK_FILE"
+python3 "$WAVE_LOCK_SH" release "$LOCK_FILE"
 ```
 
 Use a bash trap to ensure release even on unexpected exit:
 
 ```bash
-trap 'bash "$WAVE_LOCK_SH" release "$LOCK_FILE" 2>/dev/null || true' EXIT
+trap 'python3 "$WAVE_LOCK_SH" release "$LOCK_FILE" 2>/dev/null || true' EXIT
 ```
 
 ### Status check
@@ -109,7 +109,7 @@ trap 'bash "$WAVE_LOCK_SH" release "$LOCK_FILE" 2>/dev/null || true' EXIT
 To inspect whether a wave is running without acquiring:
 
 ```bash
-bash "$WAVE_LOCK_SH" status "$LOCK_FILE"
+python3 "$WAVE_LOCK_SH" status "$LOCK_FILE"
 ```
 
 ---
@@ -652,7 +652,7 @@ omit this section from the council prompt.
 Run the bundled detection script on all beads in the current wave:
 
 ```bash
-./scripts/arch-signal-detect.sh <bead-id1> <bead-id2> ... > /tmp/arch-signals.json
+python3 ./scripts/arch-signal-detect.py <bead-id1> <bead-id2> ... > /tmp/arch-signals.json
 ```
 
 The script outputs a JSON array with per-bead scores:
@@ -869,7 +869,7 @@ If `--skip-scenarios` is set, skip this phase entirely.
 
 ---
 
-## Phase 3+4: Dispatch (using wave-dispatch.sh)
+## Phase 3+4: Dispatch (using wave-dispatch.py)
 
 Instead of manually creating splits, naming surfaces, and sending commands one by one,
 use the bundled dispatch script. It handles the full Phase 3 + Phase 4 sequence in one call.
@@ -900,12 +900,12 @@ positional args, quick-mode beads use `--quick <id>`:
 
 ```bash
 # Mixed wave: some full, some quick-fix (from Wave Table modes)
-./scripts/wave-dispatch.sh mira-adapters-0al --quick mira-fix-x3r --quick mira-adapters-doq > /tmp/wave-config.json
+python3 ./scripts/wave-dispatch.py mira-adapters-0al --quick mira-fix-x3r --quick mira-adapters-doq > /tmp/wave-config.json
 ```
 
 Or with an explicit workspace:
 ```bash
-./scripts/wave-dispatch.sh mira-adapters-0al --quick mira-fix-x3r --workspace workspace:5 > /tmp/wave-config.json
+python3 ./scripts/wave-dispatch.py mira-adapters-0al --quick mira-fix-x3r --workspace workspace:5 > /tmp/wave-config.json
 ```
 
 The script:
@@ -960,8 +960,8 @@ verdict = json.loads(monitor_result)
 # verdict.status: complete | needs_intervention
 ```
 
-The `wave_config_path` is the JSON file output by `wave-dispatch.sh` (saved to
-`/tmp/wave-<wave_id>.json` or the path you provided to wave-dispatch.sh output redirect).
+The `wave_config_path` is the JSON file output by `wave-dispatch.py` (saved to
+`/tmp/wave-<wave_id>.json` or the path you provided to wave-dispatch.py output redirect).
 
 The parent orchestrator parks (context NOT re-read) until wave-monitor returns.
 wave-monitor uses `bash sleep 60` between polls — not ScheduleWakeup — so the
@@ -1007,7 +1007,7 @@ One or more panes show error/crash signals (ECONNREFUSED, fatal, panic, tracebac
 2. **If recoverable** (transient ECONNREFUSED, test setup failure):
    - Re-dispatch the bead to a new surface:
      ```bash
-     ./scripts/wave-dispatch.sh <bead-id> > /tmp/wave-config-updated.json
+     python3 ./scripts/wave-dispatch.py <bead-id> > /tmp/wave-config-updated.json
      ```
    - Update the wave config path and re-spawn wave-monitor with the updated config
 3. **If not recoverable** (fatal crash, missing dependency, bead in a broken state):
@@ -1092,7 +1092,7 @@ A pane has hit `review_loop_max_iterations` Codex review iterations (default: 3)
 
 #### verdict: needs_intervention — reason: ambiguous
 
-`wave-completion.sh` itself errored (exit code 2) or returned non-JSON, or the wave
+`wave-completion.py` itself errored (exit code 2) or returned non-JSON, or the wave
 config file was not found.
 
 ```json
@@ -1100,7 +1100,7 @@ config file was not found.
   "status": "needs_intervention",
   "reason": "ambiguous",
   "bead_id": null,
-  "details": "wave-completion.sh exited with code 2. stderr: <captured>"
+  "details": "wave-completion.py exited with code 2. stderr: <captured>"
 }
 ```
 
@@ -1110,11 +1110,11 @@ config file was not found.
    cat /tmp/wave-config.json
    ```
 2. If config is missing: something cleaned up `/tmp` prematurely. Reconstruct from
-   wave-dispatch.sh output if you have it saved elsewhere, or ask the user to re-dispatch.
+   wave-dispatch.py output if you have it saved elsewhere, or ask the user to re-dispatch.
 3. If config is present but completion script failing:
    - Attempt one manual run:
      ```bash
-     ./scripts/wave-completion.sh /tmp/wave-config.json
+     python3 ./scripts/wave-completion.py /tmp/wave-config.json
      ```
    - Read the script output/error and diagnose
 4. If infrastructure issue persists: escalate to user with full `details` from verdict.
@@ -1144,10 +1144,10 @@ monitor_result = Agent(
 
 ## Phase 6: Wave Completion & Transition
 
-### Quick Completion Check (using wave-completion.sh)
+### Quick Completion Check (using wave-completion.py)
 
 ```bash
-./scripts/wave-completion.sh /tmp/wave-config.json
+python3 ./scripts/wave-completion.py /tmp/wave-config.json
 echo $?  # 0 = all done, 1 = not yet
 ```
 
@@ -1183,7 +1183,7 @@ The wave orchestrator **only observes** and waits until the pane is fully idle.
 process may still be running, session close may still be active, or background tasks
 may still be pending.
 
-For every new wave or bead dispatch: **always use `wave-dispatch.sh`** which creates
+For every new wave or bead dispatch: **always use `wave-dispatch.py`** which creates
 fresh surfaces. Never manually reuse surfaces from a previous wave.
 
 ### Follow-up Beads
@@ -1236,7 +1236,7 @@ returns complete. If no run appears, check whether the repo has CI configured
 
 ### Verify Wave Completion
 
-After `wave-completion.sh` returns exit code 0:
+After `wave-completion.py` returns exit code 0:
 
 ```bash
 git pull --no-rebase
@@ -1250,7 +1250,7 @@ git pull --no-rebase
 bd dolt pull
 ```
 
-Then repeat from Phase 3+4 with `wave-dispatch.sh` for the next set of beads.
+Then repeat from Phase 3+4 with `wave-dispatch.py` for the next set of beads.
 
 ---
 
@@ -1264,7 +1264,7 @@ inconsistencies that only surface when all implementations are combined.
 **This is a gate on epic completion, not on individual bead session-close — CRITICAL findings prevent the epic from being declared complete and trigger a remediation wave.** Integration-Verification runs AFTER all beads have already closed, triggered by the wave-orchestrator.
 
 **When to run:**
-- wave-monitor returned `complete` AND `wave-completion.sh` returns exit code 0 (all beads closed, all surfaces idle)
+- wave-monitor returned `complete` AND `wave-completion.py` returns exit code 0 (all beads closed, all surfaces idle)
 - All CI pipelines for the wave have passed (see Pipeline Check above)
 - This is the **final wave** of the epic — either the user explicitly confirms ("no more waves") or the wave plan from Phase 1 shows all beads are now closed
 - `--skip-integration-check` flag is NOT set
@@ -1525,7 +1525,7 @@ Omit the Token Usage section only if `bead_runs` contains no rows for the wave.
 
 ### Timing
 
-Generate the report AFTER wave-monitor returns `complete` and `wave-completion.sh` returns
+Generate the report AFTER wave-monitor returns `complete` and `wave-completion.py` returns
 exit 0, but BEFORE starting the next wave. The reviewer scrollback must still be accessible
 — if surfaces have already been cleaned up, fall back to bead notes and git log (less rich
 but still useful).
@@ -1566,12 +1566,12 @@ For all error scenarios, read `references/error-recovery.md`. It covers:
 ## Rules
 
 - **Output language**: Respond in the user's language. The agent instructions are English but output should match the user.
-- **Use the scripts**: Prefer `wave-dispatch.sh`, `wave-status.sh`, and `wave-completion.sh` over manual cmux calls. They're faster, produce structured output, and reduce context usage.
+- **Use the scripts**: Prefer `wave-dispatch.py`, `wave-status.py`, and `wave-completion.py` over manual cmux calls. They're faster, produce structured output, and reduce context usage.
 - **NEVER session close**: The wave orchestrator must never trigger or send `session close`. The bead-orchestrator (or quick-fix) handles this autonomously.
 - **`--skip-wave-review` skips Phase 1.25**: Always log the skip per bead with timestamp and `$(whoami)`.
 - **`--dry-run` runs Phase 1.25 read-only**: Findings are shown but NO bd update edits are applied.
 - **Phase 1.25 max 1 re-review**: Never loop more than once. After second-pass still-not-ready, escalate to user with Continue/Abort.
-- **NEVER reuse surfaces**: Always dispatch to fresh surfaces via `wave-dispatch.sh`.
+- **NEVER reuse surfaces**: Always dispatch to fresh surfaces via `wave-dispatch.py`.
 - **Integration-verification after epic**: After the final wave closes, always run Phase 6.5 to catch cross-bead gaps. Skip only with `--skip-integration-check` and only when there are no cross-bead invariants to check (e.g. single-bead waves).
 - **Delegate scenarios**: Delegate scenario generation to subagents, not inline.
 - **Check conflict risk upfront**: Before wave dispatch, check if beads will modify the same files. If so: max 2 parallel or use sub-waves.

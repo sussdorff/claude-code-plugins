@@ -251,17 +251,17 @@ Announce: "Routing: GSD mode — [reason]" or "Routing: PAUL mode — [reason]"
 After routing (and before bd claim), create the metrics run:
 
 ```bash
-# Locate metrics-start.sh (prefer repo-local, fall back to installed)
-METRICS_START="beads-workflow/scripts/metrics-start.sh"
+# Locate metrics-start.py (prefer repo-local, fall back to installed)
+METRICS_START="beads-workflow/scripts/metrics-start.py"
 if [[ ! -f "$METRICS_START" ]]; then
-  METRICS_START=$(find ~/.claude/plugins -name metrics-start.sh -type f 2>/dev/null | sort -r | head -1)
+  METRICS_START=$(find ~/.claude/plugins -name metrics-start.py -type f 2>/dev/null | sort -r | head -1)
 fi
-RUN_ID=$("$METRICS_START" "<bead_id>" "${WAVE_ID:-}" "full-1pane")
+RUN_ID=$(python3 "$METRICS_START" "<bead_id>" "${WAVE_ID:-}" "full-1pane")
 export CCP_ORCHESTRATOR_RUN_ID="$RUN_ID"  # Prevents SubagentStop hook from double-writing ad-hoc rows
 echo "RUN_ID=$RUN_ID"
 ```
 
-Store `RUN_ID` in your agent context — propagate to every subsequent subagent and codex-exec.sh call.
+Store `RUN_ID` in your agent context — propagate to every subsequent subagent and codex-exec.py call.
 
 **Claim the bead:**
 ```bash
@@ -640,13 +640,13 @@ insert_agent_call(run_id, bead_id, phase_label='review', agent_label='review-opu
 
 ---
 
-### Phase 7: Codex Adversarial (codex via codex-exec.sh)
+### Phase 7: Codex Adversarial (codex via codex-exec.py)
 
-Run adversarial review via codex-exec.sh. Pass `--diff-range` so the script measures the diff
+Run adversarial review via codex-exec.py. Pass `--diff-range` so the script measures the diff
 and resolves `{{DIFF}}` automatically — inline for small diffs (≤ 2 files, ≤ 256 KB), self-collect
 guidance for large ones.
 
-> **BLOCKING RULE:** Run codex-exec.sh **synchronously** — NEVER use `run_in_background: true`
+> **BLOCKING RULE:** Run codex-exec.py **synchronously** — NEVER use `run_in_background: true`
 > or TaskCreate for this call. The script manages its own internal timeout (default: 300s,
 > override via `CODEX_EXEC_TIMEOUT=<seconds>`). Use Bash with `timeout: 360000` (6 minutes in ms)
 > to allow the full Codex run to complete. If Codex exits 124 (timeout) without findings, the
@@ -659,7 +659,7 @@ guidance for large ones.
 
 ```bash
 RUN_ID=<run_id> BEAD_ID=<bead_id> PHASE_LABEL=codex-adversarial ITERATION=1 \
-  beads-workflow/scripts/codex-exec.sh --diff-range <pre-impl-sha>...HEAD \
+  python3 beads-workflow/scripts/codex-exec.py --diff-range <pre-impl-sha>...HEAD \
   "Review this diff for regressions and bugs:
 
 ## Bead: <BEAD_ID>
@@ -678,7 +678,7 @@ Or if none: LGTM"
 - Contains `REGRESSION:` → Phase 8 runs
 - Contains `LGTM` or no `REGRESSION:` → skip Phase 8, proceed to Phase 9
 
-codex-exec.sh handles metrics recording automatically via the RUN_ID env var.
+codex-exec.py handles metrics recording automatically via the RUN_ID env var.
 
 → **Record phase_summary**: Codex adversarial result (LGTM or N regressions found).
 
@@ -709,7 +709,7 @@ At the end, log token usage via insert_agent_call(run_id=..., phase_label='codex
 **Step 2: Codex neutral re-check** (synchronous — same Bash timeout rule as Phase 7):
 ```bash
 RUN_ID=<run_id> BEAD_ID=<bead_id> PHASE_LABEL=codex-fix-check ITERATION=1 \
-  beads-workflow/scripts/codex-exec.sh --diff-range <fix-commit-parent-sha>...HEAD \
+  python3 beads-workflow/scripts/codex-exec.py --diff-range <fix-commit-parent-sha>...HEAD \
   "Verify these fixes resolve the reported regressions:
 
 ## Diff of fixes:
@@ -964,13 +964,13 @@ and proceed to Phase 16. Never leave a bead `in_progress` due to a documentation
 **Before session-close, rollup the run:**
 
 ```bash
-# Locate metrics-rollup.sh (prefer repo-local, fall back to installed)
-METRICS_ROLLUP="beads-workflow/scripts/metrics-rollup.sh"
+# Locate metrics-rollup.py (prefer repo-local, fall back to installed)
+METRICS_ROLLUP="beads-workflow/scripts/metrics-rollup.py"
 if [[ ! -f "$METRICS_ROLLUP" ]]; then
-  METRICS_ROLLUP=$(find ~/.claude/plugins -name metrics-rollup.sh -type f 2>/dev/null | sort -r | head -1)
+  METRICS_ROLLUP=$(find ~/.claude/plugins -name metrics-rollup.py -type f 2>/dev/null | sort -r | head -1)
 fi
 if [[ -n "$METRICS_ROLLUP" ]]; then
-  "$METRICS_ROLLUP" "<run_id>"
+  python3 "$METRICS_ROLLUP" "<run_id>"
 fi
 ```
 
@@ -1147,7 +1147,7 @@ Do NOT spawn `core:session-close`.
 - Do NOT close beads — EVER. Beads are closed by session-close as the absolute last step after merge+push. The orchestrator hands off, it does not close. **Exception:** Closing a parent bead during slicing (Phase 0) is permitted.
 - Do NOT create beads for new work discovered during implementation — report to user instead
 - Do NOT use `cmux send` for review injection — review is inline (Phase 6). The old 2-pane flow (`cld -br`, cmux-reviewer, old Codex runtime wrapper) was removed in CCP-2vo.10
-- All Codex calls go through `beads-workflow/scripts/codex-exec.sh`
+- All Codex calls go through `beads-workflow/scripts/codex-exec.py`
 - Every metric write MUST be keyed by `run_id` — NO bead_id-only writes
 
 ## Session Capture

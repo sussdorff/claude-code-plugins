@@ -3,7 +3,8 @@
 # dependencies = ["pytest>=8.0"]
 # ///
 """
-Tests for codex-exec.sh — verifies turn.completed token capture via metrics.insert_agent_call().
+Tests for codex-exec.py (formerly codex-exec.sh) — verifies turn.completed token capture
+via metrics.insert_agent_call(). Updated to target the Python script after CCP-gzi migration.
 
 Three required assertions (tested in test_shell_script_writes_db):
   1. agent_calls row is created (COUNT == 1)
@@ -28,7 +29,8 @@ sys.path.insert(0, str(_REPO_ROOT / "beads-workflow" / "lib" / "orchestrator"))
 from metrics import get_run, rollup_run, start_run
 
 _SCRIPTS_DIR = Path(__file__).resolve().parents[1]
-_CODEX_EXEC = _SCRIPTS_DIR / "codex-exec.sh"
+# Migrated from .sh to .py in CCP-gzi
+_CODEX_EXEC = _SCRIPTS_DIR / "codex-exec.py"
 _METRICS_DIR = str(_REPO_ROOT / "beads-workflow" / "lib" / "orchestrator")
 
 
@@ -124,7 +126,7 @@ def test_shell_script_writes_db(tmp_path: Path) -> None:
     env = _env_for_script(run_id=run_id, db=db, mock_bin_dir=mock_dir, codex_config=codex_config)
 
     result = subprocess.run(
-        ["bash", str(_CODEX_EXEC)],
+        ["python3", str(_CODEX_EXEC)],
         env=env,
         capture_output=True,
         text=True,
@@ -198,7 +200,7 @@ def test_missing_run_id_skips_metrics_but_runs_codex(tmp_path: Path) -> None:
     env["CODEX_CONFIG_PATH"] = str(codex_config)
 
     result = subprocess.run(
-        ["bash", str(_CODEX_EXEC)],
+        ["python3", str(_CODEX_EXEC)],
         env=env,
         capture_output=True,
         text=True,
@@ -228,7 +230,7 @@ def test_missing_phase_label_exits_nonzero(tmp_path: Path) -> None:
     env.pop("PHASE_LABEL", None)
 
     result = subprocess.run(
-        ["bash", str(_CODEX_EXEC)],
+        ["python3", str(_CODEX_EXEC)],
         env=env,
         capture_output=True,
         text=True,
@@ -276,7 +278,7 @@ def test_python_metrics_failure_exits_nonzero(tmp_path: Path) -> None:
     env["METRICS_DIR_OVERRIDE"] = _METRICS_DIR
 
     result = subprocess.run(
-        ["bash", str(_CODEX_EXEC)],
+        ["python3", str(_CODEX_EXEC)],
         env=env,
         capture_output=True,
         text=True,
@@ -320,7 +322,7 @@ def test_timeout_exits_nonzero(tmp_path: Path) -> None:
     env["CODEX_EXEC_TIMEOUT"] = "1"
 
     result = subprocess.run(
-        ["bash", str(_CODEX_EXEC)],
+        ["python3", str(_CODEX_EXEC)],
         env=env,
         capture_output=True,
         text=True,

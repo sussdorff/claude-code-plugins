@@ -3,7 +3,8 @@
 # dependencies = ["pytest>=8.0"]
 # ///
 """
-Tests for metrics-start.sh and metrics-rollup.sh.
+Tests for metrics-start.py and metrics-rollup.py (formerly metrics-start.sh and metrics-rollup.sh).
+Updated to target Python scripts after migration from Bash in CCP-gzi.
 """
 
 import os
@@ -19,8 +20,9 @@ sys.path.insert(0, str(_REPO_ROOT / "beads-workflow" / "lib" / "orchestrator"))
 from metrics import get_run, init_db, rollup_run, start_run
 
 _SCRIPTS_DIR = Path(__file__).resolve().parents[1]
-_METRICS_START = _SCRIPTS_DIR / "metrics-start.sh"
-_METRICS_ROLLUP = _SCRIPTS_DIR / "metrics-rollup.sh"
+# Migrated from .sh to .py in CCP-gzi
+_METRICS_START = _SCRIPTS_DIR / "metrics-start.py"
+_METRICS_ROLLUP = _SCRIPTS_DIR / "metrics-rollup.py"
 _METRICS_DIR = str(_REPO_ROOT / "beads-workflow" / "lib" / "orchestrator")
 
 
@@ -41,7 +43,7 @@ def test_metrics_start_creates_run(tmp_path: Path) -> None:
     env = _env(db)
 
     result = subprocess.run(
-        ["bash", str(_METRICS_START), "TEST-bead-1", "", "quick-fix"],
+        ["python3", str(_METRICS_START), "TEST-bead-1", "", "quick-fix"],
         env=env,
         capture_output=True,
         text=True,
@@ -62,7 +64,7 @@ def test_metrics_start_with_wave_id(tmp_path: Path) -> None:
     env = _env(db)
 
     result = subprocess.run(
-        ["bash", str(_METRICS_START), "TEST-bead-2", "wave-xyz", "full-1pane"],
+        ["python3", str(_METRICS_START), "TEST-bead-2", "wave-xyz", "full-1pane"],
         env=env,
         capture_output=True,
         text=True,
@@ -77,7 +79,7 @@ def test_metrics_start_with_wave_id(tmp_path: Path) -> None:
 def test_metrics_start_missing_bead_id_exits_nonzero(tmp_path: Path) -> None:
     """metrics-start.sh with no args must exit non-zero."""
     result = subprocess.run(
-        ["bash", str(_METRICS_START)],
+        ["python3", str(_METRICS_START)],
         capture_output=True,
         text=True,
     )
@@ -92,7 +94,7 @@ def test_metrics_start_bad_metrics_dir_prints_warning_and_empty(tmp_path: Path) 
     env.pop("METRICS_DB_PATH", None)
 
     result = subprocess.run(
-        ["bash", str(_METRICS_START), "TEST-bead-3", "", "quick-fix"],
+        ["python3", str(_METRICS_START), "TEST-bead-3", "", "quick-fix"],
         env=env,
         capture_output=True,
         text=True,
@@ -113,7 +115,7 @@ def test_metrics_rollup_only_run_id(tmp_path: Path) -> None:
     env = _env(db)
 
     result = subprocess.run(
-        ["bash", str(_METRICS_ROLLUP), run_id],
+        ["python3", str(_METRICS_ROLLUP), run_id],
         env=env,
         capture_output=True,
         text=True,
@@ -131,7 +133,7 @@ def test_metrics_rollup_with_phase2_stats(tmp_path: Path) -> None:
     env = _env(db)
 
     result = subprocess.run(
-        ["bash", str(_METRICS_ROLLUP), run_id, "TEST-bead-p2", "5", "2"],
+        ["python3", str(_METRICS_ROLLUP), run_id, "TEST-bead-p2", "5", "2"],
         env=env,
         capture_output=True,
         text=True,
@@ -155,7 +157,7 @@ def test_metrics_rollup_with_phase2_stats(tmp_path: Path) -> None:
 def test_metrics_rollup_empty_run_id_is_noop(tmp_path: Path) -> None:
     """metrics-rollup.sh with empty run_id must exit 0 silently (noop)."""
     result = subprocess.run(
-        ["bash", str(_METRICS_ROLLUP), ""],
+        ["python3", str(_METRICS_ROLLUP), ""],
         capture_output=True,
         text=True,
     )
@@ -169,7 +171,7 @@ def test_metrics_rollup_bad_metrics_dir_still_exits_zero(tmp_path: Path) -> None
     env["METRICS_DIR_OVERRIDE"] = "/nonexistent/path"
 
     result = subprocess.run(
-        ["bash", str(_METRICS_ROLLUP), "some-run-id"],
+        ["python3", str(_METRICS_ROLLUP), "some-run-id"],
         env=env,
         capture_output=True,
         text=True,

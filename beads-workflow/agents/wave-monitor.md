@@ -2,7 +2,7 @@
 name: wave-monitor
 description: >-
   Long-lived Haiku subagent that polls wave completion status on behalf of the
-  wave-orchestrator. Runs wave-completion.sh every 60 seconds using bash sleep,
+  wave-orchestrator. Runs wave-completion.py every 60 seconds using bash sleep,
   keeping the parent Agent() call blocked (parked) for the entire monitoring
   window. Returns a structured JSON verdict when the wave reaches a terminal
   state. Triggers on: wave monitor, poll wave, watch wave, monitor wave progress.
@@ -44,7 +44,7 @@ The agent receives a JSON object as its prompt. Required fields:
 | `review_loop_max_iterations` | number | `3` | Codex review iterations before review-loop verdict |
 | `poll_interval_seconds` | number | `60` | Seconds to sleep between polls. bash sleep keeps agent alive (no context re-read), so 60s is safe. |
 
-Wave config JSON shape (as written by wave-dispatch.sh):
+Wave config JSON shape (as written by wave-dispatch.py):
 
 ```json
 {
@@ -120,7 +120,7 @@ iteration lines (pattern: "Review iteration N/M" or "Codex review iteration N").
 
 ### Outcome 5: needs_intervention — ambiguous
 
-wave-completion.sh itself errored (exit code 2), or JSON output was unparseable,
+wave-completion.py itself errored (exit code 2), or JSON output was unparseable,
 or the wave config file was not found.
 
 ```json
@@ -128,7 +128,7 @@ or the wave config file was not found.
   "status": "needs_intervention",
   "reason": "ambiguous",
   "bead_id": null,
-  "details": "wave-completion.sh exited with code 2. stderr: <captured>"
+  "details": "wave-completion.py exited with code 2. stderr: <captured>"
 }
 ```
 
@@ -139,7 +139,7 @@ PARSE input JSON → extract wave_config_path, thresholds, poll_interval_seconds
 VERIFY wave_config_path exists (if not → return ambiguous immediately)
 
 LOOP:
-  RUN wave-completion.sh $wave_config_path → capture stdout + stderr + exit_code
+  RUN python3 wave-completion.py $wave_config_path → capture stdout + stderr + exit_code
 
   IF exit_code == 2 OR stdout is not valid JSON:
     RETURN needs_intervention(ambiguous) with stderr
@@ -208,12 +208,12 @@ echo "$RESULT" | python3 -c "import sys,json; d=json.load(sys.stdin); print(json
 
 | Signal | Verdict | Notes |
 |--------|---------|-------|
-| `complete=true` in wave-completion.sh output | `complete` | All beads closed + all panes idle |
-| `stalls` array non-empty | `stuck` | wave-completion.sh already detected stall |
+| `complete=true` in wave-completion.py output | `complete` | All beads closed + all panes idle |
+| `stalls` array non-empty | `stuck` | wave-completion.py already detected stall |
 | Straggler `in_progress` > stuck_threshold_hours | `stuck` | Based on bd updated_at |
 | Pane tail shows error/panic/fatal/traceback | `pane-error` | Excludes dead-pane error messages |
 | Review iteration count >= review_loop_max_iterations | `review-loop` | Parsed from cmux scrollback |
-| wave-completion.sh exit code 2 or non-JSON output | `ambiguous` | With captured stderr |
+| wave-completion.py exit code 2 or non-JSON output | `ambiguous` | With captured stderr |
 | wave_config_path file missing | `ambiguous` | Immediate return |
 
 ## Integration with wave-orchestrator
