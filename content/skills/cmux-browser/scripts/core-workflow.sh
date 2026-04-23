@@ -1,11 +1,10 @@
 #!/usr/bin/env bash
 # Core browser automation workflow: open a surface, verify, snapshot, interact.
-cmux --json browser open https://example.com
-# use returned surface ref, for example: surface:7
+SURFACE=$(cmux --json browser open https://example.com | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('surface') or d.get('ref') or d.get('id','surface:7'))" 2>/dev/null || echo "surface:7")
 
-cmux browser surface:7 get url
-cmux browser surface:7 wait --load-state complete --timeout-ms 15000
-cmux browser surface:7 snapshot --interactive
-cmux browser surface:7 fill e1 "hello"
-cmux --json browser surface:7 click e2 --snapshot-after
-cmux browser surface:7 snapshot --interactive
+cmux browser "$SURFACE" get url
+cmux browser "$SURFACE" wait --load-state complete --timeout-ms 15000
+cmux browser "$SURFACE" snapshot --interactive
+cmux browser "$SURFACE" fill e1 "hello"
+cmux --json browser "$SURFACE" click e2 --snapshot-after
+cmux browser "$SURFACE" snapshot --interactive
