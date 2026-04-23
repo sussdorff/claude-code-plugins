@@ -2,6 +2,7 @@
 
 ### 🐛 Bug Fixes
 
+- *(CCP-0ho)* Correct council-roles.yml default path from malte/ to business/ in bead-orchestrator Phase 3
 - *(CCP-ahs)* Code-layer claim gate: prevent double-launch via claim.py + cld/wave pre-flight
 
 ### ⚙️ Miscellaneous Tasks
