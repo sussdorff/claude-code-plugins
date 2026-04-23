@@ -75,7 +75,7 @@ Erwartetes Format: `[typ] <pfad>` oder nur `<pfad>`, optional `--roles=<yaml_pat
 
 ## Phase 1: Rollen laden
 
-**Default roles path:** `malte/skills/council/council-roles.yml` (relativ zum claude-config root)
+**Default roles path:** `business/skills/council/council-roles.yml` (relativ zum claude-config root)
 **Override:** `--roles=<yaml_path>` Argument
 
 Die YAML-Datei enthält Rollen-Profile pro Dokumenttyp. Lade das passende Profil für den erkannten `doc_type`.
