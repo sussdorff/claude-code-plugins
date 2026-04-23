@@ -26,6 +26,23 @@ python3 meta/skills/skill-auditor/scripts/validate-skill.py <skill-dir>
 - Prose that says "run X, store it, parse it, then feed it to Y"
 - Inline `python -c` or heredoc glue shaping structured data
 
+## Wave-Orchestrator Freeze
+
+As of 2026-04-23, the custom `wave-orchestrator` is in **feature freeze**.
+
+**Allowed until the Gas City feasibility spike is complete:**
+- Correctness or safety bug fixes in existing wave-orchestrator behavior
+- Monitoring fixes that prevent false status, dead/stuck misclassification, or bad operator guidance
+- Reference/doc fixes where the current wave-orchestrator guidance is incorrect and could cause wrong behavior
+
+**Not allowed during freeze:**
+- New wave-orchestrator phases, gates, or scheduling behavior
+- Rolling-wave / DAG-runner feature work in the custom harness
+- New reporting, metrics, TUI, or REST features whose primary purpose is wave-orchestrator support
+- Refactors that only improve maintainability of the frozen orchestrator without fixing a real bug
+
+**Decision rule:** prefer spending orchestration effort on the Gas City feasibility spike and pilot path, not on extending the custom scheduler.
+
 ## Python Script Standards
 
 ### Dependency Management Strategy
