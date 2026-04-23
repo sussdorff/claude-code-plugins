@@ -14,7 +14,7 @@ Evaluate each principle in a project's `vision.md` against current reality. Prod
 
 ## Overview
 
-Vision Review is a cadence-triggered enforcer-reactive skill. It does not modify `vision.md` directly — it creates auditable draft ADRs in `docs/adr/drafts/` and a review report in `docs/`. The skill drives an interactive per-principle dialog with the user, invokes the council review workflow when available (or degrades gracefully), and delegates all file I/O to `scripts/vision_review.py`.
+Vision Review is a cadence-triggered enforcer-reactive skill. It does not modify `vision.md` directly — it creates auditable draft ADRs in `docs/adr/drafts/` and a review report in `docs/`. The skill drives an interactive per-principle dialog with the user, invokes `/council` (or degrades gracefully), and delegates all file I/O to `scripts/vision_review.py`.
 
 **Trinity role**: Enforcer-Reactive — checks existing vision against current reality after the fact.
 
@@ -24,9 +24,9 @@ Vision Review is a cadence-triggered enforcer-reactive skill. It does not modify
 - "vision health" / "vision health check"
 - "re-evaluate vision" / "vision health score"
 - Quarterly or after major architecture changes
-- After `vision-author` to validate alignment
+- After `/vision-author` to validate alignment
 
-Do NOT use for: editing vision.md directly (use `vision-author --refresh`), creating new visions (use `vision-author`), or non-vision document reviews.
+Do NOT use for: editing vision.md directly (use `/vision-author --refresh`), creating new visions (use `/vision-author`), or non-vision document reviews.
 
 ## Workflow
 
@@ -57,9 +57,11 @@ Evidence (why it holds or why it is contested):
 
 ### Step 3: Council Integration
 
-For each contested principle (confirmed = N), invoke the council review workflow for a second opinion:
+For each contested principle (confirmed = N), invoke `/council` for a second opinion.
+Invoke the `business:council` subagent with `principle_id`, `principle_text`, and `evidence`:
 
 ```text
+Agent(subagent_type="business:council", prompt="""
 Architecture vision review — contested principle:
 
 **{principle_id}**: {principle_text}
@@ -68,6 +70,7 @@ User evidence: {evidence}
 
 Assess whether this principle should be revised, removed, or kept as-is.
 Focus on architectural coherence, not stylistic preference.
+""")
 ```
 
 **Degraded mode**: If the council Agent raises an exception or is unavailable, fall back to a single-perspective Haiku critique:
@@ -90,33 +93,18 @@ After collecting all per-principle results, invoke the script functions to produ
 
 **Draft ADRs** (one per contested principle):
 
-```python
-from scripts.vision_review import generate_draft_adr
-adr_path = generate_draft_adr(
-    principle=principle,
-    evidence=evidence,
-    council_finding=council_finding,  # None if council skipped
-    run_date=run_date,
-    adr_dir=Path("docs/adr/drafts/"),
-)
-```
+Call [scripts/generate_adr.py](scripts/generate_adr.py), which wraps
+`vision_review.generate_draft_adr` with `principle`, `evidence`, `council_finding`
+(None if council skipped), `run_date`, and `adr_dir`.
 
 Draft ADR filenames: `vision-mutation-<rule_id>-<YYYYMMDD-HHMMSS>.md`
 The `supersedes` field uses the authored rule_id (e.g. `P1`), NOT a positional index.
 
 **Review report**:
 
-```python
-from scripts.vision_review import compute_health_score, generate_review_report
-health_score = compute_health_score(confirmed_ids, total_count)
-report_path = generate_review_report(
-    vision_path=vision_path,
-    results=results,
-    health_score=health_score,
-    council_mode=council_mode,
-    report_dir=Path("docs/"),
-)
-```
+Call [scripts/generate_report.py](scripts/generate_report.py), which wraps
+`vision_review.compute_health_score` and `vision_review.generate_review_report`
+with `vision_path`, `results`, `confirmed_ids`, `total_count`, `council_mode`, and `report_dir`.
 
 ### Step 5: Present Results
 
