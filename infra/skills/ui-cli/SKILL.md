@@ -94,18 +94,9 @@ ui lo clients rename AA:BB:CC:DD:EE:FF "Display Name" -y
 **IMPORTANT:** Many commands require confirmation. Always use `-y` or `--yes` to skip interactive prompts.
 WHY: Without `-y`, the CLI blocks waiting for stdin input that cannot be provided in non-interactive contexts.
 
-```bash
-# Commands that support -y:
-ui lo clients set-ip ... -y
-ui lo clients rename ... -y
-ui lo clients kick ... -y
-ui lo clients block ... -y
-ui lo clients unblock ... -y
-ui lo devices restart ... -y
-ui lo devices upgrade ... -y
-ui lo vouchers revoke ... -y
-ui lo apgroups delete ... -y
-```
+Run: `scripts/confirmed-commands.sh <operation> [args...]` for write operations with automatic `-y`.
+
+Supported operations: `set-ip`, `rename`, `kick`, `block`, `unblock`, `restart-device`, `upgrade-device`, `revoke-voucher`, `delete-apgroup`.
 
 ## Output Formats
 

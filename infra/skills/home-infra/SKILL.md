@@ -94,21 +94,15 @@ MacBook Pro M4 Max — primary development machine (192.168.2.120 typically).
 | `ccu-cli`  | Homematic CCU3       | `~/code/house-projects/ccu-cli/`     | `~/.config/ccu-cli/config.toml` |
 | `ssh`      | Elysium (Proxmox)    | built-in                             | `ssh elysium`                   |
 
+Run: `scripts/cli-overview.sh` for a combined snapshot across all tools.
+
+Individual commands:
 ```bash
-# UniFi — network devices, clients, WLANs
-ui lo devices list                    # All network devices
-ui lo clients list                    # Connected clients
-
-# Home Assistant — entities, services
-hass-cli state list                   # All entities
-hass-cli service call light.turn_on   # Call a service
-
-# Homematic CCU3 — direct device control
-ccu-cli device list                   # All Homematic devices
-
-# Elysium — Proxmox host
-ssh elysium                              # Shell access
-ssh elysium "qm list"                    # List VMs
+ui lo devices list        # UniFi network devices
+ui lo clients list        # UniFi connected clients
+hass-cli state list       # Home Assistant entities
+ccu-cli device list       # Homematic CCU3 devices
+ssh elysium "qm list"     # Proxmox VMs
 ```
 
 → Load `references/related-projects.md` for full project list and related skills.
