@@ -31,16 +31,12 @@ and the implementation orchestration workflow in Phase 2.
 Before anything else, verify the tense-gate linter is available.
 
 ```bash
-REPO_ROOT=$(git rev-parse --show-toplevel)
-TENSE_GATE="$REPO_ROOT/scripts/tense-gate.py"
-if [[ ! -f "$TENSE_GATE" ]]; then
-  echo "ERROR: tense-gate not found at $TENSE_GATE"
-  echo "Install via: /tense-gate (CCP-2q2)"
-  exit 2
-fi
+python3 <skill-dir>/scripts/probe-tense-gate.py
 ```
 
-If the probe fails, stop immediately with exit code 2. Do NOT proceed to Phase 1.
+Where `<skill-dir>` is the directory where the /vision-author skill is installed (e.g. `~/.claude/skills/vision-author`).
+
+If the probe fails (exit 2), stop immediately. Do NOT proceed to Phase 1.
 
 ---
 
@@ -51,19 +47,15 @@ If `--refresh` was passed:
 1. Locate `docs/vision.md`. If not found, inform the user and fall through to normal Q&A.
 2. Run conformance check:
 
-```python
-import subprocess, sys
-from pathlib import Path
-REPO_ROOT = Path(subprocess.check_output(["git", "rev-parse", "--show-toplevel"], text=True).strip())
-if str(REPO_ROOT) not in sys.path:
-    sys.path.insert(0, str(REPO_ROOT))
-from scripts.vision_conformance import check_conformance
-result = check_conformance(REPO_ROOT / "docs/vision.md")
+```bash
+python3 <skill-dir>/scripts/check-conformance.py docs/vision.md
 ```
 
-3. If `result.is_conformant` is False:
+Parse result: if the script exits 0, proceed. If it exits non-zero, print its output and abort.
+
+3. If the check-conformance.py script exits non-zero:
    - Print: "CONFORMANCE FAILURE: Cannot load existing vision.md as defaults."
-   - List all `result.missing_sections` and `result.errors`
+   - Print the output from the script (missing sections / errors)
    - Print: "Options: (a) Fix the vision.md manually, then retry --refresh. (b) Run /vision-author (no --refresh) to re-author from scratch."
    - Exit with code 1. Do NOT proceed with --refresh dialogue.
 
@@ -103,28 +95,15 @@ Then return and complete this question when you have the answer.
 
 ### Tense Gate Validation Rule
 
-After STUB detection, run tense gate on every answer. Write the answer text to a temporary
-file with the prescriptive-present frontmatter, then call `lint_file()`:
+After STUB detection, run tense gate on every answer:
 
-```python
-import subprocess, sys, tempfile, importlib.util
-from pathlib import Path
-REPO_ROOT = Path(subprocess.check_output(["git", "rev-parse", "--show-toplevel"], text=True).strip())
-if str(REPO_ROOT) not in sys.path:
-    sys.path.insert(0, str(REPO_ROOT))
-
-spec = importlib.util.spec_from_file_location("tense_gate", REPO_ROOT / "scripts/tense-gate.py")
-tg = importlib.util.module_from_spec(spec)
-sys.modules["tense_gate"] = tg
-spec.loader.exec_module(tg)
-
-with tempfile.NamedTemporaryFile(mode="w", suffix=".md", delete=False, encoding="utf-8") as f:
-    f.write("---\ndocument_type: prescriptive-present\ntemplate_version: 1\ngenerator: vision-author\n---\n\n")
-    f.write(answer_text)
-    tmp_path = f.name
-
-violations = tg.lint_file(Path(tmp_path))
+```bash
+python3 <skill-dir>/scripts/validate-tense.py << 'TENSE_GATE_EOF'
+<answer_text>
+TENSE_GATE_EOF
 ```
+
+Exit 0 = no violations (proceed). Exit 1 = violations listed on stdout (reject the answer, show violations, re-prompt).
 
 If violations > 0, reject:
 ```
@@ -405,72 +384,49 @@ After all 7 questions succeed:
 
 ### Step 1: Render and validate the complete vision.md
 
-```python
-import subprocess, sys
-from pathlib import Path
-REPO_ROOT = Path(subprocess.check_output(["git", "rev-parse", "--show-toplevel"], text=True).strip())
-if str(REPO_ROOT) not in sys.path:
-    sys.path.insert(0, str(REPO_ROOT))
-from scripts.vision_renderer import render_vision, VisionAnswers
-answers = VisionAnswers(
-    vision_statement=...,  # collected above
-    target_group=...,
-    core_need=...,
-    positioning=...,
-    principles=...,        # list of (rule_id, text) tuples
-    principle_scopes=...,  # dict rule_id -> scope
-    business_goal=...,
-    not_in_vision=...,
-)
-content = render_vision(answers)
+Save all collected answers to `/tmp/vision-answers-<session>.json` with the structure:
+```json
+{
+  "vision_statement": "...",
+  "target_group": "...",
+  "core_need": "...",
+  "positioning": "...",
+  "principles": [["P1", "text"], ["P2", "text"]],
+  "principle_scopes": {"P1": "scope1", "P2": "scope2"},
+  "business_goal": "...",
+  "not_in_vision": ["item1", "item2"]
+}
 ```
 
-Run tense gate on the complete rendered content as a final check.
+Then render:
+```bash
+python3 <skill-dir>/scripts/render-vision-cli.py /tmp/vision-answers-<session>.json > /tmp/vision-content-<session>.md
+```
+
+Run tense gate on the rendered content as a final check:
+```bash
+cat /tmp/vision-content-<session>.md | python3 <skill-dir>/scripts/validate-tense.py
+```
 
 ### Step 2: Atomic write
 
-```python
-import os
-from pathlib import Path
-
-draft = Path("docs/vision.md.draft")
-final = Path("docs/vision.md")
-
-# Ensure docs/ exists
-final.parent.mkdir(parents=True, exist_ok=True)
-
-# Write to draft
-draft.write_text(content, encoding="utf-8")
-
-# Atomic rename (POSIX guarantee: no partial writes visible to readers)
-os.rename(draft, final)
+```bash
+cat /tmp/vision-content-<session>.md | python3 <skill-dir>/scripts/write-vision-atomic.py
 ```
 
-Print: "✓ docs/vision.md written (atomic rename from draft)"
+Print: "docs/vision.md written (atomic rename from draft)"
 
 ### Step 3: Genesis ADR creation
 
 Create `docs/adr/0000-vision-initial.md` using `render_genesis_adr` from `scripts/vision_renderer.py`:
 
-```python
-import subprocess, sys
-from datetime import date
-from pathlib import Path
-REPO_ROOT = Path(subprocess.check_output(["git", "rev-parse", "--show-toplevel"], text=True).strip())
-if str(REPO_ROOT) not in sys.path:
-    sys.path.insert(0, str(REPO_ROOT))
-from scripts.vision_renderer import render_genesis_adr
-
-# Derive project_name from the git directory name or vision statement
-project_name = REPO_ROOT.name  # or extract from vision statement
-
-adr_dir = REPO_ROOT / "docs/adr"
-adr_dir.mkdir(parents=True, exist_ok=True)
-adr_path = adr_dir / "0000-vision-initial.md"
-adr_path.write_text(render_genesis_adr(project_name, str(date.today())), encoding="utf-8")
+```bash
+python3 <skill-dir>/scripts/write-genesis-adr.py
 ```
 
-Print: "✓ docs/adr/0000-vision-initial.md created (genesis ADR)"
+This uses the git repo directory name as the project name.
+
+Print: "docs/adr/0000-vision-initial.md created (genesis ADR)"
 
 ---
 

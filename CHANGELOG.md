@@ -5,6 +5,11 @@
 - *(CCP-0ho)* Correct council-roles.yml default path from malte/ to business/ in bead-orchestrator Phase 3
 - *(CCP-ahs)* Code-layer claim gate: prevent double-launch via claim.py + cld/wave pre-flight
 
+### 🚜 Refactor
+
+- *(CCP-9t5)* Extract inline shell code from core skills (cmux, dolt, event-log) to scripts — fixes EXTRACTABLE_CODE validation failures
+- *(CCP-tox)* Extract inline code from dev-tools skills (codex, playwright-cli, vision-author) to scripts — fixes EXTRACTABLE_CODE validation failures
+
 ### ⚙️ Miscellaneous Tasks
 
 - *(CCP-xib)* Remove unreliable screen-lock check from session-close; treat git push failure as notification

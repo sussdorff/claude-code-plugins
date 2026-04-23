@@ -154,33 +154,10 @@ With focus (e.g., "security"):
 
 2. Run codex exec with **JSONL output** to capture reasoning traces and tool calls (5-minute timeout):
 ```bash
-codex exec "<prompt>" -s read-only -c 'model_reasoning_effort="xhigh"' --enable web_search_cached --json 2>/dev/null | python3 -c "
-import sys, json
-for line in sys.stdin:
-    line = line.strip()
-    if not line: continue
-    try:
-        obj = json.loads(line)
-        t = obj.get('type','')
-        if t == 'item.completed' and 'item' in obj:
-            item = obj['item']
-            itype = item.get('type','')
-            text = item.get('text','')
-            if itype == 'reasoning' and text:
-                print(f'[codex thinking] {text}')
-                print()
-            elif itype == 'agent_message' and text:
-                print(text)
-            elif itype == 'command_execution':
-                cmd = item.get('command','')
-                if cmd: print(f'[codex ran] {cmd}')
-        elif t == 'turn.completed':
-            usage = obj.get('usage',{})
-            tokens = usage.get('input_tokens',0) + usage.get('output_tokens',0)
-            if tokens: print(f'\ntokens used: {tokens}')
-    except: pass
-"
+codex exec "<prompt>" -s read-only -c 'model_reasoning_effort="xhigh"' --enable web_search_cached --json 2>/dev/null | python3 <skill-dir>/scripts/parse-codex-jsonl.py
 ```
+
+Where `<skill-dir>` is the directory where the /codex skill is installed (e.g. `~/.claude/skills/codex`).
 
 This parses codex's JSONL events to extract reasoning traces, tool calls, and the final
 response. The `[codex thinking]` lines show what codex reasoned through before its answer.
@@ -238,46 +215,16 @@ THE PLAN:
 
 For a **new session:**
 ```bash
-codex exec "<prompt>" -s read-only -c 'model_reasoning_effort="xhigh"' --enable web_search_cached --json 2>"$TMPERR" | python3 -c "
-import sys, json
-for line in sys.stdin:
-    line = line.strip()
-    if not line: continue
-    try:
-        obj = json.loads(line)
-        t = obj.get('type','')
-        if t == 'thread.started':
-            tid = obj.get('thread_id','')
-            if tid: print(f'SESSION_ID:{tid}')
-        elif t == 'item.completed' and 'item' in obj:
-            item = obj['item']
-            itype = item.get('type','')
-            text = item.get('text','')
-            if itype == 'reasoning' and text:
-                print(f'[codex thinking] {text}')
-                print()
-            elif itype == 'agent_message' and text:
-                print(text)
-            elif itype == 'command_execution':
-                cmd = item.get('command','')
-                if cmd: print(f'[codex ran] {cmd}')
-        elif t == 'turn.completed':
-            usage = obj.get('usage',{})
-            tokens = usage.get('input_tokens',0) + usage.get('output_tokens',0)
-            if tokens: print(f'\ntokens used: {tokens}')
-    except: pass
-"
+codex exec "<prompt>" -s read-only -c 'model_reasoning_effort="xhigh"' --enable web_search_cached --json 2>"$TMPERR" | python3 <skill-dir>/scripts/parse-codex-jsonl.py --session
 ```
 
 For a **resumed session** (user chose "Continue"):
 ```bash
-codex exec resume <session-id> "<prompt>" -s read-only -c 'model_reasoning_effort="xhigh"' --enable web_search_cached --json 2>"$TMPERR" | python3 -c "
-<same python streaming parser as above>
-"
+codex exec resume <session-id> "<prompt>" -s read-only -c 'model_reasoning_effort="xhigh"' --enable web_search_cached --json 2>"$TMPERR" | python3 <skill-dir>/scripts/parse-codex-jsonl.py --session
 ```
 
 5. Capture session ID from the streamed output. The parser prints `SESSION_ID:<id>`
-   from the `thread.started` event. Save it for follow-ups:
+   when a thread is started. Capture this from the output and save it for follow-ups:
 ```bash
 mkdir -p .context
 ```
