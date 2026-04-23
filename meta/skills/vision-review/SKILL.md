@@ -57,9 +57,21 @@ Evidence (why it holds or why it is contested):
 
 ### Step 3: Council Integration
 
-For each contested principle (confirmed = N), invoke `/council` for a second opinion
-via [scripts/council_review.py](scripts/council_review.py). The script invokes the
-`business:council` subagent with `principle_id`, `principle_text`, and `evidence`.
+For each contested principle (confirmed = N), invoke `/council` for a second opinion.
+Invoke the `business:council` subagent with `principle_id`, `principle_text`, and `evidence`:
+
+```text
+Agent(subagent_type="business:council", prompt="""
+Architecture vision review — contested principle:
+
+**{principle_id}**: {principle_text}
+
+User evidence: {evidence}
+
+Assess whether this principle should be revised, removed, or kept as-is.
+Focus on architectural coherence, not stylistic preference.
+""")
+```
 
 **Degraded mode**: If the council Agent raises an exception or is unavailable, fall back to a single-perspective Haiku critique:
 

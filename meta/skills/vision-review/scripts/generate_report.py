@@ -8,11 +8,14 @@ Usage:
     (Called programmatically by the vision-review skill workflow.)
 """
 
+import sys
 from pathlib import Path
-from scripts.vision_review import compute_health_score, generate_review_report
 
 
 def run(vision_path, results, confirmed_ids, total_count, council_mode, report_dir=Path("docs/")):
+    sys.path.insert(0, str(Path(__file__).parent.parent))
+    from scripts.vision_review import compute_health_score, generate_review_report
+
     health_score = compute_health_score(confirmed_ids, total_count)
     report_path = generate_review_report(
         vision_path=vision_path,
@@ -22,3 +25,8 @@ def run(vision_path, results, confirmed_ids, total_count, council_mode, report_d
         report_dir=report_dir,
     )
     return health_score, report_path
+
+
+if __name__ == "__main__":
+    print("generate_report.py: call run() programmatically from the skill workflow.")
+    sys.exit(0)

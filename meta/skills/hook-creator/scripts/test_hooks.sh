@@ -17,4 +17,5 @@ python3 -m pytest assets/test_hooks.py -v -k pre_tool_use
 
 # Quick diagnostics
 cat .claude/settings.json | jq .
-tail -f .claude/hooks/logs/pre_tool_use.jsonl
+# Quick diagnostics (last 20 log lines)
+tail -20 .claude/hooks/logs/pre_tool_use.jsonl 2>/dev/null || echo "No log file found yet"

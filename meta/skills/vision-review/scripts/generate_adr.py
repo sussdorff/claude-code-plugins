@@ -8,11 +8,14 @@ Usage:
     (Called programmatically by the vision-review skill workflow.)
 """
 
+import sys
 from pathlib import Path
-from scripts.vision_review import generate_draft_adr
 
 
 def run(principle, evidence, council_finding, run_date, adr_dir=Path("docs/adr/drafts/")):
+    sys.path.insert(0, str(Path(__file__).parent.parent))
+    from scripts.vision_review import generate_draft_adr
+
     adr_path = generate_draft_adr(
         principle=principle,
         evidence=evidence,
@@ -21,3 +24,8 @@ def run(principle, evidence, council_finding, run_date, adr_dir=Path("docs/adr/d
         adr_dir=adr_dir,
     )
     return adr_path
+
+
+if __name__ == "__main__":
+    print("generate_adr.py: call run() programmatically from the skill workflow.")
+    sys.exit(0)
