@@ -22,7 +22,8 @@ Dispatches to the dedicated Sonnet subagent for all wave orchestration work.
 ## Dispatch
 
 ```python
-Agent(subagent_type='beads-workflow:wave-orchestrator', prompt=$ARGUMENTS)
+Invoke the configured wave-orchestration worker with the current input arguments.
+Pass through the user's topic, bead IDs, and flags unchanged.
 ```
 
 All wave orchestration logic (discovery, planning, dispatch, monitoring, integration-verification,

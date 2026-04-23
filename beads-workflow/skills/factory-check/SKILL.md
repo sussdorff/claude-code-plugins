@@ -4,11 +4,11 @@ argument-hint: [bead-id]
 tags: workflow
 ---
 
-# /factory-check — Bead Spec Quality Evaluation
+# Factory-Check — Bead Spec Quality Evaluation
 
 Evaluates a bead's specification against the 6 factory-ready criteria and recommends whether it can be run autonomously or needs interactive work first.
 
-**Usage**: `/factory-check <bead-id>`
+**Usage**: `factory-check <bead-id>`
 
 ## What This Checks
 
@@ -21,7 +21,7 @@ This is NOT the DoD (Definition of Done). Tests passing, code quality — those 
 ### Step 1: Load Bead Data
 
 ```bash
-bd show $ARGUMENTS --json
+bd show <bead-id> --json
 ```
 
 Extract and note:
@@ -116,7 +116,7 @@ Format the report as:
 
 ### Verdict
 
-**FACTORY READY** ✓ — Can run autonomously: `cld -b <id>` or `/impl <id>`
+**FACTORY READY** ✓ — Can run autonomously: `cld -b <id>` or `impl <id>`
 
 — OR —
 
@@ -124,7 +124,7 @@ Format the report as:
 - [Gap 1: specific missing element]
 - [Gap 2: specific missing element]
 
-**Recommended action**: Run `/plan <id>` to resolve the above gaps before autonomous execution.
+**Recommended action**: Run `plan <id>` to resolve the above gaps before autonomous execution.
 
 ### Warnings (non-blocking)
 - [Any WARN items that won't block execution but may cause issues]
@@ -134,9 +134,9 @@ Format the report as:
 
 | Verdict | What to Do |
 |---------|-----------|
-| FACTORY READY | `cld -b <id>` for background run, or `/impl <id>` in current session |
+| FACTORY READY | `cld -b <id>` for background run, or `impl <id>` in current session |
 | FACTORY READY with warnings | Proceed with caution; note warnings in session |
-| NEEDS INTERACTIVE WORK | Run `/plan <id>` first to fill spec gaps |
+| NEEDS INTERACTIVE WORK | Run `plan <id>` first to fill spec gaps |
 | BLOCKED | Resolve blockers before anything else |
 
 ## Reference

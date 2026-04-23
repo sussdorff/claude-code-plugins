@@ -46,7 +46,7 @@ Ask one question group at a time. Skip groups the user already answered in their
 scripts/init-brand.sh [--local] [--type=voice|visual|combined] <brand-name>
 ```
 
-Default: global brand in `~/.claude/brands/`. Use `--local` for project-specific brands in `.claude/brands/`.
+Default: store global brands in the user-level brand directory. Use `--local` for project-specific brands in the project brand directory.
 
 ### 3. Write Profile
 
@@ -102,7 +102,7 @@ Use the Review output template from `references/brand-review-checklist.md`.
 
 Run `scripts/scan-brands.sh [--verbose]` and present the output.
 
-Shows all brands from `~/.claude/brands/` (global) and `.claude/brands/` (project) with name, type, scope, and description.
+Shows all brands from the global and project brand directories with name, type, scope, and description.
 
 ## Apply Mode
 

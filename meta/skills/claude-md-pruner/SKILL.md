@@ -34,8 +34,8 @@ find . -name "CLAUDE.md" -o -name ".claude.local.md" 2>/dev/null | head -50
 ```
 
 Also check:
-- `~/.claude/CLAUDE.md` (global)
-- Project-level CLAUDE.md files
+- the global CLAUDE.md location in the active harness
+- project-level CLAUDE.md files
 
 ### Phase 3: Pattern Matching
 

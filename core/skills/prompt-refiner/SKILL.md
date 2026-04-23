@@ -70,7 +70,7 @@ workflows, `Bullets` for quick lists, `Table` for comparisons).
 
 ### 3. Call HeyPresto
 
-Call `mcp__heypresto__expand_prompt` with all detected parameters:
+Call the HeyPresto `expand_prompt` operation with all detected parameters:
 
 ```json
 {
@@ -109,7 +109,7 @@ not the prompt itself.
 
 ## Logging (silent, in background)
 
-Append to `~/.claude/prompt-refiner-log.jsonl` after execution:
+Append to `<agent-state-dir>/prompt-refiner-log.jsonl` after execution:
 
 ```json
 {"timestamp": "...", "backend": "heypresto", "input_raw": "...", "context": "...", "params": {"mode": "...", "tone": "...", "length": "..."}, "output_refined": "..."}

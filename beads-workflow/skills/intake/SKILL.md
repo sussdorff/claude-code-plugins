@@ -1,8 +1,8 @@
 ---
 name: intake
-description: /intake — Transkript zu Beads Pipeline
+description: intake — Transkript zu Beads Pipeline
 ---
-# /intake — Transkript zu Beads Pipeline
+# intake — Transkript zu Beads Pipeline
 
 Du nimmst ein Gespraechstranskript oder Freitext entgegen und zerlegst es in hochwertige,
 umsetzbare Beads mit Akzeptanzkriterien und Means of Compliance.
@@ -10,7 +10,7 @@ umsetzbare Beads mit Akzeptanzkriterien und Means of Compliance.
 ## Input
 
 ```
-$ARGUMENTS
+<transcript text or file path>
 ```
 
 ---
@@ -35,7 +35,7 @@ Transkript nach `.intake/transcript.md` schreiben (als Referenz fuer alle Phasen
 
 ## Phase 1: Extraktion (Themen-Mining)
 
-Starte **Task-Subagent** (subagent_type="general-purpose"):
+Nutze einen spezialisierten Extraktions-Helper oder arbeite inline mit diesem Prompt:
 ```
 Du bist ein Requirements-Analyst. Du extrahierst umsetzbare Themen aus Gespraechen.
 
@@ -88,7 +88,8 @@ Frage:
 
 ## Phase 2: Strukturierung (AKs + Means of Compliance)
 
-Fuer JEDEN freigegebenen Kandidaten einen **Task-Subagent** starten (parallel wenn > 1):
+Fuer JEDEN freigegebenen Kandidaten einen spezialisierten Strukturierungs-Helper starten
+(parallel wenn > 1), oder dieselbe Arbeit inline erledigen:
 
 ```
 Du bist ein Requirements Engineer. Du schreibst praezise, testbare Akzeptanzkriterien
@@ -167,7 +168,7 @@ Antwort (1 Zeile): BEAD-[N]: [Titel] | AKs: [Anzahl] | MoCs: [code-review:X, uni
 
 ### Wenn Council JA:
 
-Starte **Task-Subagent**:
+Nutze fuer den Council-Schritt einen spezialisierten Review-Helper oder arbeite inline mit diesem Prompt:
 ```
 Du bist ein Council aus 4 Perspektiven das Bead-Specs reviewed.
 
@@ -275,4 +276,4 @@ Naechster Schritt: `/dispatch bd-xxx` fuer Umsetzung
 
 ## Input
 
-$ARGUMENTS
+Die urspruenglich uebergebenen Eingabeargumente.

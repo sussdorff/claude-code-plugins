@@ -1,12 +1,12 @@
 ---
 name: stringer
-description: /stringer — Codebase archaeology and tech debt scanning
+description: stringer — Codebase archaeology and tech debt scanning
 ---
-# /stringer — Codebase archaeology and tech debt scanning
+# stringer — Codebase archaeology and tech debt scanning
 
 Scan a repository for tech debt signals, generate agent onboarding context, or view a health dashboard using the `stringer` CLI. Signals can be imported directly into beads for tracking.
 
-Optional: $ARGUMENTS (z.B. `scan`, `scan --full`, `context`, `docs`, `init`, oder beliebige stringer-Flags)
+Optional: Eingabeargumente (z.B. `scan`, `scan --full`, `context`, `docs`, `init`, oder beliebige stringer-Flags)
 
 ## Pre-flight
 
@@ -20,11 +20,11 @@ Optional: $ARGUMENTS (z.B. `scan`, `scan --full`, `context`, `docs`, `init`, ode
    ```bash
    ls -d .stringer/ 2>/dev/null
    ```
-   If not found, suggest running `/stringer init` first. Ask the user whether to proceed without config or init first.
+   If not found, suggest running `stringer init` first. Ask the user whether to proceed without config or init first.
 
 ## Mode Detection
 
-Parse `$ARGUMENTS` to determine the mode. Any flags not consumed by mode detection are passed through to the stringer command.
+Parse the provided input arguments to determine the mode. Any flags not consumed by mode detection are passed through to the stringer command.
 
 | Args pattern | Mode |
 |---|---|
@@ -114,7 +114,7 @@ After init, create a baseline from current signals so future `--delta` scans onl
 stringer baseline create .
 ```
 
-Tell the user: "stringer initialized. `.stringer/` created with baseline. Future `/stringer scan` will only show new signals."
+Tell the user: "stringer initialized. `.stringer/` created with baseline. Future `stringer scan` will only show new signals."
 
 ## Useful Flag Combinations
 

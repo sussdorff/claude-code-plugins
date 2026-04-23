@@ -84,18 +84,18 @@ More inline examples (Black, gofmt, notifications): `assets/templates/simple_hoo
 
 ### Advanced Hook (Python script)
 
-1. Copy template: `cp assets/templates/pre_tool_use_template.py .claude/hooks/pre_tool_use.py`
-2. Make executable: `chmod +x .claude/hooks/pre_tool_use.py`
+1. Copy template: `cp assets/templates/pre_tool_use_template.py <project-hooks-dir>/pre_tool_use.py`
+2. Make executable: `chmod +x <project-hooks-dir>/pre_tool_use.py`
 3. Customize validation logic
-4. Install: `uv run scripts/hook_manager.py install PreToolUse --command "uv run .claude/hooks/pre_tool_use.py"`
-5. Test: `echo '{"tool_name":"Bash","tool_input":{"command":"rm -rf /"}}' | uv run .claude/hooks/pre_tool_use.py`
+4. Install: `uv run scripts/hook_manager.py install PreToolUse --command "uv run <project-hooks-dir>/pre_tool_use.py"`
+5. Test: `echo '{"tool_name":"Bash","tool_input":{"command":"rm -rf /"}}' | uv run <project-hooks-dir>/pre_tool_use.py`
 
 ## Hook Configuration
 
 ### Settings locations
 
-- **User scope**: `~/.claude/settings.json` (all projects)
-- **Project scope**: `<project>/.claude/settings.json` (project-specific)
+- **User scope**: `<user-settings-file>` (all projects)
+- **Project scope**: `<project-settings-file>` (project-specific)
 
 ### Matcher patterns
 
@@ -140,10 +140,10 @@ Hooks can output JSON for richer control:
 Install, remove, and list hooks via the manager script:
 
 ```bash
-uv run scripts/hook_manager.py install PreToolUse --command "uv run .claude/hooks/pre_tool_use.py"
+uv run scripts/hook_manager.py install PreToolUse --command "uv run <project-hooks-dir>/pre_tool_use.py"
 uv run scripts/hook_manager.py install PostToolUse --matcher "Edit:*.py" --command "black \"$file_path\""
 uv run scripts/hook_manager.py list
-uv run scripts/hook_manager.py remove PreToolUse --command "uv run .claude/hooks/pre_tool_use.py"
+uv run scripts/hook_manager.py remove PreToolUse --command "uv run <project-hooks-dir>/pre_tool_use.py"
 uv run scripts/hook_manager.py install Notification --command "osascript -e '...'" --scope user
 ```
 
@@ -164,18 +164,18 @@ Full patterns, detection functions, and testing: `references/security_patterns.m
 
 ```bash
 # Built-in test mode
-uv run .claude/hooks/your_hook.py --test
+uv run <project-hooks-dir>/your_hook.py --test
 
 # Manual test
-echo '{"tool_name":"Bash","tool_input":{"command":"ls"}}' | uv run .claude/hooks/your_hook.py
+echo '{"tool_name":"Bash","tool_input":{"command":"ls"}}' | uv run <project-hooks-dir>/your_hook.py
 echo $?  # 0 = allow, 2 = block
 
 # Automated pytest
 python3 -m pytest assets/test_hooks.py -v -k pre_tool_use
 
 # Quick diagnostics
-cat .claude/settings.json | jq .
-tail -f .claude/hooks/logs/pre_tool_use.jsonl
+cat <project-settings-file> | jq .
+tail -f <project-hooks-log-dir>/pre_tool_use.jsonl
 ```
 
 ## Best Practices
