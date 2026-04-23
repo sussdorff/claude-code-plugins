@@ -23,21 +23,7 @@ event-log --project=<name>       # Filter by project name (cross-project queries
 
 ### Step 1: Determine DB path and current project
 
-```bash
-DB="<agent-state-dir>/events.db"
-
-if [[ ! -f "$DB" ]]; then
-  echo "No event log found at $DB."
-  echo "Events are recorded when hooks are active and CLAUDE_EVENTS_DB is set (or defaults to the harness events DB)."
-  exit 0
-fi
-
-# Derive current project name from git remote or cwd basename
-PROJECT=$(git remote get-url origin 2>/dev/null | sed 's|.*[:/]||; s|\.git$||')
-if [[ -z "$PROJECT" ]]; then
-  PROJECT=$(basename "$PWD")
-fi
-```
+See [`scripts/init-db.sh`](scripts/init-db.sh) for the DB existence check and project name derivation logic.
 
 ### Step 2: Parse arguments
 
@@ -63,79 +49,7 @@ Parse the user's arguments to determine filters:
 > Then interpolate `$VALUE_SAFE` in the SQL string, not `$VALUE`. Do not apply
 > this to literal example values in comments or hardcoded constants.
 
-Use the `sqlite3` CLI to query the database:
-
-```bash
-DB="<agent-state-dir>/events.db"
-TAIL=20
-
-# No filters — last N events for current project
-# IMPORTANT: $PROJECT must be properly shell-escaped. Never interpolate
-# user-supplied values directly into SQL strings. Safe pattern:
-#   PROJECT_SAFE=$(echo "$PROJECT" | tr -d "'" | tr -d '"')
-# Or better: use Python for queries to avoid shell injection entirely.
-sqlite3 "$DB" "
-  SELECT
-    substr(timestamp, 1, 19) || 'Z' as ts,
-    event_type,
-    coalesce(agent, '-') as agent,
-    coalesce(tool, '-') as tool,
-    coalesce(outcome, '-') as outcome
-  FROM events
-  WHERE project = '$(echo "$PROJECT" | tr -d "'" | tr -d '"')'
-  ORDER BY timestamp DESC
-  LIMIT $TAIL
-" | column -t -s '|'
-
-# With --type filter
-# Use PROJECT_SAFE=$(echo "$PROJECT" | tr -d "'" | tr -d '"') before interpolating.
-sqlite3 "$DB" "
-  SELECT substr(timestamp,1,19)||'Z', event_type, session_id
-  FROM events
-  WHERE project = '$(echo "$PROJECT" | tr -d "'" | tr -d '"')'  AND event_type = 'session_start'
-  ORDER BY timestamp DESC LIMIT $TAIL
-"
-
-# With --tool filter
-sqlite3 "$DB" "
-  SELECT substr(timestamp,1,19)||'Z', event_type, tool, outcome
-  FROM events
-  WHERE project = '$(echo "$PROJECT" | tr -d "'" | tr -d '"')'  AND tool = 'Read'
-  ORDER BY timestamp DESC LIMIT $TAIL
-"
-
-# With --session filter
-sqlite3 "$DB" "
-  SELECT substr(timestamp,1,19)||'Z', event_type, tool, outcome
-  FROM events
-  WHERE session_id = 'SESS_ID'
-  ORDER BY timestamp DESC LIMIT $TAIL
-"
-
-# With --bead filter
-sqlite3 "$DB" "
-  SELECT substr(timestamp,1,19)||'Z', event_type, tool, outcome
-  FROM events
-  WHERE json_extract(metadata, '$.bead_id') = 'claude-qxs3'
-  ORDER BY timestamp DESC LIMIT $TAIL
-"
-
-# Cross-project: --project filter (all events today)
-sqlite3 "$DB" "
-  SELECT project, substr(timestamp,1,19)||'Z', event_type, tool, outcome
-  FROM events
-  WHERE project = 'my-project'
-  ORDER BY timestamp DESC LIMIT $TAIL
-"
-
-# All events today across all projects (no --project flag)
-sqlite3 "$DB" "
-  SELECT project, substr(timestamp,1,19)||'Z', event_type, tool, outcome
-  FROM events
-  WHERE date(timestamp) = date('now')
-  ORDER BY timestamp DESC LIMIT $TAIL
-"
-```
+Use the `sqlite3` CLI to query the database. See [`scripts/query-events.sh`](scripts/query-events.sh) for complete query templates for each filter combination (no filter, `--type`, `--tool`, `--session`, `--bead`, cross-project).
 
 ### Step 4: Format output
 
@@ -176,36 +90,11 @@ event-log --type=session_start
 event-log --type=permission_decision
 ```
 
-Query:
-```bash
-sqlite3 "$HOME/.claude/events.db" "
-  SELECT
-    substr(timestamp,1,19)||'Z' as ts,
-    json_extract(metadata,'$.decision') as decision,
-    json_extract(metadata,'$.rule') as rule,
-    tool,
-    json_extract(metadata,'$.reason') as reason
-  FROM events
-  WHERE event_type = 'permission_decision'
-  ORDER BY timestamp DESC LIMIT 20
-"
-```
+Query: See [`scripts/query-permission-decisions.sh`](scripts/query-permission-decisions.sh)
 
 ### Denied operations only
-```bash
-sqlite3 "$HOME/.claude/events.db" "
-  SELECT
-    substr(timestamp,1,19)||'Z',
-    json_extract(metadata,'$.decision') as decision,
-    json_extract(metadata,'$.rule') as rule,
-    tool,
-    json_extract(metadata,'$.reason') as reason
-  FROM events
-  WHERE event_type = 'permission_decision'
-    AND json_extract(metadata,'$.decision') = 'deny'
-  ORDER BY timestamp DESC LIMIT 20
-"
-```
+
+See [`scripts/query-denied-operations.sh`](scripts/query-denied-operations.sh)
 
 ### Specific session
 ```
@@ -222,20 +111,7 @@ event-log --bead=claude-qxs3
 event-log --project=all
 ```
 
-Query:
-```bash
-sqlite3 "$HOME/.claude/events.db" "
-  SELECT
-    project,
-    substr(timestamp,1,19)||'Z' as ts,
-    event_type,
-    coalesce(tool,'-') as tool,
-    coalesce(outcome,'-') as outcome
-  FROM events
-  WHERE date(timestamp) = date('now')
-  ORDER BY timestamp DESC LIMIT 50
-"
-```
+Query: See [`scripts/query-cross-project.sh`](scripts/query-cross-project.sh)
 
 ### Cross-project: specific project
 ```
