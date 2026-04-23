@@ -10,7 +10,7 @@
 #   14: Second merge from main (merge-from-main.sh)
 #   15: Merge feature branch into main (merge-feature.sh)
 #   15b: Version bump + create tag (version.sh)
-#   16: Screen-lock check + push + tag push
+#   16: Push + tag push
 #   16a: Pipeline watch (pipeline-watch.sh)
 #   16c: Sync plugin cache (sync-plugin-cache.sh)
 #
@@ -333,33 +333,6 @@ elif [[ "$DRY_RUN" == "true" ]]; then
   PUSH_DETAIL="dry-run"
   echo "    skipped (dry-run)" >&2
 else
-  # Screen lock safety check (macOS only)
-  if command -v ioreg &>/dev/null; then
-    if ! ioreg -c AppleDisplayWakeReason 2>/dev/null | grep -q IODisplayWrangler; then
-      PUSH_STATUS="screen_locked"
-      PUSH_DETAIL="Screen is locked — push aborted. Unlock and re-run with --ship-only."
-      echo "    SCREEN LOCKED — aborting push" >&2
-      # Emit partial JSON — everything up to push is complete
-      jq -cn \
-        --argjson killed "$(printf '%s\n' "${KILL_PROCS_KILLED[@]+"${KILL_PROCS_KILLED[@]}"}" | jq -R . | jq -s . || echo '[]')" \
-        --arg kps "$KILL_PROCS_STATUS" \
-        --arg sms "$SECOND_MERGE_STATUS" --arg smd "$SECOND_MERGE_DETAIL" \
-        --arg mfs "$MERGE_FEATURE_STATUS" --arg mfd "$MERGE_FEATURE_DETAIL" \
-        --arg vs "$VERSION_STATUS" --arg vt "$VERSION_TAG" --arg vv "$VERSION_VER" \
-        --arg ps "$PUSH_STATUS" --arg pd "$PUSH_DETAIL" \
-        '{
-          kill_procs: {status:$kps, killed:$killed},
-          second_merge: {status:$sms, detail:$smd},
-          merge_feature: {status:$mfs, detail:$mfd},
-          version: {status:$vs, tag:$vt, version:$vv},
-          push: {status:$ps, detail:$pd},
-          pipeline: {status:"not_attempted", run_url:""},
-          plugin_cache: {status:"not_attempted", detail:""}
-        }'
-      exit 0
-    fi
-  fi
-
   # Push main branch
   PUSH_OUT=$(git -C "$GIT_WORK_DIR" push origin main 2>&1) || PUSH_EXIT=$?
   PUSH_EXIT=${PUSH_EXIT:-0}
@@ -395,7 +368,7 @@ if [[ "$SKIP_PIPELINE" == "true" ]]; then
   PIPELINE_STATUS="skipped_flag"
   echo "    skipped (--skip-pipeline)" >&2
 elif [[ "$PUSH_STATUS" != "ok" ]]; then
-  PIPELINE_STATUS="skipped"
+  PIPELINE_STATUS="skipped_push_failed"
   echo "    skipped (push was not ok: $PUSH_STATUS)" >&2
 elif [[ ! -f "$HANDLERS_DIR/pipeline-watch.sh" ]]; then
   PIPELINE_STATUS="skipped_no_handler"
