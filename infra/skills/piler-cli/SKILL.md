@@ -37,32 +37,14 @@ piler read <id>           # Full email body + attachment list
 
 ## Commands
 
-All commands must be run with `uv run` from the piler-cli directory:
+Run via: `scripts/piler-commands.sh <stats|search|list|read> [args...]`
 
+Or invoke `uv run piler <command>` directly from `~/code/piler-cli`:
 ```bash
-cd ~/code/piler-cli
-
-# Archive overview: total emails, size, import job status
 uv run piler stats
-
-# Full-text search (searches subject, body, sender, recipient)
 uv run piler search "rechnung"
-uv run piler search "invoice cognovis" -n 10
-
-# Search specific field only
-uv run piler search "audible" -f subject
-uv run piler search "sussdorff" -f sender
-
-# List emails filtered by sender, recipient, date
 uv run piler list --from cognovis.de --limit 20
-uv run piler list --from malte@sussdorff.de --since 2025-01-01
-uv run piler list --to shikigami@sussdorff.de --until 2025-12-31
-
-# Read a specific email (parsed: headers + text body + attachment list)
 uv run piler read 115022
-
-# Read raw EML (for debugging or forwarding)
-uv run piler read 115022 --raw
 ```
 
 ## Search Tips

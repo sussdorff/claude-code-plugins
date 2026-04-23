@@ -8,6 +8,8 @@
 ### 🚜 Refactor
 
 - *(CCP-4h1)* Extract inline code to scripts across 6 business skills (amazon, collmex-cli, google-invoice, mail-send, mm-cli, op-credentials) — 17 scripts extracted, 0 CI violations
+- *(CCP-9t5)* Extract inline shell code from core skills (cmux, dolt, event-log) to scripts — fixes EXTRACTABLE_CODE validation failures
+- *(CCP-tox)* Extract inline code from dev-tools skills (codex, playwright-cli, vision-author) to scripts — fixes EXTRACTABLE_CODE validation failures
 
 ### ⚙️ Miscellaneous Tasks
 

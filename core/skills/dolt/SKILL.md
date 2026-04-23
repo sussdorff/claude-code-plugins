@@ -271,16 +271,7 @@ bd dolt remote add origin https://dolt.cognovis.de/<db_name>
 
 #### Step 5: Sync and verify
 
-```bash
-bd dolt pull        # Pull latest from remote
-bd list --all       # Verify all issues are present
-bd dolt push        # Should succeed without force
-# Test consecutive pushes:
-bd create --title="push test" --type=task --priority=4
-bd dolt push        # Should also succeed
-bd close <test-id> --reason="test"
-bd dolt push        # Third consecutive push — should still work
-```
+See [`scripts/sync-verify.sh`](scripts/sync-verify.sh) for the full sync and consecutive-push verification sequence.
 
 #### Step 6: Clean up embedded artifacts
 
@@ -324,34 +315,7 @@ bd list --all   # Should show issues
 
 ### New Project Setup
 
-```bash
-cd /path/to/project && bd init --shared-server --prefix <name>
-
-# Create remote DB (if not exists) — MUST be owned by dolt user, not root
-ssh dolt-server "cd /var/lib/dolt && sudo -u dolt mkdir -p beads_<name> && cd beads_<name> && sudo -u dolt /usr/local/bin/dolt init"
-
-# Fix file permissions if needed (if mkdir was run as root not dolt)
-ssh dolt-server "chown -R dolt:dolt /var/lib/dolt/beads_<name>"
-
-# Restart remote Dolt server so it discovers the new DB
-ssh dolt-server "systemctl restart dolt-server && sleep 3 && systemctl is-active dolt-server"
-
-# Drop the local DB that bd init created (wrong name, no auth), then clone from remote.
-# DOLT_CLONE automatically sets __DOLT__grpc_username in the SQL remote — no manual fix needed.
-dolt --host 127.0.0.1 --port 3308 --no-tls sql -q "DROP DATABASE IF EXISTS <name>; CALL DOLT_CLONE('--user', 'malte', 'https://dolt.cognovis.de/beads_<name>');"
-
-# Update metadata.json to point to the cloned DB name (beads_<name>)
-python3 -c "
-import json
-path = '.beads/metadata.json'
-d = json.load(open(path))
-d = {k: v for k, v in d.items() if k in ('dolt_mode', 'dolt_database', 'project_id')}
-d['dolt_database'] = 'beads_<name>'
-json.dump(d, open(path, 'w'), indent=2)
-"
-
-bd dolt pull && bd dolt push --force
-```
+See [`scripts/new-project-setup.sh`](scripts/new-project-setup.sh) for the full setup sequence (init, create remote DB, restart server, clone, update metadata.json, and initial push).
 
 **Setup Checklist:**
 1. Always use `--shared-server` flag (embedded mode is broken for remote push)
@@ -366,29 +330,7 @@ bd dolt pull && bd dolt push --force
 
 ### Fix Existing Misconfigured Project
 
-```bash
-# Option A: Re-init with shared-server (preserves data if DB name matches)
-bd init --shared-server --database <existing_db> --prefix <name> --force
-
-# Option B: Manual fix
-bd dolt stop 2>/dev/null
-rm -f .beads/dolt-server.port
-echo "dolt.shared-server: true" >> .beads/config.yaml
-# Clean metadata.json — keep only dolt_database and project_id
-python3 -c "
-import json
-d=json.load(open('.beads/metadata.json'))
-keep = {k:v for k,v in d.items() if k in ('dolt_database','project_id') and v}
-json.dump(keep, open('.beads/metadata.json','w'), indent=2)
-"
-rm -f .beads/daemon.log .beads/daemon.pid .beads/daemon.lock \
-      .beads/bd.sock .beads/bd.sock.startlock .beads/ephemeral.sqlite3 \
-      .beads/interactions.jsonl .beads/.jsonl.lock .beads/sync-state.json \
-      .beads/dolt-server.lock .beads/dolt-config.log .beads/dolt-server.log \
-      .beads/beads.db-migrated .beads/.migration-hint-ts
-bd doctor --fix --yes
-bd dolt test && bd dolt push
-```
+See [`scripts/fix-misconfigured.sh`](scripts/fix-misconfigured.sh) for both Option A (re-init) and Option B (manual fix: stop server, clean config, remove stale files, run doctor, and push).
 
 ### Diagnose Push Failures
 
@@ -411,22 +353,7 @@ bd dolt remote list             # Should show origin with [SQL + CLI] or [SQL on
 
 ### Resolve Pull Merge Conflicts
 
-```bash
-# 1. Check conflicts
-ssh dolt-server "cd /var/lib/dolt && /usr/local/bin/dolt sql -q \"
-USE <db_name>; SELECT * FROM dolt_conflicts;\""
-
-# 2. Resolve on remote (--ours keeps remote version)
-ssh dolt-server "cd /var/lib/dolt && /usr/local/bin/dolt sql -q \"
-USE <db_name>;
-SET autocommit = 0;
-SET @@dolt_allow_commit_conflicts = 1;
-CALL DOLT_MERGE('<branch>');
-CALL DOLT_CONFLICTS_RESOLVE('--ours', '<table>');
-CALL DOLT_COMMIT('-am', 'merge: resolve conflicts');\""
-
-# 3. If too diverged → Re-Clone Local Database (below)
-```
+See [`scripts/resolve-merge-conflicts.sh`](scripts/resolve-merge-conflicts.sh) for the full conflict check and resolution sequence (check conflicts, resolve with --ours, commit on remote).
 
 ### Journal Corruption Recovery
 
@@ -592,23 +519,7 @@ Backup: Daily cron at 3:00 AM, 7-day rotation, `/var/backups/dolt/`.
 
 Last resort when remote data was accidentally overwritten:
 
-```bash
-# 1. Inspect reflog for last good commit
-ssh dolt-server "cd /var/lib/dolt && /usr/local/bin/dolt sql -q \"
-USE <db_name>;
-SELECT ref, commit_hash, commit_message FROM dolt_reflog('main') LIMIT 20;\""
-
-# 2. Reset main to good commit
-ssh dolt-server "cd /var/lib/dolt && /usr/local/bin/dolt sql -q \"
-USE <db_name>;
-CALL DOLT_RESET('--hard', '<good_commit_hash>');\""
-
-# 3. Re-import any local-only issues via dolt table import
-# Export from local: dolt sql -r csv -q "SELECT * FROM issues WHERE ..."
-# Import on remote or re-clone locally
-
-# 4. Re-clone locally (see Re-Clone Local Database above)
-```
+See [`scripts/remote-recovery-reflog.sh`](scripts/remote-recovery-reflog.sh) for the full reflog inspection, hard reset, and re-clone sequence.
 
 **Note**: If schema has changed between commits (e.g. bigint→UUID migration from beads upgrade),
 merging branches will fail with "different primary keys". Use `DOLT_RESET` instead of merge,
