@@ -1,3 +1,9 @@
+## [Unreleased]
+
+### 🐛 Bug Fixes
+
+- *(CCP-ahs)* Code-layer claim gate: prevent double-launch via claim.py + cld/wave pre-flight
+
 ## [2026.04.100] - 2026-04-22
 
 ### 🚀 Features
