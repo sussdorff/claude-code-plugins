@@ -476,7 +476,7 @@ fi
 | First merge conflict | STOP, report, user resolves |
 | Second merge conflict | STOP, report — previous work preserved on branch |
 | Feature->main merge conflict | STOP, report, do NOT force |
-| Screen locked | STOP, inform user |
+| Push failed | Warn, show push.status in final summary with retry instruction, continue to close beads |
 | Handler script missing | Warn, skip that step, continue |
 | bd command missing | Warn, skip beads steps |
 | git-cliff missing | Warn, skip changelog |

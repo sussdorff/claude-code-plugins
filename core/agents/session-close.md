@@ -391,7 +391,7 @@ Parse `SHIP_JSON` (see `phase-b-ship.schema.json` for the full schema):
 .merge_feature.status - ok|conflict|skipped|not_attempted
 .version.status       - ok|failed|not_attempted
 .version.tag          - e.g. v2026.04.77
-.push.status          - ok|failed|screen_locked|skipped|not_attempted
+.push.status          - ok|failed|skipped|not_attempted
 .pipeline.status      - passed|failed|skipped_*|not_attempted
 .pipeline.run_url     - GitHub Actions run URL (on passed/failed)
 .plugin_cache.status  - ok|skipped|not_attempted
