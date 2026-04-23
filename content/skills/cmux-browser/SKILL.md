@@ -17,16 +17,13 @@ Use this skill for browser tasks inside cmux webviews.
 6. Re-snapshot after DOM/navigation changes.
 
 ```bash
-cmux --json browser open https://example.com
-# use returned surface ref, for example: surface:7
-
-cmux browser surface:7 get url
+cmux --json browser open https://example.com  # returns surface ref, e.g. surface:7
 cmux browser surface:7 wait --load-state complete --timeout-ms 15000
 cmux browser surface:7 snapshot --interactive
-cmux browser surface:7 fill e1 "hello"
 cmux --json browser surface:7 click e2 --snapshot-after
-cmux browser surface:7 snapshot --interactive
 ```
+
+See [`scripts/core-workflow.sh`](scripts/core-workflow.sh) for the complete example.
 
 ## Surface Targeting
 
@@ -61,15 +58,12 @@ cmux browser <surface> wait --function "document.readyState === 'complete'" --ti
 
 ```bash
 cmux --json browser open https://example.com/signup
-cmux browser surface:7 get url
-cmux browser surface:7 wait --load-state complete --timeout-ms 15000
-cmux browser surface:7 snapshot --interactive
 cmux browser surface:7 fill e1 "Jane Doe"
 cmux browser surface:7 fill e2 "jane@example.com"
 cmux --json browser surface:7 click e3 --snapshot-after
-cmux browser surface:7 wait --url-contains "/welcome" --timeout-ms 15000
-cmux browser surface:7 snapshot --interactive
 ```
+
+See [`scripts/form-submit.sh`](scripts/form-submit.sh) for the complete example.
 
 ### Clear an Input
 
@@ -157,17 +151,12 @@ cmux browser surface:7 snapshot --interactive
 When implementing a new UI element that appears across multiple views (see `standards/frontend/view-impact-check.md`), use cmux-browser to quickly verify all affected views:
 
 ```bash
-# Check each view that uses the same data type
 cmux browser surface:7 navigate http://mira-92.localhost:1355/patients
 cmux browser surface:7 wait --load-state complete --timeout-ms 10000
 cmux browser surface:7 snapshot --interactive
-# → verify badge/indicator appears correctly
-
-cmux browser surface:7 navigate http://mira-92.localhost:1355/dashboard
-cmux browser surface:7 wait --load-state complete --timeout-ms 10000
-cmux browser surface:7 snapshot --interactive
-# → verify same component renders here too
 ```
+
+See [`scripts/view-impact-check.sh`](scripts/view-impact-check.sh) for the multi-view example.
 
 ## Limits (WKWebView)
 
