@@ -117,11 +117,14 @@ Parse: title, description, acceptance criteria, type, priority.
 **Guard rail:** If effort is NOT micro/small, or type is `feature`, STOP:
 > "Bead <id> is too large for quick-fix (effort: <effort>, type: <type>). Use the full bead-orchestrator."
 
-Claim the bead:
-```bash
-bd update <id> --status=in_progress
-bd dolt commit && bd dolt pull && bd dolt push --force
+**Claim the bead** (sets status=in_progress, records metadata.claim, syncs dolt):
+
+Run:
 ```
+python3 beads-workflow/scripts/claim-bead.py <id> --session-id=$CCP_SESSION_ID
+```
+
+First line `✓ CLAIMED ...` → proceed. First line `✗ ABORT ...` → stop, return that line to user, exit phase.
 
 Gather minimal context:
 1. Read files mentioned in the bead description
