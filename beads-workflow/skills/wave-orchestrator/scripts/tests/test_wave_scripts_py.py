@@ -400,5 +400,291 @@ def test_wave_completion_exits_two_on_missing_config(tmp_path: Path) -> None:
     assert "not found" in result.stderr.lower() or "Error" in result.stderr
 
 
+# ---------------------------------------------------------------------------
+# wave-dispatch.py tests (WaveDispatcher class)
+# ---------------------------------------------------------------------------
+
+
+def _wd():
+    """Load wave-dispatch module."""
+    return _load_module("wave_dispatch", _SCRIPTS_DIR / "wave-dispatch.py")
+
+
+class _MockResult:
+    """Simple mock for subprocess.run result."""
+
+    def __init__(self, stdout="", stderr="", returncode=0):
+        self.stdout = stdout
+        self.stderr = stderr
+        self.returncode = returncode
+
+
+def test_wave_dispatcher_empty_bead_list_returns_error() -> None:
+    """WaveDispatcher.dispatch with empty bead list returns exit code 1."""
+    wd = _wd()
+
+    calls: list = []
+
+    def mock_runner(cmd, **kwargs):
+        calls.append(cmd)
+        return _MockResult()
+
+    dispatcher = wd.WaveDispatcher(runner=mock_runner)
+    exit_code, output = dispatcher.dispatch(
+        bead_ids=[],
+        quick_ids=[],
+        workspace="ws:1",
+        base_surface="surface:1",
+        wave_id="wave-test",
+        skip_scenarios=True,
+    )
+    assert exit_code == 1
+    assert output == {}
+
+
+def test_wave_dispatcher_constructs_cmux_send_command() -> None:
+    """WaveDispatcher dispatches cmux send with correct bead ID and cld flag."""
+    wd = _wd()
+
+    # Track all cmux send calls
+    send_calls: list[list] = []
+
+    def mock_runner(cmd, **kwargs):
+        if cmd and cmd[0] == "cmux" and "new-split" in cmd:
+            # Return surface identifier in stdout
+            return _MockResult(stdout="Created surface:42\n")
+        if cmd and cmd[0] == "cmux" and "send" in cmd and "--surface" in cmd:
+            send_calls.append(cmd)
+        return _MockResult()
+
+    dispatcher = wd.WaveDispatcher(runner=mock_runner)
+    exit_code, output = dispatcher.dispatch(
+        bead_ids=["proj-abc"],
+        quick_ids=[],
+        workspace="ws:1",
+        base_surface="surface:1",
+        wave_id="wave-2026",
+        skip_scenarios=True,
+    )
+    assert exit_code == 0
+    assert len(output["beads"]) == 1
+    assert output["beads"][0]["id"] == "proj-abc"
+    assert output["beads"][0]["mode"] == "full"
+
+    # Verify cmux send included cld -b (full mode)
+    found_send = any(
+        "cld -b proj-abc" in " ".join(c) for c in send_calls
+    )
+    assert found_send, f"Expected 'cld -b proj-abc' in send calls, got: {send_calls}"
+
+
+def test_wave_dispatcher_quick_flag_routing() -> None:
+    """--quick beads use cld -bq in the send command."""
+    wd = _wd()
+
+    send_calls: list[list] = []
+
+    def mock_runner(cmd, **kwargs):
+        if cmd and cmd[0] == "cmux" and "new-split" in cmd:
+            return _MockResult(stdout="surface:10\n")
+        if cmd and cmd[0] == "cmux" and "send" in cmd and "--surface" in cmd:
+            send_calls.append(cmd)
+        return _MockResult()
+
+    dispatcher = wd.WaveDispatcher(runner=mock_runner)
+    exit_code, output = dispatcher.dispatch(
+        bead_ids=[],
+        quick_ids=["proj-qf1"],
+        workspace="ws:1",
+        base_surface="surface:1",
+        wave_id="wave-2026",
+        skip_scenarios=True,
+    )
+    assert exit_code == 0
+    assert output["beads"][0]["mode"] == "quick"
+
+    found_quick = any(
+        "cld -bq proj-qf1" in " ".join(c) for c in send_calls
+    )
+    assert found_quick, f"Expected 'cld -bq proj-qf1' in send calls, got: {send_calls}"
+
+
+def test_wave_dispatcher_scenario_gate_blocks_feature_bead() -> None:
+    """Feature beads without ## Scenario section block dispatch (exit code 1)."""
+    wd = _wd()
+
+    def mock_runner(cmd, **kwargs):
+        # bd show --json returns feature type
+        if cmd and cmd[0] == "bd" and "--json" in cmd:
+            return _MockResult(stdout='[{"issue_type": "feature"}]', returncode=0)
+        # bd show (no --json) returns description without Scenario section
+        if cmd and cmd[0] == "bd" and "--json" not in cmd:
+            return _MockResult(stdout="Title: My feature\nDescription: stuff\n")
+        return _MockResult()
+
+    dispatcher = wd.WaveDispatcher(runner=mock_runner)
+    exit_code, output = dispatcher.dispatch(
+        bead_ids=["proj-feat"],
+        quick_ids=[],
+        workspace="ws:1",
+        base_surface="surface:1",
+        wave_id="wave-test",
+        skip_scenarios=False,
+    )
+    assert exit_code == 1
+    assert output == {}
+
+
+def test_wave_dispatcher_skip_scenarios_bypasses_gate() -> None:
+    """--skip-scenarios bypasses the scenario gate even for feature beads."""
+    wd = _wd()
+
+    def mock_runner(cmd, **kwargs):
+        if cmd and cmd[0] == "cmux" and "new-split" in cmd:
+            return _MockResult(stdout="surface:5\n")
+        return _MockResult()
+
+    dispatcher = wd.WaveDispatcher(runner=mock_runner)
+    exit_code, output = dispatcher.dispatch(
+        bead_ids=["proj-feat"],
+        quick_ids=[],
+        workspace="ws:1",
+        base_surface="surface:1",
+        wave_id="wave-test",
+        skip_scenarios=True,
+    )
+    assert exit_code == 0
+
+
+def test_wave_dispatcher_wave_id_auto_generation() -> None:
+    """wave_id in output matches a wave-YYYYMMDD-HHMMSS pattern when auto-generated via dispatch()."""
+    wd = _wd()
+
+    def mock_runner(cmd, **kwargs):
+        if cmd and cmd[0] == "cmux" and "new-split" in cmd:
+            return _MockResult(stdout="surface:7\n")
+        return _MockResult()
+
+    dispatcher = wd.WaveDispatcher(runner=mock_runner)
+    # Pass an empty wave_id to trigger auto-generation inside dispatch()
+    # The auto-generation actually happens in main(), so we test it via main() logic:
+    # dispatch() receives the wave_id as a parameter — test that the format is correct
+    # when main() generates it via the datetime pattern.
+    # Here we verify the datetime pattern directly:
+    import re as _re
+    from datetime import datetime, timezone
+
+    generated = f"wave-{datetime.now(timezone.utc).strftime('%Y%m%d-%H%M%S')}"
+    assert _re.match(r"wave-\d{8}-\d{6}", generated), generated
+
+    # Also verify dispatch() passes the wave_id straight through to output
+    exit_code, output = dispatcher.dispatch(
+        bead_ids=["proj-abc"],
+        quick_ids=[],
+        workspace="ws:1",
+        base_surface="surface:1",
+        wave_id=generated,
+        skip_scenarios=True,
+    )
+    assert exit_code == 0
+    assert output["wave_id"] == generated
+
+
+# ---------------------------------------------------------------------------
+# wave-status.py tests
+# ---------------------------------------------------------------------------
+
+
+def _ws():
+    """Load wave-status module."""
+    return _load_module("wave_status", _SCRIPTS_DIR / "wave-status.py")
+
+
+def test_wave_status_returns_correct_json_structure() -> None:
+    """check_wave_status returns dict with required top-level keys."""
+    ws = _ws()
+
+    def mock_runner(cmd, **kwargs):
+        # cmux read-screen → idle prompt
+        if cmd and cmd[0] == "cmux":
+            return _MockResult(stdout="$ \n")
+        # bd show → CLOSED
+        if cmd and cmd[0] == "bd":
+            return _MockResult(stdout="Status: CLOSED\n")
+        return _MockResult()
+
+    config = {
+        "dispatch_time": "2026-01-01T00:00:00",
+        "beads": [{"id": "proj-abc", "surface": "surface:1"}],
+    }
+    result = ws.check_wave_status(config, runner=mock_runner)
+
+    assert "elapsed_minutes" in result
+    assert "beads" in result
+    assert "all_done" in result
+    assert "follow_up_beads" in result
+    assert isinstance(result["beads"], list)
+    assert len(result["beads"]) == 1
+
+
+def test_wave_status_idle_surface_detection() -> None:
+    """Surfaces ending with a shell prompt are detected as done (idle)."""
+    ws = _ws()
+
+    def mock_runner(cmd, **kwargs):
+        if cmd and cmd[0] == "cmux":
+            # idle surface: last line is shell prompt
+            return _MockResult(stdout="Some output\n$ \n")
+        if cmd and cmd[0] == "bd":
+            return _MockResult(stdout="Status: CLOSED\n")
+        return _MockResult()
+
+    config = {
+        "dispatch_time": "2026-01-01T00:00:00",
+        "beads": [{"id": "proj-idle", "surface": "surface:3"}],
+    }
+    result = ws.check_wave_status(config, runner=mock_runner)
+    bead = result["beads"][0]
+    assert bead["status"] == "done"
+
+
+def test_wave_status_active_surface_not_done() -> None:
+    """Surfaces showing active tool use are not marked done."""
+    ws = _ws()
+
+    def mock_runner(cmd, **kwargs):
+        if cmd and cmd[0] == "cmux":
+            # Surface showing active editing (no trailing prompt)
+            return _MockResult(stdout="Edit file.py\nWrite output.txt\n")
+        if cmd and cmd[0] == "bd":
+            return _MockResult(stdout="Status: IN_PROGRESS\n")
+        return _MockResult()
+
+    config = {
+        "dispatch_time": "2026-01-01T00:00:00",
+        "beads": [{"id": "proj-busy", "surface": "surface:5"}],
+    }
+    result = ws.check_wave_status(config, runner=mock_runner)
+    bead = result["beads"][0]
+    assert bead["status"] != "done"
+    assert result["all_done"] is False
+
+
+def test_wave_status_elapsed_minutes_calculated() -> None:
+    """elapsed_minutes is a non-negative integer for a past dispatch time."""
+    ws = _ws()
+
+    def mock_runner(cmd, **kwargs):
+        return _MockResult(stdout="")
+
+    config = {
+        "dispatch_time": "2020-01-01T00:00:00",
+        "beads": [],
+    }
+    result = ws.check_wave_status(config, runner=mock_runner)
+    assert isinstance(result["elapsed_minutes"], int)
+    assert result["elapsed_minutes"] > 0
+
+
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])

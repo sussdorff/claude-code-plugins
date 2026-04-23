@@ -38,9 +38,9 @@ from wave_helpers import (
 # ---------------------------------------------------------------------------
 
 
-def _check_bead(bead_id: str, surface: str, result_holder: list) -> None:
+def _check_bead(bead_id: str, surface: str, result_holder: list, runner=None) -> None:
     """Check one bead's surface and bd status. Thread-safe via result_holder."""
-    screen = _read_surface(surface, lines=60, scrollback=True)
+    screen = _read_surface(surface, lines=60, scrollback=True, runner=runner)
 
     status = "unknown"
     detail = ""
@@ -97,7 +97,7 @@ def _check_bead(bead_id: str, surface: str, result_holder: list) -> None:
     follow_ups = re.findall(r"Created issue: ([a-zA-Z0-9_-]+)", screen)
 
     # BD status (authoritative for done)
-    bd_st = _bd_status(bead_id)
+    bd_st = _bd_status(bead_id, runner=runner)
     if bd_st == "closed":
         status = "done"
         detail = "Bead closed in database"
@@ -134,22 +134,17 @@ def _elapsed_minutes(dispatch_time: str) -> int:
 # ---------------------------------------------------------------------------
 
 
-def main() -> int:
-    if len(sys.argv) < 2:
-        print("Usage: wave-status.py <wave-config.json>", file=sys.stderr)
-        return 1
+def check_wave_status(config: dict, runner=None) -> dict:
+    """Check status for all beads in a wave config.
 
-    config_path = Path(sys.argv[1])
-    if not config_path.is_file():
-        print(f"Error: config file not found: {config_path}", file=sys.stderr)
-        return 1
+    Args:
+        config: Parsed wave config dict (dispatch_time, beads, ...).
+        runner: Optional callable with the same signature as subprocess.run.
+                Defaults to subprocess.run. Inject a mock for testing.
 
-    try:
-        config = json.loads(config_path.read_text())
-    except json.JSONDecodeError as e:
-        print(f"Error: invalid JSON in config: {e}", file=sys.stderr)
-        return 1
-
+    Returns:
+        dict with keys: elapsed_minutes, beads, all_done, follow_up_beads.
+    """
     dispatch_time = config.get("dispatch_time", "")
     elapsed_min = _elapsed_minutes(dispatch_time) if dispatch_time else -1
 
@@ -164,7 +159,7 @@ def main() -> int:
         surface = bead.get("surface", "")
         t = threading.Thread(
             target=_check_bead,
-            args=(bead_id, surface, results[i]),
+            args=(bead_id, surface, results[i], runner),
             daemon=True,
         )
         threads.append(t)
@@ -187,12 +182,31 @@ def main() -> int:
                 all_done = False
             follow_up_beads_all.update(bead_result.get("follow_up_beads", []))
 
-    output = {
+    return {
         "elapsed_minutes": elapsed_min,
         "beads": bead_results,
         "all_done": all_done,
         "follow_up_beads": sorted(follow_up_beads_all),
     }
+
+
+def main() -> int:
+    if len(sys.argv) < 2:
+        print("Usage: wave-status.py <wave-config.json>", file=sys.stderr)
+        return 1
+
+    config_path = Path(sys.argv[1])
+    if not config_path.is_file():
+        print(f"Error: config file not found: {config_path}", file=sys.stderr)
+        return 1
+
+    try:
+        config = json.loads(config_path.read_text())
+    except json.JSONDecodeError as e:
+        print(f"Error: invalid JSON in config: {e}", file=sys.stderr)
+        return 1
+
+    output = check_wave_status(config)
     print(json.dumps(output, indent=2))
     return 0
 

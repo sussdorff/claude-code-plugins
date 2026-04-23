@@ -69,21 +69,19 @@ def _check_recent_tool_use(surface: str) -> bool:
 # ---------------------------------------------------------------------------
 
 
-def main() -> int:
-    if len(sys.argv) < 2:
-        print("Usage: wave-completion.py <wave-config.json>", file=sys.stderr)
-        return 2
+def check_wave_completion(config: dict, runner=None) -> tuple[dict, int]:
+    """Check completion status for all beads in a wave config.
 
-    config_path = Path(sys.argv[1])
-    if not config_path.is_file():
-        print(f"Error: config file not found: {config_path}", file=sys.stderr)
-        return 2
+    Args:
+        config: Parsed wave config dict (beads, wave_id, dispatch_time, ...).
+        runner: Optional callable with the same signature as subprocess.run.
+                Defaults to subprocess.run. Inject a mock for testing.
 
-    try:
-        config = json.loads(config_path.read_text())
-    except json.JSONDecodeError as e:
-        print(f"Error: invalid JSON in config: {e}", file=sys.stderr)
-        return 2
+    Returns:
+        (output_dict, exit_code) where exit_code is 0 (complete) or 1 (not complete).
+    """
+    if runner is None:
+        runner = subprocess.run
 
     beads = config.get("beads", [])
     wave_id = config.get("wave_id", "unknown")
@@ -102,10 +100,10 @@ def main() -> int:
         surface = bead.get("surface", "")
 
         # Check bd status
-        bd_st = _bd_status(bead_id)
+        bd_st = _bd_status(bead_id, runner=runner)
 
         # Check surface state
-        last_lines = _read_surface(surface, lines=5)
+        last_lines = _read_surface(surface, lines=5, runner=runner)
         surface_idle = False
 
         if _DEAD_SURFACE_RE.search(last_lines):
@@ -147,7 +145,7 @@ def main() -> int:
                 if not stall_marker.exists():
                     stall_marker.touch()
                     try:
-                        subprocess.run(
+                        runner(
                             [
                                 "bd",
                                 "update",
@@ -167,12 +165,12 @@ def main() -> int:
     follow_ups: list[dict] = []
     for bead in beads:
         surface = bead.get("surface", "")
-        screen = _read_surface(surface, lines=30, scrollback=True)
+        screen = _read_surface(surface, lines=30, scrollback=True, runner=runner)
         if _DEAD_SURFACE_RE.search(screen):
             continue
         new_beads = re.findall(r"Created issue: ([a-zA-Z0-9_-]+)", screen)
         for new_id in new_beads:
-            fu_st = _bd_status(new_id)
+            fu_st = _bd_status(new_id, runner=runner)
             if fu_st != "closed":
                 all_closed = False
                 follow_ups.append({"id": new_id, "status": fu_st})
@@ -218,9 +216,28 @@ def main() -> int:
         "metrics_sanity": metrics_sanity,
         "bead_runs_count": bead_runs_count,
     }
-    print(json.dumps(output, indent=2))
+    return output, 0 if complete else 1
 
-    return 0 if complete else 1
+
+def main() -> int:
+    if len(sys.argv) < 2:
+        print("Usage: wave-completion.py <wave-config.json>", file=sys.stderr)
+        return 2
+
+    config_path = Path(sys.argv[1])
+    if not config_path.is_file():
+        print(f"Error: config file not found: {config_path}", file=sys.stderr)
+        return 2
+
+    try:
+        config = json.loads(config_path.read_text())
+    except json.JSONDecodeError as e:
+        print(f"Error: invalid JSON in config: {e}", file=sys.stderr)
+        return 2
+
+    output, exit_code = check_wave_completion(config)
+    print(json.dumps(output, indent=2))
+    return exit_code
 
 
 if __name__ == "__main__":

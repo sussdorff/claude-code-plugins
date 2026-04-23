@@ -39,24 +39,42 @@ def _surface_is_idle(screen_text: str) -> bool:
     return True
 
 
-def _read_surface(surface: str, lines: int = 5, scrollback: bool = False) -> str:
-    """Read a cmux surface. Returns empty string on error."""
+def _read_surface(surface: str, lines: int = 5, scrollback: bool = False, runner=None) -> str:
+    """Read a cmux surface. Returns empty string on error.
+
+    Args:
+        surface: The cmux surface identifier.
+        lines: Number of lines to read.
+        scrollback: Whether to include scrollback buffer.
+        runner: Optional callable with the same signature as subprocess.run.
+                Defaults to subprocess.run. Inject a mock for testing.
+    """
+    if runner is None:
+        runner = subprocess.run
     cmd = ["cmux", "read-screen", "--surface", surface]
     if scrollback:
         cmd.append("--scrollback")
     if lines:
         cmd += ["--lines", str(lines)]
     try:
-        result = subprocess.run(cmd, capture_output=True, text=True, timeout=30)
+        result = runner(cmd, capture_output=True, text=True, timeout=30)
         return result.stdout + result.stderr
     except Exception:
         return ""
 
 
-def _bd_status(bead_id: str) -> str:
-    """Get bd status for a bead. Returns 'unknown' on failure."""
+def _bd_status(bead_id: str, runner=None) -> str:
+    """Get bd status for a bead. Returns 'unknown' on failure.
+
+    Args:
+        bead_id: The bead identifier.
+        runner: Optional callable with the same signature as subprocess.run.
+                Defaults to subprocess.run. Inject a mock for testing.
+    """
+    if runner is None:
+        runner = subprocess.run
     try:
-        result = subprocess.run(
+        result = runner(
             ["bd", "show", bead_id],
             capture_output=True,
             text=True,
