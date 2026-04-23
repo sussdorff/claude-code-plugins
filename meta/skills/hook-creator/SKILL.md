@@ -162,21 +162,9 @@ Full patterns, detection functions, and testing: `references/security_patterns.m
 
 ## Testing Hooks
 
-```bash
-# Built-in test mode
-uv run .claude/hooks/your_hook.py --test
+Run the bundled test helper: `scripts/test_hooks.sh [hook_path]`
 
-# Manual test
-echo '{"tool_name":"Bash","tool_input":{"command":"ls"}}' | uv run .claude/hooks/your_hook.py
-echo $?  # 0 = allow, 2 = block
-
-# Automated pytest
-python3 -m pytest assets/test_hooks.py -v -k pre_tool_use
-
-# Quick diagnostics
-cat .claude/settings.json | jq .
-tail -f .claude/hooks/logs/pre_tool_use.jsonl
-```
+The script exercises built-in test mode, manual stdin injection, automated pytest, and quick diagnostics. See [scripts/test_hooks.sh](scripts/test_hooks.sh) for the full sequence.
 
 ## Best Practices
 
