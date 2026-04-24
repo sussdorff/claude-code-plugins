@@ -102,6 +102,83 @@ Status is `ok` when all sources are available, `warning` when any source is degr
 - `--date YYYY-MM-DD` — date to query (Europe/Berlin midnight-to-midnight)
 - `--config PATH` — optional config file path override
 
+## Capability Extraction (scripts/capability-extractor.py)
+
+The `capability-extractor.py` script parses closed bead titles/descriptions and session
+summaries for capability signals, producing short present-tense capability sentences
+grounded in source data.
+
+**Capability signals detected:**
+- Bead titles/descriptions containing: `now`, `new gate`, `now verified`, `now possible`,
+  `unblocks`, `[FEAT]`, `[QG]` (case-insensitive)
+- Both `feature` AND `task` beads qualify
+- Session summary lines starting with `New:`, `Fixed:`, or `Internal:`
+- For polaris: files created on target date in `docs/` and `docs/adr/`
+
+**CLI options:**
+- `--stdin` — read query-sources.py JSON envelope from stdin
+- `--project NAME --date YYYY-MM-DD` — run query-sources internally
+- `--scan-docs` — enable polaris docs/ scanning
+- `--config PATH` — optional config file override
+
+**Output:** execution-result envelope with `data.capabilities[]` list of sentences.
+
+**Usage:**
+
+```bash
+python3 scripts/query-sources.py --project claude-code-plugins --date 2026-04-23 | python3 scripts/capability-extractor.py --stdin
+```
+
+```bash
+python3 scripts/capability-extractor.py --project claude-code-plugins --date 2026-04-23
+```
+
+## Rendering (scripts/render-brief.py)
+
+The `render-brief.py` script renders a v1.0 Chief-of-Staff markdown report in Voice B
+(journalistic narrator, past tense, third-person observational, German).
+
+**v1.0 sections rendered:**
+
+| Section | German heading | Content type |
+|---------|---------------|--------------|
+| Executive Summary | `## Executive Summary` | Synthesized prose (German, ~150 words) |
+| What Changed | `## Was sich verändert hat` | Deterministic from closed_beads + commits |
+| Why It Matters | `## Warum es zählt` | Synthesized prose, only from cited facts |
+| Open Loops | `## Offene Fäden` | Deterministic from open_beads + blocked_beads |
+| Next Best Moves | `## Nächste sinnvolle Schritte` | Max 3 items: ≤2 from ready_beads, ≤1 from followups |
+| Evidence | `## Belege` | Bullet list: beads/commits/sessions/decisions/warnings |
+
+**Voice B rules:** German, past tense, third-person observational. No first-person pronouns.
+Prose paragraphs, not bullet lists (except Evidence). Empty day: `Ruhiger Tag — keine Aktivität verzeichnet.`
+
+**CLI options:**
+- `--project NAME` — project name from daily-brief.yml (required)
+- `--date YYYY-MM-DD` — single day mode
+- `--since YYYY-MM-DD [--until YYYY-MM-DD]` — range mode
+- `--range START END` — explicit date range
+- `--detailed` — raises word cap to ~300 words/project; full per-day sections in range
+- `--no-persist` — skip writing brief to `<project>/.claude/daily-briefs/YYYY-MM-DD.md`
+- `--config PATH` — optional config file override
+
+**Single day:**
+
+```bash
+python3 scripts/render-brief.py --project claude-code-plugins --date 2026-04-23
+```
+
+**Range (compressed rollup by default):**
+
+```bash
+python3 scripts/render-brief.py --project claude-code-plugins --since 2026-04-20
+```
+
+**Detailed range:**
+
+```bash
+python3 scripts/render-brief.py --project claude-code-plugins --since 2026-04-20 --detailed
+```
+
 ## CLI Usage
 
 ```bash
