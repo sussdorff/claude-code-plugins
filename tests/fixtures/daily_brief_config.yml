@@ -1,0 +1,13 @@
+projects:
+  - name: claude-code-plugins
+    path: /tmp/test-ccp-repo
+    slug: claude-code-plugins
+    beads: true
+    docs_dir: docs
+
+defaults:
+  since: yesterday
+  format: markdown
+  detailed: false
+  language: de
+  timezone: Europe/Berlin
