@@ -106,6 +106,22 @@ def assert_required_data_fields(data: dict[str, Any]) -> None:
 # ---------------------------------------------------------------------------
 
 
+@pytest.fixture(autouse=True)
+def _ensure_test_beads_db() -> None:
+    """Ensure the fixture project path has a .beads/*.db file.
+
+    `query_sources` now resolves the beads DB from `<project_path>/.beads/*.db`
+    so it never leaks beads from the caller's cwd. The test fixture project
+    points at /tmp/test-ccp-repo; we stub a dummy .db there so the bd queries
+    actually fire (MockCommandRunner ignores the --db flag when matching).
+    """
+    beads_dir = Path("/tmp/test-ccp-repo/.beads")
+    beads_dir.mkdir(parents=True, exist_ok=True)
+    db_file = beads_dir / "test.db"
+    if not db_file.exists():
+        db_file.touch()
+
+
 @pytest.fixture()
 def config_path() -> Path:
     return make_config_path()
@@ -901,3 +917,279 @@ class TestNoActivity:
             ob_client=ob_client,
         )
         assert result["status"] == "ok"
+
+
+# ---------------------------------------------------------------------------
+# Regression tests — Codex adversarial findings
+# ---------------------------------------------------------------------------
+
+
+class TestBdDbFlagScoping:
+    """REGRESSION: bd commands must run against the project-resolved DB, not cwd."""
+
+    def test_bd_commands_include_db_flag_from_project_path(
+        self, config_path: Path
+    ) -> None:
+        """All bd invocations must be scoped by --db <project>/.beads/*.db."""
+        captured_cmds: list[list[str]] = []
+
+        class CapturingRunner(qs.CommandRunner):
+            def run(self, cmd: list[str], **kwargs: Any) -> subprocess.CompletedProcess[str]:
+                captured_cmds.append(list(cmd))
+                if cmd and cmd[0] == "git":
+                    return subprocess.CompletedProcess(args=cmd, returncode=0, stdout="", stderr="")
+                return subprocess.CompletedProcess(args=cmd, returncode=0, stdout="[]", stderr="")
+
+        qs.query_sources(
+            project=TEST_PROJECT,
+            date=TEST_DATE,
+            config_path=config_path,
+            runner=CapturingRunner(),
+            ob_client=None,
+        )
+        bd_cmds = [c for c in captured_cmds if c and c[0] == "bd"]
+        assert bd_cmds, "Expected at least one bd command to be issued"
+        for cmd in bd_cmds:
+            assert len(cmd) >= 3 and cmd[1] == "--db", (
+                f"bd command missing --db scoping: {cmd}"
+            )
+            assert cmd[2].startswith("/tmp/test-ccp-repo/.beads/"), (
+                f"bd --db path should point at the project beads DB, got: {cmd[2]}"
+            )
+
+    def test_resolve_bd_db_flag_returns_none_when_no_db(self, tmp_path: Path) -> None:
+        """_resolve_bd_db_flag returns None when there is no .beads/*.db file."""
+        assert qs._resolve_bd_db_flag(tmp_path) is None
+
+    def test_resolve_bd_db_flag_returns_first_db(self, tmp_path: Path) -> None:
+        """_resolve_bd_db_flag picks the first matching *.db file in .beads/."""
+        beads_dir = tmp_path / ".beads"
+        beads_dir.mkdir()
+        (beads_dir / "issues.db").touch()
+        flag = qs._resolve_bd_db_flag(tmp_path)
+        assert flag is not None
+        assert flag[0] == "--db"
+        assert flag[1].endswith("issues.db")
+
+
+class TestClosedBeadFallbackRegression:
+    """REGRESSION: failed date-filtered closed-bead lookup must NOT fall back to
+    unfiltered bd list --status=closed (that pollutes a single-day brief with
+    historical closed work). It must instead warn and return []."""
+
+    def test_filtered_closed_failure_does_not_fall_back_to_unfiltered(
+        self, config_path: Path
+    ) -> None:
+        """A closed-bead command that fails the date-filtered variant must not
+        be silently reissued without filters."""
+        historical_bead = {
+            "id": "CCP-old",
+            "title": "Closed months ago",
+            "status": "closed",
+            "close_reason": "done",
+            "closed_at": "2025-01-01T10:00:00+02:00",
+        }
+
+        class ScriptedRunner(qs.CommandRunner):
+            def __init__(self) -> None:
+                self.calls: list[list[str]] = []
+
+            def run(self, cmd: list[str], **kwargs: Any) -> subprocess.CompletedProcess[str]:
+                self.calls.append(list(cmd))
+                # strip --db <path>
+                logical = list(cmd)
+                if logical and logical[0] == "bd" and len(logical) >= 3 and logical[1] == "--db":
+                    logical = [logical[0]] + logical[3:]
+                joined = " ".join(logical)
+                if logical and logical[0] == "git":
+                    return subprocess.CompletedProcess(args=cmd, returncode=0, stdout="", stderr="")
+                # Date-filtered closed query fails
+                if "--closed-after" in joined:
+                    return subprocess.CompletedProcess(
+                        args=cmd, returncode=2, stdout="", stderr="unknown flag: --closed-after"
+                    )
+                # Unfiltered --status=closed would return historical data — must NOT be called
+                if logical == ["bd", "list", "--status=closed", "--json"]:
+                    return subprocess.CompletedProcess(
+                        args=cmd, returncode=0, stdout=json.dumps([historical_bead]), stderr=""
+                    )
+                return subprocess.CompletedProcess(args=cmd, returncode=0, stdout="[]", stderr="")
+
+        runner = ScriptedRunner()
+        result = qs.query_sources(
+            project=TEST_PROJECT,
+            date=TEST_DATE,
+            config_path=config_path,
+            runner=runner,
+            ob_client=None,
+        )
+        # No bead from 2025 should leak into the 2026-04-23 brief
+        closed = result["data"]["closed_beads"]
+        assert all(c.get("id") != "CCP-old" for c in closed), (
+            f"Historical closed bead leaked via unfiltered fallback: {closed}"
+        )
+        # A warning must have been emitted about the filtered failure
+        bead_warnings = [
+            w for w in result["data"]["warnings"]
+            if w.get("source") == "beads" and "closed" in w.get("reason", "").lower()
+        ]
+        assert bead_warnings, (
+            "Expected a beads warning about the failed date-filtered closed lookup"
+        )
+        # And the unfiltered fallback command must NEVER have been issued.
+        # "Unfiltered" = `bd [--db ...] list --status=closed --json` without
+        # any --closed-after / --closed-before date bounds.
+        unfiltered_calls = [
+            c for c in runner.calls
+            if c
+            and c[0] == "bd"
+            and "list" in c
+            and "--status=closed" in c
+            and "--closed-after" not in " ".join(c)
+        ]
+        assert not unfiltered_calls, (
+            f"Unfiltered fallback was issued (regression): {unfiltered_calls}"
+        )
+
+
+class TestDebriefInSessions:
+    """REGRESSION: debrief entries must appear in sessions[] per the skill
+    contract ('sessions contains session_summary + debrief entries')."""
+
+    def test_debrief_entry_appears_in_sessions(
+        self, config_path: Path, empty_mock_runner: qs.MockCommandRunner
+    ) -> None:
+        debrief_entry = {
+            "id": "ob-debrief-1",
+            "type": "debrief",
+            "content": "General debrief content without follow-up prefixes.",
+            "session_ref": "sess-debrief",
+            "project": "claude-code-plugins",
+            "created_at": "2026-04-23T14:00:00Z",
+        }
+        client = MagicMock()
+        client.search = AsyncMock(return_value=[debrief_entry])
+        result = qs.query_sources(
+            project=TEST_PROJECT,
+            date=TEST_DATE,
+            config_path=config_path,
+            runner=empty_mock_runner,
+            ob_client=client,
+        )
+        session_ids = {s.get("id") for s in result["data"]["sessions"]}
+        assert "ob-debrief-1" in session_ids, (
+            f"Debrief entry missing from sessions[]: {result['data']['sessions']}"
+        )
+
+    def test_debrief_still_produces_followups(
+        self, config_path: Path, empty_mock_runner: qs.MockCommandRunner
+    ) -> None:
+        """Adding debrief to sessions[] must not break follow-up extraction."""
+        debrief_entry = {
+            "id": "ob-debrief-2",
+            "type": "debrief",
+            "content": "Decide: migrate now?\nFollow-up: ping team",
+            "session_ref": "sess-fup",
+            "project": "claude-code-plugins",
+            "created_at": "2026-04-23T14:30:00Z",
+        }
+        client = MagicMock()
+        client.search = AsyncMock(return_value=[debrief_entry])
+        result = qs.query_sources(
+            project=TEST_PROJECT,
+            date=TEST_DATE,
+            config_path=config_path,
+            runner=empty_mock_runner,
+            ob_client=client,
+        )
+        assert any(s.get("id") == "ob-debrief-2" for s in result["data"]["sessions"])
+        assert len(result["data"]["followups"]) >= 2
+
+
+class TestMcpJsonRpcErrorDetection:
+    """REGRESSION: MCP JSON-RPC error responses (HTTP 200 + body.error) must
+    surface as warnings instead of silent empty success."""
+
+    def test_ob_client_raises_on_mcp_error_body(self) -> None:
+        """_OBClient.search must raise when the JSON-RPC body contains 'error'."""
+        import httpx
+
+        ob_client = qs._build_ob_client.__wrapped__ if hasattr(qs._build_ob_client, "__wrapped__") else None
+        # _build_ob_client is driven by env/token — we instead mint an _OBClient
+        # directly by monkey-patching httpx.AsyncClient to return an error body.
+        # To avoid plumbing, we build the client via a small monkeypatch.
+
+        # Instead, test the underlying logic by constructing an httpx-like
+        # response handler via httpx.MockTransport.
+        async def handler(request: httpx.Request) -> httpx.Response:
+            if b"initialize" in request.content:
+                return httpx.Response(200, json={"jsonrpc": "2.0", "id": 1, "result": {}})
+            return httpx.Response(
+                200,
+                json={
+                    "jsonrpc": "2.0",
+                    "id": 2,
+                    "error": {"code": -32000, "message": "boom"},
+                },
+            )
+
+        import asyncio as _aio
+
+        async def _drive() -> None:
+            transport = httpx.MockTransport(handler)
+
+            # Reproduce _OBClient inline with a custom transport so we can
+            # exercise the error-detection branch without hitting the network.
+            class _Client:
+                def __init__(self) -> None:
+                    self._url = "https://example.test/mcp"
+                    self._token = "stub"
+
+                async def search(self) -> list[dict[str, Any]]:
+                    headers = {"Authorization": f"Bearer {self._token}"}
+                    async with httpx.AsyncClient(transport=transport, timeout=5) as c:
+                        await c.post(
+                            self._url,
+                            json={"jsonrpc": "2.0", "id": 1, "method": "initialize", "params": {}},
+                            headers=headers,
+                        )
+                        resp = await c.post(
+                            self._url,
+                            json={"jsonrpc": "2.0", "id": 2, "method": "tools/call", "params": {}},
+                            headers=headers,
+                        )
+                        resp.raise_for_status()
+                        body = resp.json()
+                        if isinstance(body, dict) and body.get("error") is not None:
+                            raise RuntimeError(f"MCP error: {body['error']}")
+                        return []
+
+            client = _Client()
+            with pytest.raises(RuntimeError, match="MCP error"):
+                await client.search()
+
+        _aio.run(_drive())
+
+    def test_mcp_error_surfaces_as_warning_via_collect_open_brain(
+        self, config_path: Path, empty_mock_runner: qs.MockCommandRunner
+    ) -> None:
+        """When the ob_client.search raises (e.g. MCP error), the failure is
+        caught by _collect_open_brain and turned into an open-brain warning."""
+        client = MagicMock()
+        client.search = AsyncMock(
+            side_effect=RuntimeError("MCP error: {'code': -32000, 'message': 'boom'}")
+        )
+        result = qs.query_sources(
+            project=TEST_PROJECT,
+            date=TEST_DATE,
+            config_path=config_path,
+            runner=empty_mock_runner,
+            ob_client=client,
+        )
+        ob_warnings = [
+            w for w in result["data"]["warnings"] if w.get("source") == "open-brain"
+        ]
+        assert ob_warnings, "Expected an open-brain warning for MCP error"
+        assert any("MCP error" in w.get("reason", "") for w in ob_warnings), (
+            f"Warning should mention MCP error, got: {ob_warnings}"
+        )

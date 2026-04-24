@@ -103,7 +103,15 @@ class MockCommandRunner(CommandRunner):
         self._bd_fail = bd_fail
 
     def run(self, cmd: list[str], **kwargs: Any) -> subprocess.CompletedProcess[str]:
-        cmd_str = " ".join(cmd)
+        # Strip the "--db <path>" pair from bd invocations before matching so
+        # tests can be written in terms of the logical command ("bd list ...")
+        # without caring which database it was scoped to. Production code
+        # always passes the flag; the test double ignores it.
+        match_cmd = cmd
+        if cmd and cmd[0] == "bd" and len(cmd) >= 3 and cmd[1] == "--db":
+            match_cmd = [cmd[0]] + cmd[3:]
+
+        cmd_str = " ".join(match_cmd)
 
         # Check for failure modes first
         if self._git_fail and cmd and cmd[0] == "git":
@@ -289,13 +297,21 @@ def _run_bd(
     warnings: list[dict[str, Any]],
     warn_source: str = "beads",
     warn_reason_prefix: str = "",
+    db_flag: list[str] | None = None,
 ) -> list[dict[str, Any]]:
     """Run a bd command and return parsed JSON list.
 
     On non-zero exit or unparseable output, appends a warning and returns [].
     Never swallows errors silently (AK #5).
+
+    Args:
+        db_flag: Optional ``["--db", "<path>"]`` prefix to scope bd at a specific
+            database. When omitted, bd runs against whatever DB it resolves from
+            the caller's cwd — which is NOT the intended project for cross-project
+            daily briefs. Callers should pass a db_flag derived from the resolved
+            project path.
     """
-    cmd = ["bd"] + args
+    cmd = ["bd"] + (db_flag or []) + args
     result = runner.run(cmd)
     if result.returncode != 0:
         reason = warn_reason_prefix or f"bd {' '.join(args)} failed"
@@ -356,13 +372,35 @@ def _detect_reopens(
     return reopen_signals
 
 
+def _resolve_bd_db_flag(project_path: Path) -> list[str] | None:
+    """Return ``["--db", "<db_path>"]`` if a beads DB exists for the project.
+
+    Looks in ``<project_path>/.beads/*.db`` and picks the first match. Returns
+    ``None`` when no DB is present — callers should then treat beads as
+    unavailable (no error, just empty results).
+    """
+    beads_dir = project_path / ".beads"
+    if not beads_dir.is_dir():
+        return None
+    db_files = sorted(beads_dir.glob("*.db"))
+    if not db_files:
+        return None
+    return ["--db", str(db_files[0])]
+
+
 def _collect_beads(
     project: str,
     date: str,
     runner: CommandRunner,
     warnings: list[dict[str, Any]],
+    db_flag: list[str] | None = None,
 ) -> dict[str, Any]:
     """Collect all bead data.
+
+    Args:
+        db_flag: Optional ``["--db", "<path>"]`` prefix scoping bd at a specific
+            database. Without it, bd resolves the DB from cwd, which leaks beads
+            from whatever repo invoked the script. See ``_resolve_bd_db_flag``.
 
     Returns dict with keys:
         closed_beads, open_beads, ready_beads, blocked_beads,
@@ -373,10 +411,13 @@ def _collect_beads(
     next_date_str = (start.date() + datetime.timedelta(days=1)).isoformat()
 
     def _bd(args: list[str]) -> list[dict[str, Any]]:
-        return _run_bd(runner, args, project, date, warnings)
+        return _run_bd(runner, args, project, date, warnings, db_flag=db_flag)
 
-    # Query closed beads with date filter; fall back ONLY when the command itself fails
-    # (not when it returns empty — empty is a valid result for a quiet day).
+    # Query closed beads with date filter.
+    # On failure we DO NOT fall back to an unfiltered ``bd list --status=closed``
+    # — that would silently pollute a single-day brief with historical closed
+    # work. Instead we emit a warning and return an empty list so the caller
+    # can flag the missing data.
     filtered_args = [
         "list",
         "--status=closed",
@@ -384,15 +425,26 @@ def _collect_beads(
         f"--closed-before={next_date_str}",
         "--json",
     ]
-    filtered_result = runner.run(["bd"] + filtered_args)
+    filtered_cmd = ["bd"] + (db_flag or []) + filtered_args
+    filtered_result = runner.run(filtered_cmd)
+    closed_beads: list[dict[str, Any]] = []
     if filtered_result.returncode != 0:
-        # Command failed (e.g. flag not supported) — fall back to unfiltered
-        closed_beads = _bd(["list", "--status=closed", "--json"])
+        warnings.append(_warning_entry(
+            source="beads",
+            reason=(
+                f"bd list --status=closed (date-filtered) failed "
+                f"(rc={filtered_result.returncode}): "
+                f"{filtered_result.stderr.strip() or 'unknown error'}"
+            ),
+            project=project,
+            date=date,
+        ))
     else:
         try:
             raw = json.loads(filtered_result.stdout.strip() or "[]")
-            closed_beads = raw if isinstance(raw, list) else []
-            if not isinstance(raw, list):
+            if isinstance(raw, list):
+                closed_beads = raw
+            else:
                 warnings.append(_warning_entry(
                     source="beads",
                     reason=f"bd list --status=closed returned non-list JSON: {type(raw).__name__}",
@@ -406,7 +458,6 @@ def _collect_beads(
                 project=project,
                 date=date,
             ))
-            closed_beads = []
 
     open_beads = _bd(["list", "--status=open", "--json"])
     in_progress_beads = _bd(["list", "--status=in_progress", "--json"])
@@ -533,6 +584,11 @@ async def _collect_open_brain(
                 # Include ALL decision entries; callers can filter by metadata.status
                 decisions.append(entry)
             elif entry_type == "debrief":
+                # Debrief entries belong in sessions[] per the skill contract
+                # ("sessions contains session_summary + debrief entries"). The
+                # follow-up extraction still happens below so Decide:/Need
+                # input:/Follow-up: lines are also surfaced in followups[].
+                sessions.append(entry)
                 content = entry.get("content", "")
                 extracted = _extract_followups(content)
                 for fu in extracted:
@@ -645,12 +701,48 @@ def query_sources(
     )
 
     # Collect from beads
-    beads_data = _collect_beads(
-        project=project,
-        date=date,
-        runner=runner,
-        warnings=warnings,
-    )
+    # Resolve the project-specific beads DB so `bd` never runs against the
+    # caller's cwd (which would return beads from an unrelated repo).
+    # If the project has `beads: false` or no `.beads/*.db` file, skip the
+    # bd queries entirely and return empty lists — not an error; not every
+    # project uses beads.
+    if not proj.beads:
+        beads_data = {
+            "closed_beads": [],
+            "open_beads": [],
+            "ready_beads": [],
+            "blocked_beads": [],
+            "decision_requests": [],
+            "rework_signals": [],
+        }
+    else:
+        db_flag = _resolve_bd_db_flag(proj.path)
+        if db_flag is None:
+            warnings.append(_warning_entry(
+                source="beads",
+                reason=(
+                    f"no beads database found under {proj.path}/.beads/*.db — "
+                    "beads data skipped for this project"
+                ),
+                project=project,
+                date=date,
+            ))
+            beads_data = {
+                "closed_beads": [],
+                "open_beads": [],
+                "ready_beads": [],
+                "blocked_beads": [],
+                "decision_requests": [],
+                "rework_signals": [],
+            }
+        else:
+            beads_data = _collect_beads(
+                project=project,
+                date=date,
+                runner=runner,
+                warnings=warnings,
+                db_flag=db_flag,
+            )
 
     # Link commits to closed beads
     standalone_commits, enriched_beads = _link_commits_to_beads(
@@ -812,8 +904,14 @@ def _build_ob_client() -> Any | None:
                 resp = await client.post(self._url, json=call_payload, headers=headers)
                 resp.raise_for_status()
                 body = resp.json()
-                result = body.get("result", {})
-                content = result.get("content", [])
+                # MCP / JSON-RPC error envelopes arrive with HTTP 200. Detect
+                # the ``error`` field and raise so ``_collect_open_brain`` can
+                # turn it into a warning instead of silently returning an
+                # empty success.
+                if isinstance(body, dict) and body.get("error") is not None:
+                    raise RuntimeError(f"MCP error: {body['error']}")
+                result = body.get("result", {}) if isinstance(body, dict) else {}
+                content = result.get("content", []) if isinstance(result, dict) else []
                 entries = []
                 for item in content:
                     if item.get("type") == "text":
