@@ -562,12 +562,22 @@ def render_single_day(
 
     brief = "\n".join(sections)
 
-    # Persist to disk if requested
+    # Persist to disk if requested.
+    # Backfill: skip writing if brief already exists on disk (re-running is a no-op).
     if persist:
         try:
-            brief_path = _cfg.brief_path(project, date, config_path=config_path)
-            brief_path.parent.mkdir(parents=True, exist_ok=True)
-            brief_path.write_text(brief)
+            resolve_result = _cfg.resolve_project(project, config_path)
+            if (
+                resolve_result["status"] == "ok"
+                and resolve_result["data"]["projects"]
+            ):
+                project_cfg = _cfg.ProjectConfig.from_dict(
+                    resolve_result["data"]["projects"][0]
+                )
+                brief_file = _cfg.brief_path(project_cfg, date)
+                if not brief_file.exists():
+                    brief_file.parent.mkdir(parents=True, exist_ok=True)
+                    brief_file.write_text(brief)
         except Exception:
             pass  # Non-blocking: persist failure does not abort render
 
@@ -625,7 +635,8 @@ def render_range(
     for date in dates:
         envelope = _fetch_envelope(project, date, config_path)
         if envelope:
-            # Persist each day's brief unchanged (respects persist flag)
+            # Persist each day's brief unchanged (respects persist flag).
+            # render_single_day checks brief_exists internally before writing.
             render_single_day(project, date, config_path, detailed=detailed, persist=persist)
             all_envelopes.append((date, envelope))
 
