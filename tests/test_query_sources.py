@@ -37,7 +37,6 @@ from typing import Any
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
-import yaml
 
 # ---------------------------------------------------------------------------
 # Path setup
@@ -137,8 +136,9 @@ def git_empty_runner() -> qs.MockCommandRunner:
 
 @pytest.fixture()
 def git_revert_runner() -> qs.MockCommandRunner:
-    """A MockCommandRunner with a revert commit in git log."""
-    revert_line = "abc123|Revert \"feat(CCP-xyz): add some feature\"|Malte|2026-04-23T10:00:00+02:00"
+    """A MockCommandRunner with a revert commit in git log (canonical git format)."""
+    # Git generates revert subjects in the form: Revert "<original subject>"
+    revert_line = 'abc123|Revert "feat(CCP-xyz): add some feature"|Malte|2026-04-23T10:00:00+02:00'
     normal_line = "def456|feat(CCP-xyz): add some feature|Malte|2026-04-23T09:00:00+02:00"
     output = f"{revert_line}\n{normal_line}"
     return qs.MockCommandRunner({
@@ -365,7 +365,7 @@ class TestGitSource:
             ob_client=None,
         )
         commits = result["data"]["commits"]
-        revert_in_commits = [c for c in commits if c.get("subject", "").startswith("Revert")]
+        revert_in_commits = [c for c in commits if c.get("subject", "").startswith('Revert "')]
         assert not revert_in_commits, "Revert commits should not be in commits[], only in rework_signals[]"
 
     def test_bead_linked_commit_not_in_standalone_commits(
@@ -503,6 +503,89 @@ class TestBeadsSource:
         )
         assert len(result["data"]["open_beads"]) == 1
         assert result["data"]["open_beads"][0]["id"] == "CCP-xyz"
+
+
+# ---------------------------------------------------------------------------
+# Reopen event detection
+# ---------------------------------------------------------------------------
+
+
+class TestReopenEventDetection:
+    """Beads that were previously closed but are now open/in_progress → reopen_event."""
+
+    def test_detect_reopens_returns_reopen_signal(self) -> None:
+        """_detect_reopens() identifies a bead with closed_at set but currently open."""
+        open_bead = {
+            "id": "CCP-reopened",
+            "title": "Reopened bead",
+            "status": "open",
+            "closed_at": "2026-04-20T10:00:00+02:00",  # was previously closed
+        }
+        signals = qs._detect_reopens([open_bead], [])
+        assert len(signals) == 1
+        assert signals[0]["type"] == "reopen_event"
+        assert signals[0]["bead_id"] == "CCP-reopened"
+
+    def test_detect_reopens_in_progress_bead(self) -> None:
+        """_detect_reopens() also detects in_progress beads that were previously closed."""
+        in_progress_bead = {
+            "id": "CCP-wip",
+            "title": "WIP bead",
+            "status": "in_progress",
+            "closed_at": "2026-04-19T08:00:00+02:00",
+        }
+        signals = qs._detect_reopens([], [in_progress_bead])
+        assert len(signals) == 1
+        assert signals[0]["type"] == "reopen_event"
+        assert signals[0]["status"] == "in_progress"
+
+    def test_detect_reopens_skips_never_closed_beads(self) -> None:
+        """_detect_reopens() ignores beads whose closed_at is None (never closed)."""
+        fresh_bead = {
+            "id": "CCP-fresh",
+            "title": "Brand new bead",
+            "status": "open",
+            "closed_at": None,
+        }
+        no_closed_at_bead = {
+            "id": "CCP-nocf",
+            "title": "No closed_at field",
+            "status": "open",
+        }
+        signals = qs._detect_reopens([fresh_bead, no_closed_at_bead], [])
+        assert signals == [], f"Expected no reopen signals, got: {signals}"
+
+    def test_reopen_event_appears_in_query_sources_rework_signals(
+        self, config_path: Path
+    ) -> None:
+        """query_sources() includes reopen_event in rework_signals[] when a bead was reopened."""
+        reopened_bead = {
+            "id": "CCP-reopen",
+            "title": "Previously closed bead",
+            "status": "open",
+            "closed_at": "2026-04-20T10:00:00+02:00",
+        }
+        runner = qs.MockCommandRunner({
+            "bd list --status=closed": "[]",
+            "bd list --status=open": json.dumps([reopened_bead]),
+            "bd list --status=in_progress": "[]",
+            "bd list": "[]",
+            "bd ready": "[]",
+            "bd blocked": "[]",
+            "bd human": "[]",
+            "git": "",
+        })
+        result = qs.query_sources(
+            project=TEST_PROJECT,
+            date=TEST_DATE,
+            config_path=config_path,
+            runner=runner,
+            ob_client=None,
+        )
+        rework = result["data"]["rework_signals"]
+        reopen_signals = [r for r in rework if r.get("type") == "reopen_event"]
+        assert reopen_signals, f"Expected reopen_event in rework_signals, got: {rework}"
+        assert reopen_signals[0]["bead_id"] == "CCP-reopen"
 
 
 # ---------------------------------------------------------------------------
@@ -708,8 +791,8 @@ class TestWarningsStructure:
         ob_warnings = [w for w in result["data"]["warnings"] if w.get("source") == "open-brain"]
         assert ob_warnings
         w = ob_warnings[0]
-        for field in ("source", "reason", "project", "date"):
-            assert field in w, f"Warning missing field: {field}"
+        for required_field in ("source", "reason", "project", "date"):
+            assert required_field in w, f"Warning missing field: {required_field}"
 
     def test_git_warning_has_required_fields(
         self, config_path: Path
@@ -731,8 +814,8 @@ class TestWarningsStructure:
         git_warnings = [w for w in result["data"]["warnings"] if w.get("source") == "git"]
         if git_warnings:
             w = git_warnings[0]
-            for field in ("source", "reason", "project", "date"):
-                assert field in w, f"Warning missing field: {field}"
+            for required_field in ("source", "reason", "project", "date"):
+                assert required_field in w, f"Warning missing field: {required_field}"
 
 
 # ---------------------------------------------------------------------------

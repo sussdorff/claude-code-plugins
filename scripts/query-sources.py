@@ -20,6 +20,10 @@ Usage:
     python3 scripts/query-sources.py --project claude-code-plugins --date 2026-04-23
     python3 scripts/query-sources.py --project mira --date 2026-04-23 \\
         --config ~/.claude/daily-brief.yml
+
+NOTE: query_sources() is a sync-only entrypoint. It uses asyncio.run() internally
+to drive async open-brain calls. It CANNOT be called from within an already-running
+async event loop — doing so raises RuntimeError("This event loop is already running").
 """
 
 from __future__ import annotations
@@ -27,24 +31,27 @@ from __future__ import annotations
 import argparse
 import asyncio
 import datetime
+import importlib.util
 import json
 import re
 import subprocess
 import sys
-from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 from zoneinfo import ZoneInfo
 
 # ---------------------------------------------------------------------------
 # Path setup: make config.py importable when invoked from scripts/
+# Use importlib.util for explicit, hermetic import — avoids sys.path collision risk.
 # ---------------------------------------------------------------------------
 
 _REPO_ROOT = Path(__file__).parent.parent
-_CONFIG_SCRIPTS = _REPO_ROOT / "core" / "skills" / "daily-brief" / "scripts"
-sys.path.insert(0, str(_CONFIG_SCRIPTS))
+_CONFIG_PATH = _REPO_ROOT / "core" / "skills" / "daily-brief" / "scripts" / "config.py"
 
-import config as _cfg  # noqa: E402  (after sys.path manipulation)
+_cfg_spec = importlib.util.spec_from_file_location("_daily_brief_config", _CONFIG_PATH)
+_cfg_mod = importlib.util.module_from_spec(_cfg_spec)  # type: ignore[arg-type]
+_cfg_spec.loader.exec_module(_cfg_mod)  # type: ignore[union-attr]
+_cfg = _cfg_mod
 
 # ---------------------------------------------------------------------------
 # Constants
@@ -62,11 +69,11 @@ _TZ_BERLIN = ZoneInfo("Europe/Berlin")
 # ---------------------------------------------------------------------------
 
 
-class CommandRunner:
+class CommandRunner(Protocol):
     """Protocol for subprocess execution (injectable for testing)."""
 
     def run(self, cmd: list[str], **kwargs: Any) -> subprocess.CompletedProcess[str]:
-        raise NotImplementedError
+        ...
 
 
 class RealCommandRunner(CommandRunner):
@@ -231,7 +238,7 @@ def _collect_git(
             "author": author,
             "authored_at": authored_at,
         }
-        if subject.startswith("Revert"):
+        if subject.startswith('Revert "'):
             rework_signals.append({
                 "type": "revert_commit",
                 "sha": sha,
@@ -275,9 +282,51 @@ def _run_bd(
         data = json.loads(result.stdout.strip() or "[]")
         if isinstance(data, list):
             return data
+        else:
+            warnings.append(_warning_entry(
+                source=warn_source,
+                reason=f"bd {' '.join(args)} returned non-list JSON: {type(data).__name__}",
+                project=project,
+                date=date,
+            ))
+            return []
+    except json.JSONDecodeError as e:
+        warnings.append(_warning_entry(
+            source=warn_source,
+            reason=f"bd output parse error: {e}",
+            project=project,
+            date=date,
+        ))
         return []
-    except json.JSONDecodeError:
-        return []
+
+
+def _detect_reopens(
+    open_beads: list[dict[str, Any]],
+    in_progress_beads: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    """Detect reopened beads.
+
+    A reopen event is a bead that is currently open or in_progress AND
+    has a non-None closed_at field (meaning it was previously closed).
+
+    Args:
+        open_beads: Beads with status=open from bd CLI.
+        in_progress_beads: Beads with status=in_progress from bd CLI.
+
+    Returns:
+        List of rework_signal dicts with type="reopen_event".
+    """
+    reopen_signals: list[dict[str, Any]] = []
+    for bead in open_beads + in_progress_beads:
+        if bead.get("closed_at") is not None:
+            reopen_signals.append({
+                "type": "reopen_event",
+                "bead_id": bead.get("id"),
+                "title": bead.get("title"),
+                "status": bead.get("status"),
+                "date": bead.get("closed_at"),
+            })
+    return reopen_signals
 
 
 def _collect_beads(
@@ -290,21 +339,14 @@ def _collect_beads(
 
     Returns dict with keys:
         closed_beads, open_beads, ready_beads, blocked_beads,
-        decision_requests, rework_signals (supersede events)
+        decision_requests, rework_signals (supersede + reopen events)
     """
     start, end = _date_window(date)
     date_str = start.date().isoformat()
     next_date_str = (start.date() + datetime.timedelta(days=1)).isoformat()
 
-    # Track whether we've already warned about beads failing
-    bd_warned: list[bool] = [False]
-
     def _bd(args: list[str]) -> list[dict[str, Any]]:
-        original_len = len(warnings)
-        data = _run_bd(runner, args, project, date, warnings)
-        if len(warnings) > original_len:
-            bd_warned[0] = True
-        return data
+        return _run_bd(runner, args, project, date, warnings)
 
     closed_beads = _bd([
         "list",
@@ -318,6 +360,7 @@ def _collect_beads(
         closed_beads = _bd(["list", "--status=closed", "--json"])
 
     open_beads = _bd(["list", "--status=open", "--json"])
+    in_progress_beads = _bd(["list", "--status=in_progress", "--json"])
     ready_beads = _bd(["ready", "--json"])
     blocked_beads = _bd(["blocked", "--json"])
     decision_requests = _bd(["human", "list", "--json"])
@@ -334,6 +377,9 @@ def _collect_beads(
                 "close_reason": bead.get("close_reason"),
                 "closed_at": bead.get("closed_at"),
             })
+
+    # Detect reopen events: beads currently open/in_progress that were previously closed
+    rework_signals.extend(_detect_reopens(open_beads, in_progress_beads))
 
     return {
         "closed_beads": closed_beads,
@@ -400,16 +446,21 @@ async def _collect_open_brain(
     decisions: list[dict[str, Any]] = []
     followups: list[dict[str, Any]] = []
 
-    seen_session_refs: set[str] = set()
+    seen_session_summary_refs: set[str] = set()
+    seen_debrief_refs: set[str] = set()
 
     for entry in entries:
         session_ref = entry.get("session_ref")
-        # Dedup by session_ref when present (for session_summary and debrief types)
+        # Dedup by session_ref when present, using separate sets per type
         entry_type = entry.get("type", "")
-        if session_ref and entry_type in ("session_summary", "debrief"):
-            if session_ref in seen_session_refs:
+        if session_ref and entry_type == "session_summary":
+            if session_ref in seen_session_summary_refs:
                 continue
-            seen_session_refs.add(session_ref)
+            seen_session_summary_refs.add(session_ref)
+        elif session_ref and entry_type == "debrief":
+            if session_ref in seen_debrief_refs:
+                continue
+            seen_debrief_refs.add(session_ref)
 
         if entry_type == "session_summary":
             sessions.append(entry)
@@ -570,7 +621,6 @@ def query_sources(
         ))
 
     # Determine overall status
-    ob_warnings = [w for w in warnings if w.get("source") == "open-brain"]
     status = "warning" if warnings else "ok"
     summary = (
         f"Collected data for {project} on {date}: "
@@ -696,10 +746,8 @@ def _build_ob_client() -> Any | None:
                 entries = []
                 for item in content:
                     if item.get("type") == "text":
-                        try:
-                            entries.extend(json.loads(item["text"]))
-                        except (json.JSONDecodeError, KeyError):
-                            pass
+                        # Propagate parse errors so _collect_open_brain can warn
+                        entries.extend(json.loads(item["text"]))
                 return entries
 
     return _OBClient(ob_url, token)
