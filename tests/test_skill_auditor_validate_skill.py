@@ -193,6 +193,100 @@ find ~/.claude -name "*.md" | grep skill | head -10
     assert "ADVISORY" in result.stdout
 
 
+def test_flags_cwd_relative_plugin_path(tmp_path: Path) -> None:
+    """CWD-relative `beads-workflow/scripts/x.py` in a bash block → BLOCKING PLUGIN_PATH."""
+    skill = write_skill(
+        tmp_path,
+        """
+## Claim
+
+```bash
+python3 beads-workflow/scripts/claim-bead.py foo --bar
+```
+""",
+    )
+    result = run_validator(skill)
+
+    assert result.returncode == 1, f"Expected exit 1, got {result.returncode}\nstdout:\n{result.stdout}"
+    assert "PLUGIN_PATH" in result.stdout
+    assert "BLOCKING" in result.stdout
+    assert "beads-workflow/scripts/claim-bead.py" in result.stdout
+
+
+def test_plugin_root_env_var_passes(tmp_path: Path) -> None:
+    """`${CLAUDE_PLUGIN_ROOT}/scripts/x.py` → no PLUGIN_PATH finding."""
+    skill = write_skill(
+        tmp_path,
+        """
+## Claim
+
+```bash
+python3 "${CLAUDE_PLUGIN_ROOT}/scripts/claim-bead.py" foo --bar
+```
+""",
+    )
+    result = run_validator(skill)
+
+    assert "PLUGIN_PATH" not in result.stdout, f"Unexpected PLUGIN_PATH finding:\n{result.stdout}"
+
+
+def test_absolute_plugin_path_passes(tmp_path: Path) -> None:
+    """Absolute path containing `beads-workflow/scripts/…` (e.g. via plugins cache) is OK."""
+    skill = write_skill(
+        tmp_path,
+        """
+## Example
+
+```bash
+python3 /Users/me/.claude/plugins/cache/sussdorff-plugins/beads-workflow/scripts/claim-bead.py
+```
+""",
+    )
+    result = run_validator(skill)
+
+    assert "PLUGIN_PATH" not in result.stdout
+
+
+def test_plugin_path_in_non_shell_block_ignored(tmp_path: Path) -> None:
+    """A plugin path mentioned in a markdown/text block is prose, not an exec — ignore."""
+    skill = write_skill(
+        tmp_path,
+        """
+## Reference
+
+```markdown
+See beads-workflow/scripts/claim-bead.py for the claim helper.
+```
+""",
+    )
+    result = run_validator(skill)
+
+    # markdown fences are not bash/sh/zsh/python so PLUGIN_PATH must not fire.
+    assert "PLUGIN_PATH" not in result.stdout
+
+
+def test_plugin_path_all_known_folders(tmp_path: Path) -> None:
+    """All known plugin folders trigger the check."""
+    for folder in ("beads-workflow", "core", "dev-tools", "meta", "infra",
+                   "business", "content", "medical", "open-brain"):
+        subdir = tmp_path / folder.replace("/", "_")
+        subdir.mkdir(exist_ok=True)
+        skill = write_skill(
+            subdir,
+            f"""
+## Run
+
+```bash
+python3 {folder}/scripts/something.py
+```
+""",
+        )
+        result = run_validator(skill)
+        assert "PLUGIN_PATH" in result.stdout, (
+            f"Expected PLUGIN_PATH flag for `{folder}/scripts/something.py`, got:\n{result.stdout}"
+        )
+
+
 def test_exit_1_on_blocking(tmp_path: Path) -> None:
     """BLOCKING finding → exit 1 regardless of --strict."""
     skill = write_skill(

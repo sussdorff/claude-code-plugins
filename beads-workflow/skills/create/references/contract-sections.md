@@ -109,16 +109,16 @@ This catches cases where the section was added manually but the label was forgot
 
 ```bash
 # Check all open beads with 'touches-contract' label (default)
-python3 beads-workflow/scripts/bd_lint_contracts.py
+python3 "${CLAUDE_PLUGIN_ROOT}/scripts/bd_lint_contracts.py"
 
 # Include closed beads
-python3 beads-workflow/scripts/bd_lint_contracts.py --all
+python3 "${CLAUDE_PLUGIN_ROOT}/scripts/bd_lint_contracts.py" --all
 
 # Check a single bead
-python3 beads-workflow/scripts/bd_lint_contracts.py --bead CCP-abc
+python3 "${CLAUDE_PLUGIN_ROOT}/scripts/bd_lint_contracts.py" --bead CCP-abc
 
 # Only run the false-negative check (rule Y)
-python3 beads-workflow/scripts/bd_lint_contracts.py --check-false-negatives
+python3 "${CLAUDE_PLUGIN_ROOT}/scripts/bd_lint_contracts.py" --check-false-negatives
 
 # via shell extension (requires sourcing bd-lint-extension.sh first)
 bd lint --check=architecture-contracts
@@ -129,7 +129,7 @@ bd lint --check=architecture-contracts --bead CCP-abc
 **Install shell extension** (add to `~/.zshrc` or `~/.bashrc`):
 
 ```bash
-source /path/to/beads-workflow/scripts/bd-lint-extension.sh
+source "${CLAUDE_PLUGIN_ROOT}/scripts/bd-lint-extension.sh"
 ```
 
 ---

@@ -66,6 +66,7 @@ class SkillValidator:
             return False, True
 
         self._check_extractable_code()
+        self._check_plugin_paths()
 
         if self.strict:
             ok = len(self.blocking) == 0 and len(self.advisory) == 0
@@ -134,34 +135,78 @@ class SkillValidator:
 
             if lang == "python" and line_count > 3:
                 self.blocking.append(
-                    f"Extractable executable code: {line_count}-line Python block in skill body\n"
+                    f"EXTRACTABLE_CODE: {line_count}-line Python block in skill body\n"
                     f"    → {script_hint}"
                 )
             elif lang in {"bash", "sh", "zsh"} and line_count > 5:
                 self.blocking.append(
-                    f"Extractable executable code: {line_count}-line shell block in skill body\n"
+                    f"EXTRACTABLE_CODE: {line_count}-line shell block in skill body\n"
                     f"    → {script_hint}"
                 )
             elif lang in {"bash", "sh", "zsh"} and self._looks_like_pipeline(block):
                 self.advisory.append(
-                    "Inline multi-step shell pipeline detected in skill body\n"
+                    "EXTRACTABLE_CODE: inline multi-step shell pipeline in skill body\n"
                     f"    → {script_hint_advisory}"
                 )
 
         # --- Pattern 2: Verbal multi-step pipelines ---
         if self._looks_like_verbal_pipeline(self.body):
             self.advisory.append(
-                "Verbal multi-step pipeline detected: ordered list with 4+ items "
-                "containing tool/action keywords\n"
+                "EXTRACTABLE_CODE: verbal multi-step pipeline (ordered list with 4+ "
+                "items containing tool/action keywords)\n"
                 f"    → {script_hint_advisory}"
             )
 
         # --- Pattern 3: Inline python -c ---
         if re.search(r"\b(?:python|python3|uv run python)\s+-c\b", self.body):
             self.advisory.append(
-                "Inline Python -c invocation detected in skill body\n"
+                "EXTRACTABLE_CODE: inline Python -c invocation in skill body\n"
                 f"    → {script_hint_advisory}"
             )
+
+    # Known plugin folders in this repo — if a new plugin is added, update this list.
+    PLUGIN_FOLDERS = (
+        "beads-workflow", "core", "dev-tools", "meta", "infra",
+        "business", "content", "medical", "open-brain",
+    )
+    PLUGIN_PATH_RE = re.compile(
+        r"\b(" + "|".join(PLUGIN_FOLDERS) + r")"
+        r"/(scripts|hooks|lib)/"
+        r"[A-Za-z0-9_./\-]+\.(py|sh)\b"
+    )
+
+    def _check_plugin_paths(self) -> None:
+        """Flag CWD-relative plugin script paths inside fenced bash/python code blocks.
+
+        Paths like `beads-workflow/scripts/claim-bead.py` only resolve when CWD is
+        the dev repo. In worktrees or consumer projects they break with ENOENT.
+        Use `${CLAUDE_PLUGIN_ROOT}/…` so Claude Code resolves the installed plugin
+        root regardless of CWD. See CCP-b9d for the regression this prevents.
+        """
+        hint = (
+            'Use "${CLAUDE_PLUGIN_ROOT}/<subdir>/<script>" instead. '
+            "CWD-relative paths break in worktrees and consumer projects."
+        )
+        for match in self.FENCED_CODE_RE.finditer(self.body):
+            lang = match.group("lang").lower()
+            if lang not in {"bash", "sh", "zsh", "python"}:
+                continue
+            block = match.group("body")
+            for pmatch in self.PLUGIN_PATH_RE.finditer(block):
+                start = pmatch.start()
+                # Skip if the match is itself the tail of an absolute path
+                # (preceded by `/`) — e.g. `/Users/.../beads-workflow/scripts/x.py`.
+                if start > 0 and block[start - 1] == "/":
+                    continue
+                # Skip if preceded by ${CLAUDE_PLUGIN_ROOT}/ (with or without braces).
+                window = block[max(0, start - 30):start]
+                if ("${CLAUDE_PLUGIN_ROOT}/" in window
+                        or "$CLAUDE_PLUGIN_ROOT/" in window):
+                    continue
+                self.blocking.append(
+                    f"PLUGIN_PATH: CWD-relative `{pmatch.group(0)}`\n"
+                    f"    → {hint}"
+                )
 
     @staticmethod
     def _looks_like_pipeline(block: str) -> bool:
@@ -222,10 +267,12 @@ class SkillValidator:
         if not self.blocking and not self.advisory:
             return
 
+        # Findings are stored with an explicit category tag, e.g. "EXTRACTABLE_CODE: …"
+        # or "PLUGIN_PATH: …". The print format prepends the BLOCKING/ADVISORY marker.
         for finding in self.blocking:
-            print(f"EXTRACTABLE_CODE [BLOCKING]: {finding}")
+            print(f"[BLOCKING] {finding}")
         for finding in self.advisory:
-            print(f"EXTRACTABLE_CODE [ADVISORY]: {finding}")
+            print(f"[ADVISORY] {finding}")
 
 
 def main() -> None:

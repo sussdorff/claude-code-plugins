@@ -200,7 +200,7 @@ bd create --title="[Titel]" --type=[typ] --priority=[prio] \
 Falls das Bead mit `touches-contract` Label erstellt wurde, fuehre sofort einen Lint-Check durch:
 
 ```bash
-python3 beads-workflow/scripts/bd_lint_contracts.py --bead [neue-Bead-ID]
+python3 "${CLAUDE_PLUGIN_ROOT}/scripts/bd_lint_contracts.py" --bead [neue-Bead-ID]
 ```
 
 **Falls der Check fehlschlaegt:** Zeige die Fehlermeldungen dem User und bitte ihn,

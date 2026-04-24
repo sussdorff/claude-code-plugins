@@ -72,6 +72,7 @@ class AgentValidator:
         self._validate_color()
         self._validate_body()
         self._check_extractable_code()
+        self._check_plugin_paths()
         self._check_token_count()
         self._check_todos()
 
@@ -416,6 +417,46 @@ class AgentValidator:
             if re.search(pattern, self.body):
                 self.warnings.append(
                     f"{label} detected in prompt. {script_hint}"
+                )
+
+    # Known plugin folders in this repo — keep in sync with skill-auditor's validator.
+    PLUGIN_FOLDERS = (
+        "beads-workflow", "core", "dev-tools", "meta", "infra",
+        "business", "content", "medical", "open-brain",
+    )
+    PLUGIN_PATH_RE = re.compile(
+        r"\b(" + "|".join(PLUGIN_FOLDERS) + r")"
+        r"/(scripts|hooks|lib)/"
+        r"[A-Za-z0-9_./\-]+\.(py|sh)\b"
+    )
+
+    def _check_plugin_paths(self):
+        """Flag CWD-relative plugin script paths inside fenced bash/python code blocks.
+
+        Paths like `beads-workflow/scripts/claim-bead.py` only resolve when CWD is
+        the dev repo. In worktrees or consumer projects they break with ENOENT.
+        Use `${CLAUDE_PLUGIN_ROOT}/…` so Claude Code resolves the installed plugin
+        root regardless of CWD. See CCP-b9d.
+        """
+        hint = (
+            'Use "${CLAUDE_PLUGIN_ROOT}/<subdir>/<script>" instead. '
+            "CWD-relative paths break in worktrees and consumer projects."
+        )
+        for match in self.FENCED_CODE_RE.finditer(self.body):
+            lang = match.group("lang").lower()
+            if lang not in {"bash", "sh", "zsh", "python"}:
+                continue
+            block = match.group("body")
+            for pmatch in self.PLUGIN_PATH_RE.finditer(block):
+                start = pmatch.start()
+                if start > 0 and block[start - 1] == "/":
+                    continue
+                window = block[max(0, start - 30):start]
+                if ("${CLAUDE_PLUGIN_ROOT}/" in window
+                        or "$CLAUDE_PLUGIN_ROOT/" in window):
+                    continue
+                self.errors.append(
+                    f"PLUGIN_PATH: CWD-relative `{pmatch.group(0)}` — {hint}"
                 )
 
     @staticmethod

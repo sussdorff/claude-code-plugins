@@ -1,18 +1,22 @@
-name: Skill Audit
+name: Skill & Agent Audit
 
 on:
   push:
     paths:
       - '**/SKILL.md'
+      - '**/agents/*.md'
       - 'meta/skills/skill-auditor/scripts/**'
+      - 'meta/skills/agent-forge/scripts/**'
   pull_request:
     paths:
       - '**/SKILL.md'
+      - '**/agents/*.md'
       - 'meta/skills/skill-auditor/scripts/**'
+      - 'meta/skills/agent-forge/scripts/**'
 
 jobs:
   validate-skills:
-    name: Validate skills (EXTRACTABLE_CODE)
+    name: Validate skills (EXTRACTABLE_CODE, PLUGIN_PATH)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -38,6 +42,48 @@ jobs:
               FAILED=1
             fi
           done < <(find . -name "SKILL.md" \
+            -not -path "./.claude/*" \
+            -not -path "./.dolt/*" \
+            -not -path "./.agents/*" \
+            -not -path "./.codex/*" \
+            -not -path "*/__pycache__/*")
+
+          exit $FAILED
+
+  validate-agents:
+    name: Validate agents (PLUGIN_PATH regression gate)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Run PLUGIN_PATH check on all agent .md files
+        # Only the PLUGIN_PATH finding is a BLOCKING error today. The other
+        # validate-agent.py outputs (token count, structure) are warnings or
+        # are already captured elsewhere, so we filter to PLUGIN_PATH and fail
+        # only when that specific category is present. This keeps the gate
+        # narrow and predictable — see CCP-b9d.
+        run: |
+          VALIDATOR="meta/skills/agent-forge/scripts/validate-agent.py"
+
+          if [[ ! -f "$VALIDATOR" ]]; then
+            echo "validate-agent.py not found at $VALIDATOR — skipping"
+            exit 0
+          fi
+
+          FAILED=0
+          while IFS= read -r agent_file; do
+            echo "Checking: $agent_file"
+            OUTPUT=$(python3 "$VALIDATOR" "$agent_file" 2>&1 || true)
+            if echo "$OUTPUT" | grep -q "PLUGIN_PATH"; then
+              echo "$OUTPUT" | grep -A1 "PLUGIN_PATH"
+              FAILED=1
+            fi
+          done < <(find . -path '*/agents/*.md' \
             -not -path "./.claude/*" \
             -not -path "./.dolt/*" \
             -not -path "./.agents/*" \

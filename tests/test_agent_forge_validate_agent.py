@@ -134,3 +134,86 @@ def test_clean_prompt_has_no_extractable_code_warning(tmp_path: Path) -> None:
     assert "Extractable executable code" not in result.stdout
     assert "Inline multi-step shell pipeline detected" not in result.stdout
     assert "Inline Python -c invocation detected in prompt" not in result.stdout
+
+
+def test_errors_on_cwd_relative_plugin_path(tmp_path: Path) -> None:
+    """Fenced bash block referencing `beads-workflow/scripts/x.py` (CWD-relative)
+    must produce a BLOCKING PLUGIN_PATH error and exit 1.
+
+    Regression guard for CCP-b9d — CWD-relative paths break in worktrees and
+    consumer projects where the plugin is installed under
+    `~/.claude/plugins/cache/…`. Agents must use `${CLAUDE_PLUGIN_ROOT}/…`.
+    """
+    agent = write_agent(
+        tmp_path,
+        """
+        ## Claim
+
+        ```bash
+        python3 beads-workflow/scripts/claim-bead.py foo --bar
+        ```
+        """,
+    )
+    result = run_validator(agent)
+
+    assert result.returncode == 1, f"Expected exit 1, got {result.returncode}\nstdout:\n{result.stdout}"
+    assert "PLUGIN_PATH" in result.stdout
+    assert "beads-workflow/scripts/claim-bead.py" in result.stdout
+
+
+def test_plugin_root_env_var_passes(tmp_path: Path) -> None:
+    """`${CLAUDE_PLUGIN_ROOT}/scripts/x.py` is the correct pattern — no PLUGIN_PATH error."""
+    agent = write_agent(
+        tmp_path,
+        """
+        ## Claim
+
+        ```bash
+        python3 "${CLAUDE_PLUGIN_ROOT}/scripts/claim-bead.py" foo --bar
+        ```
+        """,
+    )
+    result = run_validator(agent)
+
+    assert "PLUGIN_PATH" not in result.stdout
+
+
+def test_absolute_plugin_path_passes(tmp_path: Path) -> None:
+    """Absolute path to an installed plugin is OK — not a CWD-relative invocation."""
+    agent = write_agent(
+        tmp_path,
+        """
+        ## Example
+
+        ```bash
+        python3 /Users/me/.claude/plugins/cache/sussdorff-plugins/beads-workflow/scripts/claim-bead.py
+        ```
+        """,
+    )
+    result = run_validator(agent)
+
+    assert "PLUGIN_PATH" not in result.stdout
+
+
+def test_fixed_agents_pass_plugin_path_check() -> None:
+    """The real agents in beads-workflow/agents/ must not contain PLUGIN_PATH violations.
+
+    Prevents regression of the CCP-b9d fix when someone edits an agent without
+    realizing the rule (e.g. AI agents copying an old pattern from git history).
+    """
+    repo_root = Path(__file__).resolve().parents[1]
+    agents_dir = repo_root / "beads-workflow" / "agents"
+    violations = []
+    for agent in sorted(agents_dir.glob("*.md")):
+        result = subprocess.run(
+            [sys.executable, str(VALIDATOR), str(agent)],
+            capture_output=True,
+            text=True,
+            check=False,
+            cwd=repo_root,
+        )
+        if "PLUGIN_PATH" in result.stdout:
+            violations.append(f"{agent.name}:\n{result.stdout}")
+    assert not violations, (
+        "beads-workflow agents contain PLUGIN_PATH violations:\n\n" + "\n".join(violations)
+    )
