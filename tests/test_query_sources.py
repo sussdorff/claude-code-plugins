@@ -43,10 +43,18 @@ import yaml
 # Path setup
 # ---------------------------------------------------------------------------
 
+import importlib.util
+
 _SCRIPTS_DIR = Path(__file__).parent.parent / "scripts"
 sys.path.insert(0, str(_SCRIPTS_DIR))
 
-import query_sources as qs  # noqa: E402
+# File uses a hyphen in the name, so we load it via importlib
+_spec = importlib.util.spec_from_file_location(
+    "query_sources", _SCRIPTS_DIR / "query-sources.py"
+)
+_module = importlib.util.module_from_spec(_spec)  # type: ignore[arg-type]
+_spec.loader.exec_module(_module)  # type: ignore[union-attr]
+qs = _module
 
 # ---------------------------------------------------------------------------
 # Constants / helpers
