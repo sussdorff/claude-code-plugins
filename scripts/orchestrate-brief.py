@@ -641,8 +641,10 @@ def _orchestrate_range(
     render_script = Path(__file__).parent / "render-brief.py"
 
     for proj in projects:
-        # Check if ALL days already exist — if so, still render rollup from disk
-        # (render-brief.py handles backfill internally via brief_exists)
+        # Record which dates are NEW (before render runs and persists them)
+        new_dates = [d for d in dates if not _cfg.brief_exists(proj, d)]
+
+        # Call render-brief.py for the full range (handles backfill internally)
         cmd = [
             sys.executable, str(render_script),
             "--project", proj.name,
@@ -656,22 +658,19 @@ def _orchestrate_range(
         proc = subprocess.run(cmd, capture_output=True, text=True)  # noqa: S603
         content = proc.stdout if proc.returncode == 0 else ""
 
-        if content:
-            # Save each day's brief to open-brain (iterate dates, check exists)
-            for date in dates:
-                project_obj = proj
-                if not _cfg.brief_exists(project_obj, date):
-                    # Brief was newly generated; save to open-brain
-                    slug = proj.slug
-                    session_ref = make_session_ref(slug, date)
-                    _save_to_open_brain(
-                        title=f"{proj.name} — {date}",
-                        text=content,
-                        ob_type="daily_brief",
-                        project=slug,
-                        session_ref=session_ref,
-                        metadata={"source": "daily-brief"},
-                    )
+        if content and new_dates:
+            # Save only newly generated days to open-brain
+            for date in new_dates:
+                slug = proj.slug
+                session_ref = make_session_ref(slug, date)
+                _save_to_open_brain(
+                    title=f"{proj.name} — {date}",
+                    text=content,
+                    ob_type="daily_brief",
+                    project=slug,
+                    session_ref=session_ref,
+                    metadata={"source": "daily-brief"},
+                )
 
         results.append(
             {
