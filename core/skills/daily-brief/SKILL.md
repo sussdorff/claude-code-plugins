@@ -68,6 +68,40 @@ Multi-field functions emit
 [`core/contracts/execution-result.schema.json`](../../contracts/execution-result.schema.json)
 envelopes. Single atomic values (`Path`, `bool`) are returned bare.
 
+## Data Collection (scripts/query-sources.py)
+
+The `query-sources.py` script aggregates raw data from three sources for a given
+project and date:
+
+```bash
+python3 scripts/query-sources.py --project claude-code-plugins --date 2026-04-23
+```
+
+Output is a single JSON blob conforming to `core/contracts/execution-result.schema.json`
+with these `data` fields:
+
+| Field | Source | Description |
+|-------|--------|-------------|
+| `sessions` | open-brain | session_summary + debrief entries |
+| `closed_beads` | beads (bd) | Beads closed in the date window, commits merged in |
+| `open_beads` | beads (bd) | Current open bead snapshot |
+| `ready_beads` | beads (bd) | Unblocked/ready bead snapshot |
+| `blocked_beads` | beads (bd) | Currently blocked beads |
+| `commits` | git | Standalone commits not linked to a bead |
+| `learnings` | open-brain | type=learning entries |
+| `decisions` | open-brain | type=decision entries |
+| `decision_requests` | beads (bd) | Beads flagged for human decision |
+| `followups` | open-brain | Lines with Decide: / Need input: / Follow-up: prefixes |
+| `rework_signals` | git + beads | Revert commits + supersede events |
+| `warnings` | — | Source unavailability notices (partial data) |
+
+Status is `ok` when all sources are available, `warning` when any source is degraded.
+
+**CLI options:**
+- `--project NAME` — project name from daily-brief.yml
+- `--date YYYY-MM-DD` — date to query (Europe/Berlin midnight-to-midnight)
+- `--config PATH` — optional config file path override
+
 ## CLI Usage
 
 ```bash
