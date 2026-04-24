@@ -6,6 +6,7 @@
 
 ### 🚀 Features
 
+- *(CCP-lx2)* **Daily-brief capability extractor + diary-style renderer** — `capability-extractor.py` parses closed bead titles/descriptions and session summaries (New:/Fixed:/Internal: prefixes) for capability signals (both feature and task beads qualify); `render-brief.py` renders v1.0 Chief-of-Staff markdown in Voice B (German, journalistic narrator, past tense) with 6 sections: Executive Summary, Was sich verändert hat, Warum es zählt, Offene Fäden, Nächste sinnvolle Schritte (max 3 items with source citation), Belege; range mode with compressed rollup; 77 tests.
 - *(CCP-top)* **Daily-brief data aggregator** (query-sources.py) collects closed/open beads, git commits, session summaries, decisions, and rework signals from open-brain and bd; deterministic JSON output conforming to execution-result envelope
 - *(CCP-ijh)* Daily-brief config schema + per-project brief storage layout
 
