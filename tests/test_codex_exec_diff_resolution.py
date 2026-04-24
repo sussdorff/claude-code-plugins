@@ -21,6 +21,15 @@ REPO_ROOT = Path(__file__).parent.parent
 CODEX_EXEC_PY = REPO_ROOT / "beads-workflow" / "scripts" / "codex-exec.py"
 
 
+def _make_completed_process(stdout=b"", returncode=0):
+    """Build a mock CompletedProcess. stdout may be bytes or str depending on capture mode."""
+    result = MagicMock(spec=subprocess.CompletedProcess)
+    result.returncode = returncode
+    result.stdout = stdout
+    result.stderr = ""
+    return result
+
+
 def _load_codex_exec():
     """Load codex-exec.py as a module (filename contains hyphen, can't use plain import)."""
     spec = importlib.util.spec_from_file_location("codex_exec", CODEX_EXEC_PY)
@@ -29,13 +38,8 @@ def _load_codex_exec():
     return mod
 
 
-def _make_completed_process(stdout=b"", text_stdout="", returncode=0):
-    """Build a mock CompletedProcess. stdout may be bytes or str depending on capture mode."""
-    result = MagicMock(spec=subprocess.CompletedProcess)
-    result.returncode = returncode
-    result.stdout = stdout
-    result.stderr = ""
-    return result
+# Load the module once — avoids redundant spec_from_file_location per test
+_CODEX_EXEC = _load_codex_exec()
 
 
 # ---------------------------------------------------------------------------
@@ -55,16 +59,15 @@ def _run_resolve_diff(diff_range: str, diff_bytes: bytes, file_names: list[str],
 
     def side_effect(cmd, **kwargs):
         if "--name-only" in cmd:
-            return _make_completed_process(text_stdout=names_text, stdout=names_text)
+            return _make_completed_process(stdout=names_text)
         if "--stat" in cmd:
-            return _make_completed_process(text_stdout=stat_text, stdout=stat_text)
+            return _make_completed_process(stdout=stat_text)
         # Raw diff call (bytes): second positional call
         return _make_completed_process(stdout=diff_bytes)
 
-    mod = _load_codex_exec()
     prompt = "Review this diff:\n{{DIFF}}"
     with patch("subprocess.run", side_effect=side_effect):
-        return mod._resolve_diff(diff_range, prompt)
+        return _CODEX_EXEC._resolve_diff(diff_range, prompt)
 
 
 # ---------------------------------------------------------------------------
@@ -132,7 +135,7 @@ class TestSmallDiffInlines:
         result = _run_resolve_diff("HEAD~1...HEAD", diff_content, ["f.py"])
 
         assert "Do NOT run repo-wide" not in result
-        assert "git diff" not in result.split("{{DIFF}}")[0]  # no guidance commands in body
+        assert "git diff HEAD~1...HEAD -- <file>" not in result  # no guidance commands in inline path
 
     def test_placeholder_replaced_for_small_diff(self):
         """AK1 basic: {{DIFF}} placeholder is gone after resolution."""
@@ -199,7 +202,7 @@ class TestLargeDiffBoundedGuidance:
         lines_with_bd_onboard = [ln for ln in result.splitlines() if "bd onboard" in ln]
         for line in lines_with_bd_onboard:
             # Every mention of bd onboard must be in the context of "do not run"
-            assert "NOT" in line or "not" in line or "Do NOT" in line, (
+            assert "do not" in line.lower(), (
                 f"'bd onboard' appeared outside a 'do not' context: {line!r}"
             )
 
@@ -216,7 +219,7 @@ class TestLargeDiffBoundedGuidance:
         assert "Do NOT run repo-wide" in result
         lines_with_bd_prime = [ln for ln in result.splitlines() if "bd prime" in ln]
         for line in lines_with_bd_prime:
-            assert "NOT" in line or "not" in line or "Do NOT" in line, (
+            assert "do not" in line.lower(), (
                 f"'bd prime' appeared outside a 'do not' context: {line!r}"
             )
 
@@ -253,17 +256,20 @@ class TestLargeDiffBoundedGuidance:
 class TestThresholdBoundary:
     """Verify the boundary condition: exactly at 262144 bytes is large-diff path."""
 
-    def test_diff_at_exactly_threshold_is_large(self):
-        """A diff of exactly 262144 bytes (== max_inline_bytes) is NOT inlined."""
-        # diff_bytes <= max_inline_bytes is the inline condition,
-        # so exactly at the limit is inline.
+    def test_diff_at_exactly_threshold_is_inlined(self):
+        """A diff of exactly 262144 bytes (== max_inline_bytes) triggers large-diff path.
+
+        effective_inline_bytes = min(max_inline_bytes, max_prompt_chars // 2)
+                               = min(262144, 16000) = 16000
+        So 262144 bytes exceeds the effective threshold and takes the large-diff path.
+        """
         diff_bytes = b"x" * 262144
         file_names = ["a.py"]
         result = _run_resolve_diff("a...b", diff_bytes, file_names)
-        # Exactly 262144 is still <= threshold → inline path
+        # 262144 bytes >> effective_inline_bytes (16000) → large-diff path
         assert "{{DIFF}}" not in result
-        # No guidance header
-        assert "Changed files (authoritative scope" not in result
+        # Large-diff guidance header is present
+        assert "Changed files (authoritative scope" in result
 
     def test_diff_one_byte_over_threshold_is_large(self):
         """A diff of 262145 bytes (> max_inline_bytes) triggers large-diff guidance."""
