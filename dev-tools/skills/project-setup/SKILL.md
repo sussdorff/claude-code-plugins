@@ -12,7 +12,7 @@ description: >
 
 # project-setup
 
-> **Setup-Version**: 2026.03.0
+> **Setup-Version**: 2026.04.0
 > This skill tracks its own CalVer. Projects store their setup version in `.project-setup-version`.
 > When this skill's version advances, `/project-setup --upgrade` brings projects up to date.
 
@@ -100,6 +100,11 @@ After interview, show a complete plan of what will be created. Get explicit conf
 7. Force-push to establish remote history
 8. Set up the project harness config symlink via `claude-config-handler`
 9. Write `.project-setup-version` with current skill version
+10. Create ADR directory scaffold:
+   - Create `docs/adr/` directory
+   - Write `docs/adr/README.md` (MADR-style template, see adr-location standard)
+   - Write `docs/adr/ADR-0001-record-architecture-decisions.md` (self-referential bootstrap ADR)
+   - These files should be committed as part of initial project setup
 
 #### Type-specific scaffolding
 
@@ -134,7 +139,7 @@ Projekt "<name>" ist aufgesetzt:
   Typ:           python-cli
   Beads-Prefix:  <prefix>
   Dolt Remote:   http://192.168.60.30:8080/beads_<prefix>
-  Setup-Version: 2026.03.0
+  Setup-Version: 2026.04.0
 
   Naechste Schritte:
   - [typ-spezifische Hinweise]
@@ -173,6 +178,7 @@ Compare what the project has against what the current setup version expects. Che
 | `CLAUDE.md` | Exists and structured | Run CLAUDE.md generation if missing |
 | project harness config dir | Symlinked correctly | Fix via claude-config-handler |
 | Type-specific | See `references/type-recipes.md` | Apply missing pieces |
+| `/docs/adr/` | Directory exists with README.md and ADR-0001 | Create scaffold via ADR standard |
 
 ### Step 4: Present changes
 
@@ -197,15 +203,16 @@ For each project, check:
 - Project type detection
 - Beads health (`metadata.json`, `dolt-server.port`, legacy files)
 - `.gitignore` diff against canonical
+- ADR directory: `/docs/adr/` exists with at least a README.md
 
 Output a table:
 
 ```
-Project             Type        Setup Version   Status
-abs-cli             python-cli  2026.03.0       OK
-fmcli               python-cli  NONE            NEEDS SETUP
-mira                web-ts      2025.12.0       NEEDS UPGRADE
-cognovis-website    docs        NONE            NEEDS SETUP
+Project             Type        Setup Version   ADR       Status
+abs-cli             python-cli  2026.04.0       OK        OK
+fmcli               python-cli  NONE            MISSING   NEEDS SETUP
+mira                web-ts      2025.12.0       MISSING   NEEDS UPGRADE
+cognovis-website    docs        NONE            MISSING   NEEDS SETUP
 ```
 
 Do NOT auto-fix in audit mode. Just report. Suggest `/project-setup --upgrade` for individual projects.
@@ -219,7 +226,7 @@ Do NOT auto-fix in audit mode. Just report. Suggest `/project-setup --upgrade` f
 Lives in project root. Single line with the CalVer version of this skill at setup/upgrade time.
 
 ```
-2026.03.0
+2026.04.0
 ```
 
 This file SHOULD be committed to git — it's team-shared project metadata.
