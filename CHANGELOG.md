@@ -6,10 +6,12 @@
 
 ### 🚀 Features
 
+- *(CCP-top)* **Daily-brief data aggregator** (query-sources.py) collects closed/open beads, git commits, session summaries, decisions, and rework signals from open-brain and bd; deterministic JSON output conforming to execution-result envelope
 - *(CCP-ijh)* Daily-brief config schema + per-project brief storage layout
 
 ### 🐛 Bug Fixes
 
+- *(CCP-die)* **Codex diff resolution** now uses size-based budgeting instead of file-count cap, with bounded guidance for large-diff fallback
 - *(CCP-b9d)* Use ${CLAUDE_PLUGIN_ROOT} for plugin script paths + add lint gate
 - *(CCP-ijh)* Remove unused 'field' import from dataclasses
 
