@@ -1,5 +1,9 @@
 ## [unreleased]
 
+### 📚 Documentation
+
+- *(CCP-pof)* UAT audit of 44 projects, cross-repo fixture design strategy, and per-project-type UAT standard (`docs/architecture/uat-audit-2026.md`, `standards/workflow/uat-fixtures.md`)
+
 ### 🚀 Features
 
 - *(CCP-ijh)* Daily-brief config schema + per-project brief storage layout
