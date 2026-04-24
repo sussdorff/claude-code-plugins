@@ -7,12 +7,14 @@ on:
       - '**/agents/*.md'
       - 'meta/skills/skill-auditor/scripts/**'
       - 'meta/skills/agent-forge/scripts/**'
+      - '.github/workflows/skill-audit.yml'
   pull_request:
     paths:
       - '**/SKILL.md'
       - '**/agents/*.md'
       - 'meta/skills/skill-auditor/scripts/**'
       - 'meta/skills/agent-forge/scripts/**'
+      - '.github/workflows/skill-audit.yml'
 
 jobs:
   validate-skills:
