@@ -414,6 +414,42 @@ def test_resolve_diff_large_diff_guidance_stays_bounded(monkeypatch: pytest.Monk
     assert "Inspect it directly" not in resolved
 
 
+def test_resolve_diff_within_prompt_budget_takes_large_diff_fallback(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Diff under 256 KB but over max_prompt_chars // 2 must take the large-diff fallback path.
+
+    This is the regression guard: previously such diffs were inlined and then silently
+    truncated by _truncate_prompt, losing hunks without providing bounded guidance.
+    With the fix, _resolve_diff is aware of the prompt budget and applies the fallback
+    when the diff would dominate the prompt.
+    """
+    ce = _load_codex_exec()
+
+    class _Result:
+        def __init__(self, *, stdout):
+            self.stdout = stdout
+
+    diff_range = "base...HEAD"
+    max_prompt_chars = 1000
+    # diff is well under 256 KB but bigger than max_prompt_chars // 2 (500 chars)
+    diff_text = "x" * 600  # 600 bytes — under 256 KB, but over 500 (half of 1000)
+
+    def fake_run(cmd, capture_output=False, text=False, check=False):
+        if cmd == ["git", "diff", diff_range, "--name-only"]:
+            return _Result(stdout="src/a.py\nsrc/b.py\n")
+        if cmd == ["git", "diff", diff_range]:
+            return _Result(stdout=diff_text.encode("utf-8"))
+        if cmd == ["git", "diff", diff_range, "--stat"]:
+            return _Result(stdout=" src/a.py | 10 +++++\n src/b.py | 12 ++++++\n")
+        raise AssertionError(f"Unexpected command: {cmd}")
+
+    monkeypatch.setattr(ce.subprocess, "run", fake_run)
+
+    resolved = ce._resolve_diff(diff_range, "Prompt\n{{DIFF}}\n", max_prompt_chars=max_prompt_chars)
+
+    assert "Changed files (authoritative scope for this review):" in resolved
+    assert "Do NOT run repo-wide onboarding/discovery commands" in resolved
+
+
 def test_parse_token_usage() -> None:
     """_parse_token_usage sums tokens from all turn.completed events."""
     ce = _load_codex_exec()
