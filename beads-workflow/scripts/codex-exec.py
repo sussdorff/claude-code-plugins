@@ -80,9 +80,15 @@ def _detect_model(codex_config_path: str | None) -> str:
 # ---------------------------------------------------------------------------
 
 
-def _resolve_diff(diff_range: str, prompt: str) -> str:
-    """Resolve {{DIFF}} placeholder in the prompt for the given diff range."""
+def _resolve_diff(diff_range: str, prompt: str, max_prompt_chars: int = DEFAULT_MAX_PROMPT_CHARS) -> str:
+    """Resolve {{DIFF}} placeholder in the prompt for the given diff range.
+
+    Uses min(256 KB, max_prompt_chars // 2) as the effective inline threshold so that
+    diffs that would dominate the prompt budget take the large-diff fallback path instead
+    of being inlined and then silently truncated by _truncate_prompt.
+    """
     max_inline_bytes = 262144  # 256 KB
+    effective_inline_bytes = min(max_inline_bytes, max_prompt_chars // 2)
 
     try:
         names_result = subprocess.run(
@@ -101,7 +107,7 @@ def _resolve_diff(diff_range: str, prompt: str) -> str:
         diff_text = diff_result.stdout.decode("utf-8", errors="replace")
         diff_bytes = len(diff_result.stdout)
 
-        if diff_bytes <= max_inline_bytes:
+        if diff_bytes <= effective_inline_bytes:
             diff_content = diff_text
         else:
             stat_result = subprocess.run(
@@ -402,7 +408,7 @@ def main(argv: list[str] | None = None) -> int:
         args = args[2:]
 
         if args:
-            args[0] = _resolve_diff(diff_range, args[0])
+            args[0] = _resolve_diff(diff_range, args[0], max_prompt_chars=max_prompt_chars)
 
     # ---------------------------------------------------------------------------
     # Prompt size guard
