@@ -133,9 +133,9 @@ def _render_executive_summary(
 
     lines: list[str] = [f"## Executive Summary — {project} ({date})", ""]
 
-    # Check for empty day — include open/ready beads as management anchors
-    # (a day with only open/blocked work is not truly empty; it still has context to report)
-    has_activity = any([closed_beads, commits, capabilities, sessions, open_beads, ready_beads])
+    # Check for empty day — include open/ready beads and warnings as management anchors
+    # (a day with only open/blocked work or degraded sources is not truly empty)
+    has_activity = any([closed_beads, commits, capabilities, sessions, open_beads, ready_beads, warnings])
     if not has_activity:
         lines.append(_EMPTY_DAY_MSG)
         lines.append("")
