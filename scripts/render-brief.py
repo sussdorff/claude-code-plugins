@@ -133,8 +133,9 @@ def _render_executive_summary(
 
     lines: list[str] = [f"## Executive Summary — {project} ({date})", ""]
 
-    # Check for empty day
-    has_activity = any([closed_beads, commits, capabilities, sessions])
+    # Check for empty day — include open/ready beads as management anchors
+    # (a day with only open/blocked work is not truly empty; it still has context to report)
+    has_activity = any([closed_beads, commits, capabilities, sessions, open_beads, ready_beads])
     if not has_activity:
         lines.append(_EMPTY_DAY_MSG)
         lines.append("")
@@ -199,7 +200,20 @@ def _render_executive_summary(
             f"{'waren' if len(warnings) > 1 else 'war'} nicht vollständig verfügbar."
         )
 
-    lines.append(" ".join(paragraphs))
+    prose = " ".join(paragraphs)
+
+    # In detailed mode, expand with individual bead titles if available
+    if detailed and closed_beads:
+        detail_lines: list[str] = []
+        for bead in closed_beads:
+            bead_id = bead.get("id", "?")
+            title = bead.get("title", "")
+            issue_type = bead.get("issue_type") or bead.get("type") or "task"
+            detail_lines.append(f"- **{bead_id}** [{issue_type}]: {title}")
+        if detail_lines:
+            prose = prose + "\n\n" + "\n".join(detail_lines)
+
+    lines.append(prose)
     lines.append("")
     return "\n".join(lines)
 
@@ -302,10 +316,10 @@ def _render_why_it_matters(
             f"{'erweitern' if count > 1 else 'erweitert'} den Funktionsumfang direkt."
         )
 
-    # Capabilities hint
+    # Capabilities hint — use neutral temporal language (not "gestern" for explicit dates)
     if capabilities:
         paragraphs.append(
-            "Die erkannten Capability-Signale zeigen, was durch die gestrige Arbeit "
+            "Die erkannten Capability-Signale zeigen, was durch die abgeschlossene Arbeit "
             "jetzt möglich geworden ist."
         )
 
@@ -584,10 +598,11 @@ def render_range(
     config_path: Path,
     *,
     detailed: bool = False,
+    persist: bool = True,
 ) -> str:
     """Render a compressed rollup brief for a date range.
 
-    Per-day briefs are persisted unchanged on disk.
+    Per-day briefs are persisted unchanged on disk (unless persist=False).
     Default output is a compressed rollup (one Executive Summary, What Changed
     grouped by day, Open Loops/Next Best Moves/Evidence aggregated).
     In --detailed mode, full per-day sections are included.
@@ -598,19 +613,20 @@ def render_range(
         end_date: End of range (YYYY-MM-DD).
         config_path: Path to daily-brief.yml.
         detailed: If True, include full per-day sections.
+        persist: If True (default), save per-day briefs to disk.
 
     Returns:
         Rendered markdown string.
     """
     dates = _date_range(start_date, end_date)
 
-    # Persist single-day briefs and collect envelopes
+    # Optionally persist single-day briefs and collect envelopes
     all_envelopes: list[tuple[str, dict[str, Any]]] = []
     for date in dates:
         envelope = _fetch_envelope(project, date, config_path)
         if envelope:
-            # Persist each day's brief unchanged
-            render_single_day(project, date, config_path, detailed=detailed, persist=True)
+            # Persist each day's brief unchanged (respects persist flag)
+            render_single_day(project, date, config_path, detailed=detailed, persist=persist)
             all_envelopes.append((date, envelope))
 
     if not all_envelopes:
@@ -806,7 +822,7 @@ def main(argv: list[str] | None = None) -> int:
             return 1
 
         brief = render_range(
-            args.project, start_date, end_date, config_path, detailed=detailed
+            args.project, start_date, end_date, config_path, detailed=detailed, persist=persist
         )
         print(brief)
 
@@ -821,7 +837,7 @@ def main(argv: list[str] | None = None) -> int:
             return 1
 
         brief = render_range(
-            args.project, start_date, end_date, config_path, detailed=detailed
+            args.project, start_date, end_date, config_path, detailed=detailed, persist=persist
         )
         print(brief)
 
