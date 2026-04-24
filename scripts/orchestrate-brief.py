@@ -659,13 +659,20 @@ def _orchestrate_range(
         content = proc.stdout if proc.returncode == 0 else ""
 
         if content and new_dates:
-            # Save only newly generated days to open-brain
+            # Save only newly generated days to open-brain.
+            # Read each day's brief from disk (not the rollup content) so that
+            # per-day open-brain entries contain that day's content, not the range rollup.
             for date in new_dates:
                 slug = proj.slug
                 session_ref = make_session_ref(slug, date)
+                # Read per-day brief from disk (written by render-brief.py)
+                try:
+                    per_day_brief = _cfg.brief_path(proj, date).read_text()
+                except Exception:
+                    per_day_brief = content  # Fallback to rollup if disk read fails
                 _save_to_open_brain(
                     title=f"{proj.name} — {date}",
-                    text=content,
+                    text=per_day_brief,
                     ob_type="daily_brief",
                     project=slug,
                     session_ref=session_ref,
