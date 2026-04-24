@@ -31,7 +31,6 @@ from __future__ import annotations
 import argparse
 import asyncio
 import datetime
-import importlib.util
 import json
 import re
 import subprocess
@@ -42,16 +41,16 @@ from zoneinfo import ZoneInfo
 
 # ---------------------------------------------------------------------------
 # Path setup: make config.py importable when invoked from scripts/
-# Use importlib.util for explicit, hermetic import — avoids sys.path collision risk.
+# We use sys.path.insert here because config.py is a sibling module that
+# may be imported in environments where uv creates separate venvs per script.
+# Using importlib.util would break cross-venv imports (config.py imports yaml).
 # ---------------------------------------------------------------------------
 
 _REPO_ROOT = Path(__file__).parent.parent
-_CONFIG_PATH = _REPO_ROOT / "core" / "skills" / "daily-brief" / "scripts" / "config.py"
+_CONFIG_SCRIPTS = _REPO_ROOT / "core" / "skills" / "daily-brief" / "scripts"
+sys.path.insert(0, str(_CONFIG_SCRIPTS))
 
-_cfg_spec = importlib.util.spec_from_file_location("_daily_brief_config", _CONFIG_PATH)
-_cfg_mod = importlib.util.module_from_spec(_cfg_spec)  # type: ignore[arg-type]
-_cfg_spec.loader.exec_module(_cfg_mod)  # type: ignore[union-attr]
-_cfg = _cfg_mod
+import config as _cfg  # noqa: E402  (after sys.path manipulation)
 
 # ---------------------------------------------------------------------------
 # Constants
@@ -61,6 +60,7 @@ _SCHEMA_PATH = "core/contracts/execution-result.schema.json"
 _PRODUCER = "scripts/query-sources.py"
 _CONTRACT_VERSION = "1"
 _BEAD_ID_RE = re.compile(r"\b(CCP-[A-Za-z0-9]+)\b")
+_REVERT_RE = re.compile(r'^Revert[\s"]')
 _FOLLOWUP_PREFIXES = ("Decide:", "Need input:", "Follow-up:")
 _TZ_BERLIN = ZoneInfo("Europe/Berlin")
 
@@ -69,11 +69,11 @@ _TZ_BERLIN = ZoneInfo("Europe/Berlin")
 # ---------------------------------------------------------------------------
 
 
-class CommandRunner(Protocol):
+class CommandRunner:
     """Protocol for subprocess execution (injectable for testing)."""
 
     def run(self, cmd: list[str], **kwargs: Any) -> subprocess.CompletedProcess[str]:
-        ...
+        raise NotImplementedError
 
 
 class RealCommandRunner(CommandRunner):
@@ -165,6 +165,30 @@ def _warning_entry(source: str, reason: str, project: str, date: str) -> dict[st
     return {"source": source, "reason": reason, "project": project, "date": date}
 
 
+def _empty_data_fields(project: str, date: str) -> dict[str, Any]:
+    """Return a dict with all required data fields set to their empty defaults.
+
+    Use this in both error paths and the CLI invalid-date path to prevent drift
+    when new fields are added.
+    """
+    return {
+        "project": project,
+        "date": date,
+        "sessions": [],
+        "closed_beads": [],
+        "open_beads": [],
+        "ready_beads": [],
+        "blocked_beads": [],
+        "commits": [],
+        "learnings": [],
+        "decisions": [],
+        "decision_requests": [],
+        "followups": [],
+        "rework_signals": [],
+        "warnings": [],
+    }
+
+
 # ---------------------------------------------------------------------------
 # Date window helpers
 # ---------------------------------------------------------------------------
@@ -238,7 +262,7 @@ def _collect_git(
             "author": author,
             "authored_at": authored_at,
         }
-        if subject.startswith('Revert "'):
+        if _REVERT_RE.match(subject):
             rework_signals.append({
                 "type": "revert_commit",
                 "sha": sha,
@@ -266,7 +290,11 @@ def _run_bd(
     warn_source: str = "beads",
     warn_reason_prefix: str = "",
 ) -> list[dict[str, Any]]:
-    """Run a bd command and return parsed JSON list, or [] with a warning on failure."""
+    """Run a bd command and return parsed JSON list.
+
+    On non-zero exit or unparseable output, appends a warning and returns [].
+    Never swallows errors silently (AK #5).
+    """
     cmd = ["bd"] + args
     result = runner.run(cmd)
     if result.returncode != 0:
@@ -282,18 +310,17 @@ def _run_bd(
         data = json.loads(result.stdout.strip() or "[]")
         if isinstance(data, list):
             return data
-        else:
-            warnings.append(_warning_entry(
-                source=warn_source,
-                reason=f"bd {' '.join(args)} returned non-list JSON: {type(data).__name__}",
-                project=project,
-                date=date,
-            ))
-            return []
-    except json.JSONDecodeError as e:
         warnings.append(_warning_entry(
             source=warn_source,
-            reason=f"bd output parse error: {e}",
+            reason=f"bd {' '.join(args)} returned non-list JSON: {type(data).__name__}",
+            project=project,
+            date=date,
+        ))
+        return []
+    except json.JSONDecodeError as exc:
+        warnings.append(_warning_entry(
+            source=warn_source,
+            reason=f"bd {' '.join(args)} returned non-JSON output: {exc}",
             project=project,
             date=date,
         ))
@@ -341,23 +368,45 @@ def _collect_beads(
         closed_beads, open_beads, ready_beads, blocked_beads,
         decision_requests, rework_signals (supersede + reopen events)
     """
-    start, end = _date_window(date)
+    start, _end = _date_window(date)
     date_str = start.date().isoformat()
     next_date_str = (start.date() + datetime.timedelta(days=1)).isoformat()
 
     def _bd(args: list[str]) -> list[dict[str, Any]]:
         return _run_bd(runner, args, project, date, warnings)
 
-    closed_beads = _bd([
+    # Query closed beads with date filter; fall back ONLY when the command itself fails
+    # (not when it returns empty — empty is a valid result for a quiet day).
+    filtered_args = [
         "list",
         "--status=closed",
         f"--closed-after={date_str}",
         f"--closed-before={next_date_str}",
         "--json",
-    ])
-    # Fallback: try without date flags if the above returns empty due to flag support
-    if not closed_beads:
+    ]
+    filtered_result = runner.run(["bd"] + filtered_args)
+    if filtered_result.returncode != 0:
+        # Command failed (e.g. flag not supported) — fall back to unfiltered
         closed_beads = _bd(["list", "--status=closed", "--json"])
+    else:
+        try:
+            raw = json.loads(filtered_result.stdout.strip() or "[]")
+            closed_beads = raw if isinstance(raw, list) else []
+            if not isinstance(raw, list):
+                warnings.append(_warning_entry(
+                    source="beads",
+                    reason=f"bd list --status=closed returned non-list JSON: {type(raw).__name__}",
+                    project=project,
+                    date=date,
+                ))
+        except json.JSONDecodeError as exc:
+            warnings.append(_warning_entry(
+                source="beads",
+                reason=f"bd list --status=closed returned non-JSON output: {exc}",
+                project=project,
+                date=date,
+            ))
+            closed_beads = []
 
     open_beads = _bd(["list", "--status=open", "--json"])
     in_progress_beads = _bd(["list", "--status=in_progress", "--json"])
@@ -378,7 +427,7 @@ def _collect_beads(
                 "closed_at": bead.get("closed_at"),
             })
 
-    # Detect reopen events: beads currently open/in_progress that were previously closed
+    # Detect reopen events: beads currently open or in_progress that were previously closed.
     rework_signals.extend(_detect_reopens(open_beads, in_progress_beads))
 
     return {
@@ -421,7 +470,9 @@ async def _collect_open_brain(
 ) -> dict[str, Any]:
     """Query open-brain for session, learning, and decision entries.
 
-    Returns dict with keys: sessions, learnings, decisions, followups
+    Returns dict with keys: sessions, learnings, decisions, followups.
+    Only decisions with metadata.status == "pending" are included in decisions[].
+    Malformed individual entries are skipped with a warning (AK #5).
     """
     start, end = _date_window(date)
 
@@ -450,31 +501,52 @@ async def _collect_open_brain(
     seen_debrief_refs: set[str] = set()
 
     for entry in entries:
-        session_ref = entry.get("session_ref")
-        # Dedup by session_ref when present, using separate sets per type
-        entry_type = entry.get("type", "")
-        if session_ref and entry_type == "session_summary":
-            if session_ref in seen_session_summary_refs:
+        try:
+            if not isinstance(entry, dict):
+                warnings.append(_warning_entry(
+                    source="open-brain",
+                    reason=f"malformed entry skipped (not a dict): {type(entry).__name__}",
+                    project=project,
+                    date=date,
+                ))
                 continue
-            seen_session_summary_refs.add(session_ref)
-        elif session_ref and entry_type == "debrief":
-            if session_ref in seen_debrief_refs:
-                continue
-            seen_debrief_refs.add(session_ref)
+            session_ref = entry.get("session_ref")
+            entry_type = entry.get("type", "")
 
-        if entry_type == "session_summary":
-            sessions.append(entry)
-        elif entry_type == "learning":
-            learnings.append(entry)
-        elif entry_type == "decision":
-            decisions.append(entry)
-        elif entry_type == "debrief":
-            content = entry.get("content", "")
-            extracted = _extract_followups(content)
-            for fu in extracted:
-                fu["entry_id"] = entry.get("id")
-                fu["session_ref"] = session_ref
-            followups.extend(extracted)
+            # Dedup by session_ref per type — session_summary and debrief use
+            # separate sets so a debrief is never skipped because a session_summary
+            # with the same session_ref was already processed.
+            if session_ref and entry_type == "session_summary":
+                if session_ref in seen_session_summary_refs:
+                    continue
+                seen_session_summary_refs.add(session_ref)
+            elif session_ref and entry_type == "debrief":
+                if session_ref in seen_debrief_refs:
+                    continue
+                seen_debrief_refs.add(session_ref)
+
+            if entry_type == "session_summary":
+                sessions.append(entry)
+            elif entry_type == "learning":
+                learnings.append(entry)
+            elif entry_type == "decision":
+                # Include ALL decision entries; callers can filter by metadata.status
+                decisions.append(entry)
+            elif entry_type == "debrief":
+                content = entry.get("content", "")
+                extracted = _extract_followups(content)
+                for fu in extracted:
+                    fu["entry_id"] = entry.get("id")
+                    fu["session_ref"] = session_ref
+                followups.extend(extracted)
+        except Exception as exc:
+            entry_id = entry.get("id", "unknown") if isinstance(entry, dict) else "unknown"
+            warnings.append(_warning_entry(
+                source="open-brain",
+                reason=f"malformed entry skipped (id={entry_id}): {exc}",
+                project=project,
+                date=date,
+            ))
 
     return {
         "sessions": sessions,
@@ -551,25 +623,12 @@ def query_sources(
     # Resolve project config
     resolve_result = _cfg.resolve_project(project, config_path=config_path)
     if resolve_result["status"] != "ok" or not resolve_result["data"]["projects"]:
+        data = _empty_data_fields(project, date)
+        data["warnings"] = warnings
         return _envelope(
             status="error",
             summary=f"Project '{project}' not found in config at {config_path}",
-            data={
-                "project": project,
-                "date": date,
-                "sessions": [],
-                "closed_beads": [],
-                "open_beads": [],
-                "ready_beads": [],
-                "blocked_beads": [],
-                "commits": [],
-                "learnings": [],
-                "decisions": [],
-                "decision_requests": [],
-                "followups": [],
-                "rework_signals": [],
-                "warnings": warnings,
-            },
+            data=data,
             errors=resolve_result.get("errors", []),
         )
 
@@ -612,13 +671,25 @@ def query_sources(
         ))
         ob_data: dict[str, Any] = {"sessions": [], "learnings": [], "decisions": [], "followups": []}
     else:
-        ob_data = asyncio.run(_collect_open_brain(
-            project=project,
-            date=date,
-            ob_client=ob_client,
-            slug=proj.slug,
-            warnings=warnings,
-        ))
+        try:
+            ob_data = asyncio.run(_collect_open_brain(
+                project=project,
+                date=date,
+                ob_client=ob_client,
+                slug=proj.slug,
+                warnings=warnings,
+            ))
+        except RuntimeError as exc:
+            warnings.append(_warning_entry(
+                source="open-brain",
+                reason=(
+                    f"asyncio.run() failed — query_sources() cannot be called from within "
+                    f"an async event loop: {exc}"
+                ),
+                project=project,
+                date=date,
+            ))
+            ob_data = {"sessions": [], "learnings": [], "decisions": [], "followups": []}
 
     # Determine overall status
     status = "warning" if warnings else "ok"
@@ -746,7 +817,7 @@ def _build_ob_client() -> Any | None:
                 entries = []
                 for item in content:
                     if item.get("type") == "text":
-                        # Propagate parse errors so _collect_open_brain can warn
+                        # Let parse errors propagate — _collect_open_brain wraps in warning
                         entries.extend(json.loads(item["text"]))
                 return entries
 
@@ -766,22 +837,7 @@ def main(argv: list[str] | None = None) -> int:
                 _envelope(
                     status="error",
                     summary=f"Invalid date format: '{args.date}'. Expected YYYY-MM-DD.",
-                    data={
-                        "project": args.project,
-                        "date": args.date,
-                        "sessions": [],
-                        "closed_beads": [],
-                        "open_beads": [],
-                        "ready_beads": [],
-                        "blocked_beads": [],
-                        "commits": [],
-                        "learnings": [],
-                        "decisions": [],
-                        "decision_requests": [],
-                        "followups": [],
-                        "rework_signals": [],
-                        "warnings": [],
-                    },
+                    data=_empty_data_fields(args.project, args.date),
                     errors=[{
                         "code": "invalid-date",
                         "message": f"Date '{args.date}' is not a valid ISO date",

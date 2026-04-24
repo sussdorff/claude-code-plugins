@@ -665,6 +665,50 @@ class TestOpenBrainIntegration:
         assert len(result["data"]["decisions"]) == 1
         assert result["status"] == "ok"  # ob available → ok
 
+    def test_all_decisions_included_with_metadata_status(
+        self, config_path: Path, empty_mock_runner: qs.MockCommandRunner
+    ) -> None:
+        """All open-brain type=decision entries are included in decisions[].
+
+        The data layer must NOT filter by metadata.status — callers filter if needed.
+        The metadata.status field is preserved so callers can distinguish pending vs resolved.
+        """
+        resolved_decision = {
+            "id": "ob-3r",
+            "type": "decision",
+            "content": "Decided: Use option A.",
+            "session_ref": "sess-001",
+            "project": "claude-code-plugins",
+            "created_at": "2026-04-23T11:00:00Z",
+            "metadata": {"status": "resolved"},
+        }
+        no_status_decision = {
+            "id": "ob-3n",
+            "type": "decision",
+            "content": "Some old decision, no status field.",
+            "session_ref": "sess-002",
+            "project": "claude-code-plugins",
+            "created_at": "2026-04-23T11:30:00Z",
+        }
+        ob_client = self._make_ob_client([resolved_decision, no_status_decision])
+        result = qs.query_sources(
+            project=TEST_PROJECT,
+            date=TEST_DATE,
+            config_path=config_path,
+            runner=empty_mock_runner,
+            ob_client=ob_client,
+        )
+        # Both decisions must be present regardless of metadata.status
+        decisions = result["data"]["decisions"]
+        assert len(decisions) == 2, (
+            f"Expected 2 decisions[], got: {decisions}"
+        )
+        ids = {d["id"] for d in decisions}
+        assert ids == {"ob-3r", "ob-3n"}
+        # metadata.status is preserved for caller-side filtering
+        resolved = next(d for d in decisions if d["id"] == "ob-3r")
+        assert resolved.get("metadata", {}).get("status") == "resolved"
+
     def test_followup_prefixes_extracted(self, config_path: Path, empty_mock_runner: qs.MockCommandRunner) -> None:
         """Debrief entries with Decide:/Need input:/Follow-up: → followups[]."""
         debrief_entry = {
