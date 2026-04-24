@@ -49,35 +49,60 @@ class TestProvenanceFieldsInVerificationAgent:
         assert "docs_required" in content
 
 
-def phase4_section(content: str) -> str:
-    """Return only the Phase 4: Completion Verification section of the orchestrator."""
-    start = content.find("### Phase 4: Completion Verification")
-    end = content.find("### Phase 4a:", start)
-    return content[start:end] if start != -1 else ""
+def verification_phase_section(content: str) -> str:
+    """Return the Verification phase section of the orchestrator.
+
+    The verification phase was Phase 4 in the CCP-2vo.1 design but was
+    renumbered to Phase 9 in CCP-2vo.4 (flat 0-16 rewrite). The test helper
+    auto-detects either numbering so the contract checks survive future
+    renumbering as long as a "Verification" phase exists.
+    """
+    import re
+    header_re = re.compile(r"^###\s+Phase\s+\d+[a-z]?:\s+Verification\b", re.MULTILINE)
+    m = header_re.search(content)
+    if not m:
+        return ""
+    start = m.start()
+    # End marker: the next top-level phase header (### Phase N …)
+    next_header = re.search(r"^###\s+Phase\s+\d+", content[m.end():], re.MULTILINE)
+    end = m.end() + next_header.start() if next_header else len(content)
+    return content[start:end]
 
 
 class TestProvenanceInOrchestrator:
-    def test_phase4_template_contains_standards_applied(self):
+    def test_verification_phase_template_contains_standards_applied(self):
         content = BEAD_ORCHESTRATOR_MD.read_text()
-        assert "standards_applied" in phase4_section(content)
+        assert "standards_applied" in verification_phase_section(content)
 
-    def test_phase4_template_contains_skills_referenced(self):
+    def test_verification_phase_template_contains_skills_referenced(self):
         content = BEAD_ORCHESTRATOR_MD.read_text()
-        assert "skills_referenced" in phase4_section(content)
+        assert "skills_referenced" in verification_phase_section(content)
 
-    def test_phase4_template_contains_adrs_in_scope(self):
+    def test_verification_phase_template_contains_adrs_in_scope(self):
         content = BEAD_ORCHESTRATOR_MD.read_text()
-        assert "adrs_in_scope" in phase4_section(content)
+        assert "adrs_in_scope" in verification_phase_section(content)
 
-    def test_phase4_template_contains_docs_required(self):
+    def test_verification_phase_template_contains_docs_required(self):
         content = BEAD_ORCHESTRATOR_MD.read_text()
-        assert "docs_required" in phase4_section(content)
+        assert "docs_required" in verification_phase_section(content)
 
-    def test_phase36_references_verification_tokens(self):
-        content = BEAD_ORCHESTRATOR_MD.read_text()
-        assert "verification_tokens" in content
+    def test_verification_phase_captures_token_usage(self):
+        """The verification phase must record token usage for the verification call.
 
-    def test_phase2_has_provenance_gathering_step(self):
+        Historical note: the original CCP-2vo.1 spec called `update_verification_tokens()`
+        explicitly. CCP-2vo.4 unified all token capture through `insert_agent_call` with
+        `phase_label='verification'`. Either mechanism satisfies the contract — the test
+        just guards that the verification phase actually records tokens somehow.
+        """
+        section = verification_phase_section(BEAD_ORCHESTRATOR_MD.read_text())
+        assert section, "No Verification phase section found"
+        assert (
+            "verification_tokens" in section
+            or "phase_label='verification'" in section
+            or 'phase_label="verification"' in section
+        ), "Verification phase must record token usage (verification_tokens or insert_agent_call)"
+
+    def test_has_provenance_gathering_step(self):
         content = BEAD_ORCHESTRATOR_MD.read_text()
         assert "Provenance gathering" in content or "provenance" in content.lower()
 
