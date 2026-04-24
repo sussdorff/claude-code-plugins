@@ -170,7 +170,7 @@ END LOOP
 ## Implementation
 
 > **Extracted to helper:** All polling logic lives in
-> `beads-workflow/scripts/wave-poll.py`. This section is now a thin
+> `${CLAUDE_PLUGIN_ROOT}/scripts/wave-poll.py`. This section is now a thin
 > dispatch wrapper — see `wave-poll.py` for the full implementation.
 
 ```bash
@@ -181,14 +181,8 @@ STUCK_HOURS=$(echo "$INPUT" | python3 -c "import sys,json; d=json.load(sys.stdin
 REVIEW_MAX=$(echo "$INPUT" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('review_loop_max_iterations', 3))")
 POLL_SEC=$(echo "$INPUT" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('poll_interval_seconds', 60))")
 
-# Discover wave-poll.py via pathlib (worktree-safe)
-SCRIPT=$(python3 -c "
-from pathlib import Path
-hits = list((Path.home() / '.claude').rglob('wave-poll.py'))
-if not hits:
-    hits = list(Path('.').rglob('wave-poll.py'))
-print(hits[0] if hits else '')
-")
+# Use CLAUDE_PLUGIN_ROOT (set by Claude Code) — never rglob or use CWD-relative paths.
+SCRIPT="${CLAUDE_PLUGIN_ROOT}/scripts/wave-poll.py"
 
 # Delegate all polling logic to the helper
 # wave-poll.py returns an execution-result envelope; extract data.verdict and emit it
@@ -254,8 +248,8 @@ Documents what was extracted, what was classified as ALLOWED, and why.
 
 | Agent / Skill | Location in prompt | Extracted to | Classification |
 |---|---|---|---|
-| `wave-monitor.md` `## Implementation` (115 lines bash) | Lines 168–285 (pre-refactor) | `beads-workflow/scripts/wave-poll.py` | EXTRACT — deterministic workflow logic with multiple exit paths, non-trivial JSON parsing, cmux calls |
-| `bead-orchestrator.md` Phase 6 + Phase 8 `auto_decisions` SQL snippet | Two identical `python3 -c "import sqlite3..."` blocks | `increment_auto_decisions()` in `beads-workflow/lib/orchestrator/metrics.py` | EXTRACT — duplicated SQL; belongs in the metrics library alongside `start_run`, `rollup_run` |
+| `wave-monitor.md` `## Implementation` (115 lines bash) | Lines 168–285 (pre-refactor) | `${CLAUDE_PLUGIN_ROOT}/scripts/wave-poll.py` | EXTRACT — deterministic workflow logic with multiple exit paths, non-trivial JSON parsing, cmux calls |
+| `bead-orchestrator.md` Phase 6 + Phase 8 `auto_decisions` SQL snippet | Two identical `python3 -c "import sqlite3..."` blocks | `increment_auto_decisions()` in `${CLAUDE_PLUGIN_ROOT}/lib/orchestrator/metrics.py` | EXTRACT — duplicated SQL; belongs in the metrics library alongside `start_run`, `rollup_run` |
 
 ### Classified as ALLOWED (embedded snippet permitted)
 

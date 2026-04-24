@@ -122,7 +122,7 @@ After receiving any subagent result, pipe the output through `parse_debrief.py` 
 the parsed data in an in-context `DEBRIEF_AGGREGATE` list (list of parsed debrief JSON dicts).
 
 ```bash
-python3 beads-workflow/lib/orchestrator/parse_debrief.py <<'DEBRIEF_EOF'
+python3 "${CLAUDE_PLUGIN_ROOT}/lib/orchestrator/parse_debrief.py" <<'DEBRIEF_EOF'
 <subagent output verbatim>
 DEBRIEF_EOF
 ```
@@ -251,11 +251,9 @@ Announce: "Routing: GSD mode — [reason]" or "Routing: PAUL mode — [reason]"
 After routing (and before bd claim), create the metrics run:
 
 ```bash
-# Locate metrics-start.py (prefer repo-local, fall back to installed)
-METRICS_START="beads-workflow/scripts/metrics-start.py"
-if [[ ! -f "$METRICS_START" ]]; then
-  METRICS_START=$(find ~/.claude/plugins -name metrics-start.py -type f 2>/dev/null | sort -r | head -1)
-fi
+# Use CLAUDE_PLUGIN_ROOT (set by Claude Code) — do NOT use CWD-relative paths,
+# they break in worktrees and consumer projects.
+METRICS_START="${CLAUDE_PLUGIN_ROOT}/scripts/metrics-start.py"
 RUN_ID=$(python3 "$METRICS_START" "<bead_id>" "${WAVE_ID:-}" "full-1pane")
 export CCP_ORCHESTRATOR_RUN_ID="$RUN_ID"  # Prevents SubagentStop hook from double-writing ad-hoc rows
 echo "RUN_ID=$RUN_ID"
@@ -267,7 +265,7 @@ Store `RUN_ID` in your agent context — propagate to every subsequent subagent 
 
 Run:
 ```
-python3 beads-workflow/scripts/claim-bead.py <id> --session-id=$CCP_SESSION_ID --wave-id=${WAVE_ID:-} --run-id=$RUN_ID
+python3 "${CLAUDE_PLUGIN_ROOT}/scripts/claim-bead.py" <id> --session-id=$CCP_SESSION_ID --wave-id=${WAVE_ID:-} --run-id=$RUN_ID
 ```
 
 First line `✓ CLAIMED ...` → proceed. First line `✗ ABORT ...` → stop, return that line to user, exit phase.
@@ -510,7 +508,7 @@ For each acceptance criterion:
 ### Metrics Logging
 At the end, log your token usage:
 ```python
-import sys; sys.path.insert(0, '<repo>/beads-workflow/lib/orchestrator')
+import os, sys; sys.path.insert(0, os.path.join(os.environ['CLAUDE_PLUGIN_ROOT'], 'lib', 'orchestrator'))
 from metrics import insert_agent_call
 insert_agent_call(
     run_id='<RUN_ID>', bead_id='<BEAD_ID>', phase_label='implementation',
@@ -662,7 +660,7 @@ guidance for large ones.
 
 ```bash
 RUN_ID=<run_id> BEAD_ID=<bead_id> PHASE_LABEL=codex-adversarial ITERATION=1 \
-  python3 beads-workflow/scripts/codex-exec.py --diff-range <pre-impl-sha>...HEAD \
+  python3 "${CLAUDE_PLUGIN_ROOT}/scripts/codex-exec.py" --diff-range <pre-impl-sha>...HEAD \
   "Review this diff for regressions and bugs:
 
 ## Bead: <BEAD_ID>
@@ -717,7 +715,7 @@ At the end, log token usage via insert_agent_call(run_id=..., phase_label='codex
 **Step 2: Codex neutral re-check** (synchronous — same Bash timeout rule as Phase 7):
 ```bash
 RUN_ID=<run_id> BEAD_ID=<bead_id> PHASE_LABEL=codex-fix-check ITERATION=1 \
-  python3 beads-workflow/scripts/codex-exec.py --diff-range <fix-commit-parent-sha>...HEAD \
+  python3 "${CLAUDE_PLUGIN_ROOT}/scripts/codex-exec.py" --diff-range <fix-commit-parent-sha>...HEAD \
   "Verify these fixes resolve the reported regressions:
 
 ## Diff of fixes:
@@ -977,14 +975,8 @@ and proceed to Phase 16. Never leave a bead `in_progress` due to a documentation
 **Before session-close, rollup the run:**
 
 ```bash
-# Locate metrics-rollup.py (prefer repo-local, fall back to installed)
-METRICS_ROLLUP="beads-workflow/scripts/metrics-rollup.py"
-if [[ ! -f "$METRICS_ROLLUP" ]]; then
-  METRICS_ROLLUP=$(find ~/.claude/plugins -name metrics-rollup.py -type f 2>/dev/null | sort -r | head -1)
-fi
-if [[ -n "$METRICS_ROLLUP" ]]; then
-  python3 "$METRICS_ROLLUP" "<run_id>"
-fi
+# Use CLAUDE_PLUGIN_ROOT (set by Claude Code) — never use CWD-relative paths.
+python3 "${CLAUDE_PLUGIN_ROOT}/scripts/metrics-rollup.py" "<run_id>"
 ```
 
 **Store close reason:**
@@ -1160,7 +1152,7 @@ Do NOT spawn `core:session-close`.
 - Do NOT close beads — EVER. Beads are closed by session-close as the absolute last step after merge+push. The orchestrator hands off, it does not close. **Exception:** Closing a parent bead during slicing (Phase 0) is permitted.
 - Do NOT create beads for new work discovered during implementation — report to user instead
 - Do NOT use `cmux send` for review injection — review is inline (Phase 6). The old 2-pane flow (`cld -br`, cmux-reviewer, old Codex runtime wrapper) was removed in CCP-2vo.10
-- All Codex calls go through `beads-workflow/scripts/codex-exec.py`
+- All Codex calls go through `${CLAUDE_PLUGIN_ROOT}/scripts/codex-exec.py`
 - Every metric write MUST be keyed by `run_id` — NO bead_id-only writes
 
 ## Session Capture

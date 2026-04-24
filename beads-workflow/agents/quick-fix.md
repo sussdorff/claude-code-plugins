@@ -131,11 +131,8 @@ Gather minimal context:
 
 4. Create a metrics run (store `RUN_ID` for codex-exec.sh calls and the claim call):
    ```bash
-   # Locate metrics-start.sh (prefer repo-local, fall back to installed)
-   METRICS_START="beads-workflow/scripts/metrics-start.sh"
-   if [[ ! -f "$METRICS_START" ]]; then
-     METRICS_START=$(find ~/.claude/plugins -name metrics-start.sh -type f 2>/dev/null | sort -r | head -1)
-   fi
+   # Use CLAUDE_PLUGIN_ROOT (set by Claude Code) — never use CWD-relative paths.
+   METRICS_START="${CLAUDE_PLUGIN_ROOT}/scripts/metrics-start.sh"
    RUN_ID=$("$METRICS_START" "<bead_id>" "${WAVE_ID:-}" "quick-fix")
    export CCP_ORCHESTRATOR_RUN_ID="$RUN_ID"  # Prevents SubagentStop hook from double-writing ad-hoc rows
    echo "$RUN_ID"
@@ -159,11 +156,8 @@ Gather minimal context:
 
 5. Create a metrics run (store `RUN_ID` for codex-exec.py calls):
    ```bash
-   # Locate metrics-start.py (prefer repo-local, fall back to installed)
-   METRICS_START="beads-workflow/scripts/metrics-start.py"
-   if [[ ! -f "$METRICS_START" ]]; then
-     METRICS_START=$(find ~/.claude/plugins -name metrics-start.py -type f 2>/dev/null | sort -r | head -1)
-   fi
+   # Use CLAUDE_PLUGIN_ROOT (set by Claude Code) — never use CWD-relative paths.
+   METRICS_START="${CLAUDE_PLUGIN_ROOT}/scripts/metrics-start.py"
    RUN_ID=$(python3 "$METRICS_START" "<bead_id>" "${WAVE_ID:-}" "quick-fix")
    export CCP_ORCHESTRATOR_RUN_ID="$RUN_ID"  # Prevents SubagentStop hook from double-writing ad-hoc rows
    echo "$RUN_ID"
@@ -174,7 +168,7 @@ Gather minimal context:
 
 Run:
 ```
-python3 beads-workflow/scripts/claim-bead.py <id> --session-id=$CCP_SESSION_ID --run-id=$RUN_ID
+python3 "${CLAUDE_PLUGIN_ROOT}/scripts/claim-bead.py" <id> --session-id=$CCP_SESSION_ID --run-id=$RUN_ID
 ```
 
 First line `✓ CLAIMED ...` → proceed. First line `✗ ABORT ...` → stop, return that line to user, exit phase.
@@ -223,15 +217,12 @@ After the implementer commits, trigger a Codex adversarial review on the diff.
 #### Step 1: Locate codex-exec.py
 
 ```bash
-# Locate codex-exec.py (prefer repo-local, fall back to installed)
-CODEX_EXEC="beads-workflow/scripts/codex-exec.py"
-if [[ ! -f "$CODEX_EXEC" ]]; then
-  CODEX_EXEC=$(find ~/.claude/plugins -name codex-exec.py -type f 2>/dev/null | sort -r | head -1)
-fi
+# Use CLAUDE_PLUGIN_ROOT (set by Claude Code) — never use CWD-relative paths.
+CODEX_EXEC="${CLAUDE_PLUGIN_ROOT}/scripts/codex-exec.py"
 ```
 
-If not found: **skip review, proceed to Phase 3 with a warning.** Quick fixes should not be
-blocked by missing tooling — log it and move on.
+If `$CLAUDE_PLUGIN_ROOT` is unset or the script is missing: **skip review, proceed to Phase 3
+with a warning.** Quick fixes should not be blocked by missing tooling — log it and move on.
 
 If `RUN_ID` is empty (metrics unavailable): **proceed normally.** `codex-exec.py` degrades
 gracefully — it runs codex and skips DB recording. The review still happens; only metrics are lost.
@@ -347,12 +338,9 @@ Non-blocking telemetry. Capture tokens and Codex stats. Do NOT emit an output su
 return here — Phase 5 must fire next, unconditionally.
 
 ```bash
-# Locate metrics-rollup.py (prefer repo-local, fall back to installed)
-METRICS_ROLLUP="beads-workflow/scripts/metrics-rollup.py"
-if [[ ! -f "$METRICS_ROLLUP" ]]; then
-  METRICS_ROLLUP=$(find ~/.claude/plugins -name metrics-rollup.py -type f 2>/dev/null | sort -r | head -1)
-fi
-if [[ -n "$METRICS_ROLLUP" ]]; then
+# Use CLAUDE_PLUGIN_ROOT (set by Claude Code) — never use CWD-relative paths.
+METRICS_ROLLUP="${CLAUDE_PLUGIN_ROOT}/scripts/metrics-rollup.py"
+if [[ -f "$METRICS_ROLLUP" ]]; then
   python3 "$METRICS_ROLLUP" "{RUN_ID}" "{BEAD_ID}" "{TOTAL_FINDINGS}" "{REGRESSION_COUNT}"
 fi
 ```
@@ -527,7 +515,7 @@ The old cmux-send-to-self approach is deprecated — do not reintroduce it.
 - **Skip review gracefully if Codex unavailable.** Quick fixes should not be blocked by missing
   tooling. Log a warning and proceed.
 - **Never use `Skill("codex:...")`.** Those slash-commands have `disable-model-invocation: true`.
-  Always invoke via `RUN_ID=... BEAD_ID=... PHASE_LABEL=... python3 beads-workflow/scripts/codex-exec.py <prompt>` through Bash.
+  Always invoke via `RUN_ID=... BEAD_ID=... PHASE_LABEL=... python3 "${CLAUDE_PLUGIN_ROOT}/scripts/codex-exec.py" <prompt>` through Bash.
 - **Guard rail is mandatory.** If a bead is too large (M+ effort, feature type), refuse and
   redirect to bead-orchestrator. Don't try to quick-fix a complex bead.
 - **Minimal context, not no context.** Read the files mentioned in the bead. Check for obvious
