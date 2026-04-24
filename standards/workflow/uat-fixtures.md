@@ -53,11 +53,11 @@ without starting a live server.
    set -euo pipefail
    FIXTURES_DIR="tests/fixtures/uat-generated"
    mkdir -p "$FIXTURES_DIR"
-   
+
    # Example: capture API response
    curl -sf http://localhost:3001/api/health > "$FIXTURES_DIR/health.json"
    curl -sf http://localhost:3001/api/proposals?date=2026-01-01 > "$FIXTURES_DIR/proposals.json"
-   
+
    echo "$(date -Iseconds)" > "$FIXTURES_DIR/.generated_at"
    ```
 
@@ -70,14 +70,14 @@ without starting a live server.
 3. **Configure `uat-config.yml`** to use the fixtures:
    ```yaml
    project_type: library  # or: api
-   
+
    uat_strategy:
      mode: import_check  # or: smoke (for API fixtures with mock server)
-   
+
    smoke_tests:
      - cmd: "python3 -c \"import mylib; assert mylib.VERSION\""
        description: "Library imports and version is set"
-   
+
    # Optional: fixture freshness check
    # fixture_generation:
    #   cmd: "bash scripts/generate-uat-fixtures.sh"
@@ -297,10 +297,10 @@ project_type: cli | web | library
 setup:
   install: ["<cmd1>", "<cmd2>"]
   # Optional. Commands run before UAT scenarios. Install deps, build, etc.
-  
+
   env: {KEY: "value"}
   # Optional. Environment variables set for all UAT commands.
-  
+
   wait_for: "http://host/health"
   # Optional. URL polled (curl -sf) until HTTP 200 before running UAT.
   # Use for web projects that need a server to start.
@@ -308,10 +308,10 @@ setup:
 uat_strategy:
   mode: smoke | playwright | import_check
   # Required. Selects the execution strategy in uat-validator.
-  
+
   base_url: "http://host:port"
   # Required for mode: playwright.
-  
+
   dev_server_command: "MIRA_NS=ns bun run dev:all"
   # Required for mode: playwright. Command to start the dev server.
 
