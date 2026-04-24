@@ -54,7 +54,6 @@ Use this template for new ADRs:
 Name files: `ADR-NNNN-kebab-case-title.md`
 
 Start the ADR counter at 0001. The ADR-0001 is the self-referential bootstrap.
-```
 
 ## Bootstrap ADR Content
 

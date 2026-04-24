@@ -226,7 +226,7 @@ Do NOT auto-fix in audit mode. Just report. Suggest `/project-setup --upgrade` f
 Lives in project root. Single line with the CalVer version of this skill at setup/upgrade time.
 
 ```
-2026.03.0
+2026.04.0
 ```
 
 This file SHOULD be committed to git — it's team-shared project metadata.
