@@ -1,3 +1,22 @@
+## [unreleased]
+
+### 🚀 Features
+
+- *(CCP-ijh)* Daily-brief config schema + per-project brief storage layout
+
+### 🐛 Bug Fixes
+
+- *(CCP-b9d)* Use ${CLAUDE_PLUGIN_ROOT} for plugin script paths + add lint gate
+- *(CCP-ijh)* Remove unused 'field' import from dataclasses
+
+### 🧪 Testing
+
+- *(verification-provenance)* Update stale tests to match renumbered phases
+
+### ⚙️ Miscellaneous Tasks
+
+- Bump actions to Node 24 (checkout@v5, setup-python@v6)
+- Re-trigger workflow on its own YAML changes
 ## [Unreleased]
 
 ### 🚀 Features
