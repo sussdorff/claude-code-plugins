@@ -68,3 +68,16 @@ standards:
       - "migrate to python"
       - "python default"
     path: "dev-tools/python-default-bash-exception.md"
+
+  workflow/adr-location:
+    description: "ADR Location Standard: Architecture Decision Records live at /docs/adr/ (canonical). Legacy: /docs/adrs/, .claude/adrs/ accepted by verification but new projects use /docs/adr/. Bootstrapped by /project-setup with README.md + ADR-0001 self-referential bootstrap ADR."
+    triggers:
+      - "ADR"
+      - "architecture decision"
+      - "decision record"
+      - "adr-location"
+      - "docs/adr"
+      - "ADR-0001"
+      - "MADR"
+      - "architectural decision"
+    path: "workflow/adr-location.md"
