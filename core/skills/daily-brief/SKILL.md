@@ -5,12 +5,30 @@ description: >
   ~/.claude/daily-brief.yml and persists per-project briefs to
   <project>/.claude/daily-briefs/YYYY-MM-DD.md. Use for daily summaries
   of git activity, bead progress, and open-brain entries across tracked projects.
+triggers:
+  - daily brief
+  - daily briefing
+  - tagesbericht
+  - was hatte ich gestern gemacht
+  - daily-brief
+  - brief generieren
+  - /daily-brief
 ---
 
 # daily-brief
 
 Generate a daily brief for one or all tracked projects, covering git commits,
 bead activity, and memory entries for a given date range.
+
+## Quick Start
+
+All CLI forms delegate to `scripts/orchestrate-brief.py`:
+
+```bash
+python3 scripts/orchestrate-brief.py
+```
+
+See the **Orchestration** section below for all supported CLI args.
 
 ## Config
 
@@ -51,6 +69,40 @@ Briefs are persisted flat under `<project>/.claude/daily-briefs/`:
   2026-04-23.md
   ...
 ```
+
+## Orchestration (scripts/orchestrate-brief.py)
+
+The `orchestrate-brief.py` script is the main entry point. It handles all CLI
+args, backfill logic, and open-brain persistence.
+
+**Orchestration flow:**
+1. Parse CLI args
+2. Load config, resolve project(s)
+3. For each (project, date): check `brief_exists` → if missing, call `render-brief.py`
+4. Persist each new brief to open-brain (idempotent via `session_ref`)
+5. Emit aggregated markdown
+
+**Backfill rule:** Re-running the same args is a no-op. Already-persisted briefs are
+never re-queried. Force-regenerate is not supported in v1.
+
+**Open-brain persistence:** Each new brief is saved as `type=daily_brief`,
+`project=<slug>`, `session_ref=daily-brief-YYYY-MM-DD`. Non-blocking — failure
+never aborts the brief output.
+
+**CLI args:**
+
+| Invocation | Behaviour |
+|------------|-----------|
+| `python3 scripts/orchestrate-brief.py` | All config projects, since=yesterday |
+| `python3 scripts/orchestrate-brief.py <name>` | Single project, since=yesterday |
+| `python3 scripts/orchestrate-brief.py --since=Nd` | Last N days (2d, 7d, etc.) |
+| `python3 scripts/orchestrate-brief.py --date=YYYY-MM-DD` | Specific date |
+| `python3 scripts/orchestrate-brief.py --range=YYYY-MM-DD..YYYY-MM-DD` | Date range |
+| `python3 scripts/orchestrate-brief.py --detailed` | Raise word cap ~150→~300/project |
+
+**Range rollup:** For `--since` or `--range`, emits ONE aggregated markdown per
+project: single Executive Summary across the range, What Changed grouped by day,
+Open Loops/Next Best Moves/Evidence aggregated.
 
 ## Python Helpers (scripts/config.py)
 
@@ -126,10 +178,6 @@ grounded in source data.
 **Usage:**
 
 ```bash
-python3 scripts/query-sources.py --project claude-code-plugins --date 2026-04-23 | python3 scripts/capability-extractor.py --stdin
-```
-
-```bash
 python3 scripts/capability-extractor.py --project claude-code-plugins --date 2026-04-23
 ```
 
@@ -167,33 +215,10 @@ Prose paragraphs, not bullet lists (except Evidence). Empty day: `Ruhiger Tag �
 python3 scripts/render-brief.py --project claude-code-plugins --date 2026-04-23
 ```
 
-**Range (compressed rollup by default):**
+## Config CLI Usage
 
 ```bash
-python3 scripts/render-brief.py --project claude-code-plugins --since 2026-04-20
-```
-
-**Detailed range:**
-
-```bash
-python3 scripts/render-brief.py --project claude-code-plugins --since 2026-04-20 --detailed
-```
-
-## CLI Usage
-
-```bash
-# Load (or bootstrap) config
 python3 core/skills/daily-brief/scripts/config.py load
-
-# Resolve a project
 python3 core/skills/daily-brief/scripts/config.py resolve mira
-
-# Get brief path
-python3 core/skills/daily-brief/scripts/config.py brief-path mira 2026-04-24
-
-# Check brief existence
 python3 core/skills/daily-brief/scripts/config.py brief-exists mira 2026-04-24
-
-# Get briefs directory
-python3 core/skills/daily-brief/scripts/config.py briefs-dir mira
 ```
