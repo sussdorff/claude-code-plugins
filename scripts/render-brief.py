@@ -173,10 +173,9 @@ def _render_executive_summary(
     # Sessions
     if sessions:
         count = len(sessions)
-        paragraphs.append(
-            f"{count} Session-Eintrag{''-einträge if count > 1 else ''} "
-            f"{'sind' if count > 1 else 'ist'} dokumentiert."
-        )
+        noun = "Session-Einträge" if count > 1 else "Session-Eintrag"
+        verb = "sind" if count > 1 else "ist"
+        paragraphs.append(f"{count} {noun} {verb} dokumentiert.")
 
     # Open/ready work
     open_count = len(open_beads)
@@ -313,10 +312,9 @@ def _render_why_it_matters(
     # Learnings
     if learnings:
         count = len(learnings)
-        paragraphs.append(
-            f"{count} Lern-Eintrag{''-einträge if count > 1 else ''} "
-            f"{'wurden' if count > 1 else 'wurde'} dokumentiert."
-        )
+        noun = "Lern-Einträge" if count > 1 else "Lern-Eintrag"
+        verb = "wurden" if count > 1 else "wurde"
+        paragraphs.append(f"{count} {noun} {verb} dokumentiert.")
 
     # Decisions pending
     if decisions:

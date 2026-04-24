@@ -32,6 +32,12 @@ import sys
 from pathlib import Path
 from typing import Any
 
+# Pre-compiled word-boundary patterns for capability signal keywords.
+# Using word boundaries prevents false positives like "know" matching "now"
+# or "renew" matching "new gate".
+_WORD_BOUNDARY_KEYWORDS = frozenset(["now", "unblocks"])
+_SUBSTRING_KEYWORDS = frozenset(["new gate", "now verified", "now possible", "[feat]", "[qg]"])
+
 # ---------------------------------------------------------------------------
 # Path setup: make config.py importable when invoked from scripts/
 # ---------------------------------------------------------------------------
@@ -49,11 +55,6 @@ import config as _cfg  # noqa: E402  (after sys.path manipulation)
 _SCHEMA_PATH = "core/contracts/execution-result.schema.json"
 _PRODUCER = "scripts/capability-extractor.py"
 _CONTRACT_VERSION = "1"
-
-# Capability signal keywords in bead titles/descriptions
-_CAPABILITY_KEYWORDS = frozenset([
-    "now", "new gate", "now verified", "now possible", "unblocks", "[feat]", "[qg]",
-])
 
 # Session summary "What's New" line prefixes
 _WHATS_NEW_PREFIXES = ("New:", "Fixed:", "Internal:")
@@ -95,9 +96,22 @@ def _envelope(
 
 
 def _has_capability_signal(text: str) -> bool:
-    """Return True if text contains any capability signal keyword (case-insensitive)."""
+    """Return True if text contains any capability signal keyword (case-insensitive).
+
+    Word-boundary matching is used for single-word keywords like 'now' and 'unblocks'
+    to avoid false positives ('know' matching 'now', 'renew' matching substring).
+    Multi-word phrases and bracket tokens use substring matching.
+    """
     lower = text.lower()
-    return any(kw in lower for kw in _CAPABILITY_KEYWORDS)
+    # Substring match for multi-word phrases and bracket tokens
+    for kw in _SUBSTRING_KEYWORDS:
+        if kw in lower:
+            return True
+    # Word-boundary match for single-word keywords
+    for kw in _WORD_BOUNDARY_KEYWORDS:
+        if re.search(r"\b" + re.escape(kw) + r"\b", lower):
+            return True
+    return False
 
 
 def _bead_type_label(bead: dict[str, Any]) -> str:
