@@ -2,6 +2,7 @@
 
 ### 🚀 Features
 
+- *(CCP-ijh)* Daily-brief config schema + per-project brief storage layout: `config.py` with `load_config()`, `resolve_project()`, `brief_path()`, `brief_exists()`, `briefs_dir()` helpers; bootstrap creates `~/.claude/daily-brief.yml` with four projects (claude-code-plugins, mira, polaris, open-brain); `SKILL.md` for `core/skills/daily-brief`; 18 tests.
 - *(CCP-h8h)* Eliminate in-repo Codex mirrors: enforce dev-repo principle (`rm -rf` invariant). Delete `.agents/` (72 skill mirrors) and `.codex/` (3 agent mirrors). Rewrite `sync-codex-skills` and `sync-codex-agents` to target user-scoped dirs only. Fix CI: skill-audit.yml now uses canonical `meta/skills/skill-auditor/` validator. Add `docs/architecture/dev-repo-principle.md` and `tests/test_dev_repo_principle.py`.
 
 ### 🐛 Bug Fixes
