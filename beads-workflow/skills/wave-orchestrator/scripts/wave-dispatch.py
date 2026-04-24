@@ -53,19 +53,6 @@ class WaveDispatcher:
     def __init__(self, runner=None):
         self._runner = runner if runner is not None else subprocess.run
 
-    def cmux_identify(self) -> dict:
-        """Call cmux identify --json and return parsed JSON."""
-        try:
-            result = self._runner(
-                ["cmux", "identify", "--json"],
-                capture_output=True,
-                text=True,
-                timeout=10,
-            )
-            return json.loads(result.stdout)
-        except Exception:
-            return {}
-
     def bd_show_json(self, bead_id: str) -> dict | None:
         """Call bd show <id> --json and return parsed JSON."""
         try:
