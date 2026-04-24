@@ -630,13 +630,14 @@ def render_range(
     """
     dates = _date_range(start_date, end_date)
 
-    # Optionally persist single-day briefs and collect envelopes
+    # Optionally persist single-day briefs and collect envelopes.
+    # Note: data is fetched for all dates in range (needed for rollup aggregation).
+    # Backfill write protection: render_single_day skips writing if brief already exists.
     all_envelopes: list[tuple[str, dict[str, Any]]] = []
     for date in dates:
         envelope = _fetch_envelope(project, date, config_path)
         if envelope:
-            # Persist each day's brief unchanged (respects persist flag).
-            # render_single_day checks brief_exists internally before writing.
+            # Persist each day's brief (only writes if not already on disk — backfill no-op)
             render_single_day(project, date, config_path, detailed=detailed, persist=persist)
             all_envelopes.append((date, envelope))
 
