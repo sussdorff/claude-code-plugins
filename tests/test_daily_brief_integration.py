@@ -44,9 +44,6 @@ _REPO_ROOT = Path(__file__).parent.parent
 _SCRIPTS_DIR = _REPO_ROOT / "scripts"
 _CONFIG_DIR = _REPO_ROOT / "core" / "skills" / "daily-brief" / "scripts"
 
-sys.path.insert(0, str(_CONFIG_DIR))
-import config as _cfg  # noqa: E402
-
 _LIVE_CONFIG = Path.home() / ".claude" / "daily-brief.yml"
 
 # ---------------------------------------------------------------------------
@@ -116,11 +113,20 @@ def _has_date_range_heading(text: str) -> bool:
 
 def _brief_exists_on_disk(project_name: str) -> bool:
     """Return True if at least one brief exists on disk for the given project."""
-    result = _cfg.resolve_project(project_name, _LIVE_CONFIG)
-    if result["status"] != "ok" or not result["data"]["projects"]:
+    proc = subprocess.run(
+        [
+            "uv", "run", "--quiet", "--script",
+            str(_CONFIG_DIR / "config.py"),
+            "briefs-dir",
+            project_name,
+        ],
+        capture_output=True,
+        text=True,
+        timeout=30,
+    )
+    if proc.returncode != 0:
         return False
-    project = _cfg.ProjectConfig.from_dict(result["data"]["projects"][0])
-    briefs_dir = _cfg.briefs_dir(project)
+    briefs_dir = Path(proc.stdout.strip())
     if not briefs_dir.is_dir():
         return False
     return any(briefs_dir.glob("*.md"))
