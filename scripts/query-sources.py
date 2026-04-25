@@ -103,15 +103,7 @@ class MockCommandRunner(CommandRunner):
         self._bd_fail = bd_fail
 
     def run(self, cmd: list[str], **kwargs: Any) -> subprocess.CompletedProcess[str]:
-        # Strip the "--db <path>" pair from bd invocations before matching so
-        # tests can be written in terms of the logical command ("bd list ...")
-        # without caring which database it was scoped to. Production code
-        # always passes the flag; the test double ignores it.
-        match_cmd = cmd
-        if cmd and cmd[0] == "bd" and len(cmd) >= 3 and cmd[1] == "--db":
-            match_cmd = [cmd[0]] + cmd[3:]
-
-        cmd_str = " ".join(match_cmd)
+        cmd_str = " ".join(cmd)
 
         # Check for failure modes first
         if self._git_fail and cmd and cmd[0] == "git":
@@ -297,7 +289,7 @@ def _run_bd(
     warnings: list[dict[str, Any]],
     warn_source: str = "beads",
     warn_reason_prefix: str = "",
-    db_flag: list[str] | None = None,
+    cwd: Path | None = None,
 ) -> list[dict[str, Any]]:
     """Run a bd command and return parsed JSON list.
 
@@ -305,14 +297,16 @@ def _run_bd(
     Never swallows errors silently (AK #5).
 
     Args:
-        db_flag: Optional ``["--db", "<path>"]`` prefix to scope bd at a specific
-            database. When omitted, bd runs against whatever DB it resolves from
-            the caller's cwd — which is NOT the intended project for cross-project
-            daily briefs. Callers should pass a db_flag derived from the resolved
-            project path.
+        cwd: Optional working directory so bd auto-discovers .beads/ for the
+            correct project. Without it, bd resolves the DB from the caller's
+            cwd — which is NOT the intended project for cross-project daily
+            briefs.
     """
-    cmd = ["bd"] + (db_flag or []) + args
-    result = runner.run(cmd)
+    cmd = ["bd"] + args
+    kwargs: dict[str, Any] = {}
+    if cwd is not None:
+        kwargs["cwd"] = str(cwd)
+    result = runner.run(cmd, **kwargs)
     if result.returncode != 0:
         reason = warn_reason_prefix or f"bd {' '.join(args)} failed"
         warnings.append(_warning_entry(
@@ -372,20 +366,17 @@ def _detect_reopens(
     return reopen_signals
 
 
-def _resolve_bd_db_flag(project_path: Path) -> list[str] | None:
-    """Return ``["--db", "<db_path>"]`` if a beads DB exists for the project.
+def _detect_beads_available(project_path: Path) -> bool:
+    """Return True if a modern beads setup exists for the project.
 
-    Looks in ``<project_path>/.beads/*.db`` and picks the first match. Returns
-    ``None`` when no DB is present — callers should then treat beads as
-    unavailable (no error, just empty results).
+    Checks for .beads/config.yaml (canonical for both legacy SQLite and modern
+    Dolt beads) or .beads/issues.jsonl (modern export format). Returns False
+    if .beads/ does not exist or neither file is present.
     """
     beads_dir = project_path / ".beads"
     if not beads_dir.is_dir():
-        return None
-    db_files = sorted(beads_dir.glob("*.db"))
-    if not db_files:
-        return None
-    return ["--db", str(db_files[0])]
+        return False
+    return (beads_dir / "config.yaml").exists() or (beads_dir / "issues.jsonl").exists()
 
 
 def _collect_beads(
@@ -393,14 +384,14 @@ def _collect_beads(
     date: str,
     runner: CommandRunner,
     warnings: list[dict[str, Any]],
-    db_flag: list[str] | None = None,
+    project_path: Path | None = None,
 ) -> dict[str, Any]:
     """Collect all bead data.
 
     Args:
-        db_flag: Optional ``["--db", "<path>"]`` prefix scoping bd at a specific
-            database. Without it, bd resolves the DB from cwd, which leaks beads
-            from whatever repo invoked the script. See ``_resolve_bd_db_flag``.
+        project_path: Optional project directory so bd auto-discovers .beads/
+            for the correct project. Without it, bd resolves the DB from cwd,
+            which leaks beads from whatever repo invoked the script.
 
     Returns dict with keys:
         closed_beads, open_beads, ready_beads, blocked_beads,
@@ -411,7 +402,7 @@ def _collect_beads(
     next_date_str = (start.date() + datetime.timedelta(days=1)).isoformat()
 
     def _bd(args: list[str]) -> list[dict[str, Any]]:
-        return _run_bd(runner, args, project, date, warnings, db_flag=db_flag)
+        return _run_bd(runner, args, project, date, warnings, cwd=project_path)
 
     # Query closed beads with date filter.
     # On failure we DO NOT fall back to an unfiltered ``bd list --status=closed``
@@ -425,8 +416,11 @@ def _collect_beads(
         f"--closed-before={next_date_str}",
         "--json",
     ]
-    filtered_cmd = ["bd"] + (db_flag or []) + filtered_args
-    filtered_result = runner.run(filtered_cmd)
+    filtered_cmd = ["bd"] + filtered_args
+    filtered_result = runner.run(
+        filtered_cmd,
+        **({"cwd": str(project_path)} if project_path is not None else {}),
+    )
     closed_beads: list[dict[str, Any]] = []
     if filtered_result.returncode != 0:
         warnings.append(_warning_entry(
@@ -715,34 +709,32 @@ def query_sources(
             "decision_requests": [],
             "rework_signals": [],
         }
+    elif not _detect_beads_available(proj.path):
+        warnings.append(_warning_entry(
+            source="beads",
+            reason=(
+                f"no beads configuration found under {proj.path}/.beads/ "
+                "(expected config.yaml or issues.jsonl) — beads data skipped for this project"
+            ),
+            project=project,
+            date=date,
+        ))
+        beads_data = {
+            "closed_beads": [],
+            "open_beads": [],
+            "ready_beads": [],
+            "blocked_beads": [],
+            "decision_requests": [],
+            "rework_signals": [],
+        }
     else:
-        db_flag = _resolve_bd_db_flag(proj.path)
-        if db_flag is None:
-            warnings.append(_warning_entry(
-                source="beads",
-                reason=(
-                    f"no beads database found under {proj.path}/.beads/*.db — "
-                    "beads data skipped for this project"
-                ),
-                project=project,
-                date=date,
-            ))
-            beads_data = {
-                "closed_beads": [],
-                "open_beads": [],
-                "ready_beads": [],
-                "blocked_beads": [],
-                "decision_requests": [],
-                "rework_signals": [],
-            }
-        else:
-            beads_data = _collect_beads(
-                project=project,
-                date=date,
-                runner=runner,
-                warnings=warnings,
-                db_flag=db_flag,
-            )
+        beads_data = _collect_beads(
+            project=project,
+            date=date,
+            runner=runner,
+            warnings=warnings,
+            project_path=proj.path,
+        )
 
     # Link commits to closed beads
     standalone_commits, enriched_beads = _link_commits_to_beads(
