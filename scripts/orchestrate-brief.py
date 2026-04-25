@@ -233,6 +233,61 @@ def make_session_ref(project: str, date: str) -> str:
     return f"daily-brief-{date}"
 
 
+def _resolve_ob_credentials() -> tuple[str | None, str]:
+    """Resolve open-brain token and URL from the environment / token file / config.json.
+
+    Resolution order for the token:
+      1. OB_TOKEN env var
+      2. ~/.open-brain/token (plaintext file)
+      3. ~/.open-brain/config.json — reads "api_key" field
+
+    Resolution order for the endpoint URL:
+      1. OB_URL env var
+      2. ~/.open-brain/config.json — reads "server_url" + appends "/mcp/mcp"
+      3. Hardcoded default: "https://open-brain.sussdorff.org/mcp/mcp"
+
+    Returns:
+        (token, ob_url) — token is None when no credentials are available.
+    """
+    import json
+
+    ob_home = Path.home() / ".open-brain"
+    token_env = os.environ.get("OB_TOKEN")
+    token_file = ob_home / "token"
+    config_file = ob_home / "config.json"
+
+    token: str | None = token_env
+    config_server_url: str | None = None
+
+    if not token and token_file.exists():
+        token = token_file.read_text().strip() or None
+
+    if not token and config_file.exists():
+        try:
+            cfg = json.loads(config_file.read_text())
+            token = cfg.get("api_key") or None
+            config_server_url = cfg.get("server_url") or None
+        except OSError:
+            pass
+        except json.JSONDecodeError as exc:
+            print(
+                f"warning: ~/.open-brain/config.json is malformed: {exc}",
+                file=sys.stderr,
+            )
+        except KeyError:
+            pass
+
+    # Resolve URL: env var wins, then config.json server_url + path, then default
+    if os.environ.get("OB_URL"):
+        ob_url = os.environ["OB_URL"]
+    elif config_server_url:
+        ob_url = config_server_url.rstrip("/") + "/mcp/mcp"
+    else:
+        ob_url = "https://open-brain.sussdorff.org/mcp/mcp"
+
+    return token, ob_url
+
+
 def _save_to_open_brain(
     *,
     title: str,
@@ -256,38 +311,11 @@ def _save_to_open_brain(
         session_ref: Idempotent key ("daily-brief-YYYY-MM-DD").
         metadata: Additional metadata dict.
     """
-    import json as _json
-
-    ob_home = Path.home() / ".open-brain"
-    token_env = os.environ.get("OB_TOKEN")
-    token_file = ob_home / "token"
-    config_file = ob_home / "config.json"
-
-    token: str | None = token_env
-    config_server_url: str | None = None
-
-    if not token and token_file.exists():
-        token = token_file.read_text().strip() or None
-
-    if not token and config_file.exists():
-        try:
-            cfg = _json.loads(config_file.read_text())
-            token = cfg.get("api_key") or None
-            config_server_url = cfg.get("server_url") or None
-        except Exception:  # noqa: BLE001 — malformed config is non-fatal
-            pass
+    token, ob_url = _resolve_ob_credentials()
 
     if not token:
         # No credentials — skip silently
         return
-
-    # Resolve URL: env var wins, then config.json server_url + path, then default
-    if os.environ.get("OB_URL"):
-        ob_url = os.environ["OB_URL"]
-    elif config_server_url:
-        ob_url = config_server_url.rstrip("/") + "/mcp/mcp"
-    else:
-        ob_url = "https://open-brain.sussdorff.org/mcp/mcp"
 
     try:
         import httpx

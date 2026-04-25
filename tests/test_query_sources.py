@@ -1310,8 +1310,6 @@ class TestBuildObClientConfigJson:
         produces a client whose .search() we mock, and query_sources uses it.
         The warning 'ob_client not provided' must NOT appear in the result.
         """
-        from unittest.mock import AsyncMock, MagicMock
-
         # Write config.json into tmp_path so _build_ob_client() can find it
         config_json = tmp_path / ".open-brain" / "config.json"
         config_json.parent.mkdir(parents=True, exist_ok=True)
@@ -1365,8 +1363,6 @@ class TestBuildObClientConfigJson:
         This verifies AC#3: real failures (endpoint down) produce a warning,
         not silence or a generic 'not provided' message.
         """
-        from unittest.mock import AsyncMock, MagicMock
-
         failing_client = MagicMock()
         failing_client.search = AsyncMock(
             side_effect=Exception("Connection refused: endpoint down")

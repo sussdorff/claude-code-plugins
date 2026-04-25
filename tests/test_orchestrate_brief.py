@@ -532,12 +532,10 @@ class TestSaveToOpenBrainConfigJson:
     def test_save_uses_config_json_api_key(self, tmp_path: Path) -> None:
         """_save_to_open_brain() reads api_key from config.json when no OB_TOKEN set.
 
-        We verify this by patching asyncio.run and asserting it was called
-        (meaning a token was found), not skipped silently.
+        We verify this by patching `_async_save_memory` and asserting it was called
+        with the expected token/URL, meaning a token was found — not skipped silently.
         """
-        import asyncio
         import os
-        from unittest.mock import AsyncMock, patch
 
         config_json = tmp_path / ".open-brain" / "config.json"
         config_json.parent.mkdir(parents=True, exist_ok=True)

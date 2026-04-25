@@ -836,8 +836,8 @@ def _build_parser() -> argparse.ArgumentParser:
     return p
 
 
-def _build_ob_client() -> Any | None:
-    """Build an open-brain client from environment / token file / config.json.
+def _resolve_ob_credentials() -> tuple[str | None, str]:
+    """Resolve open-brain token and URL from the environment / token file / config.json.
 
     Resolution order for the token:
       1. OB_TOKEN env var
@@ -849,12 +849,10 @@ def _build_ob_client() -> Any | None:
       2. ~/.open-brain/config.json — reads "server_url" + appends "/mcp/mcp"
       3. Hardcoded default: "https://open-brain.sussdorff.org/mcp/mcp"
 
-    Returns None when no token can be resolved.
+    Returns:
+        (token, ob_url) — token is None when no credentials are available.
     """
-    import json as _json
     import os
-
-    import httpx
 
     ob_home = Path.home() / ".open-brain"
     token_env = os.environ.get("OB_TOKEN")
@@ -869,14 +867,18 @@ def _build_ob_client() -> Any | None:
 
     if not token and config_file.exists():
         try:
-            cfg = _json.loads(config_file.read_text())
+            cfg = json.loads(config_file.read_text())
             token = cfg.get("api_key") or None
             config_server_url = cfg.get("server_url") or None
-        except Exception:  # noqa: BLE001 — malformed config is non-fatal
+        except OSError:
             pass
-
-    if not token:
-        return None
+        except json.JSONDecodeError as exc:
+            print(
+                f"warning: ~/.open-brain/config.json is malformed: {exc}",
+                file=sys.stderr,
+            )
+        except KeyError:
+            pass
 
     # Resolve URL: env var wins, then config.json server_url + path, then default
     if os.environ.get("OB_URL"):
@@ -885,6 +887,23 @@ def _build_ob_client() -> Any | None:
         ob_url = config_server_url.rstrip("/") + "/mcp/mcp"
     else:
         ob_url = "https://open-brain.sussdorff.org/mcp/mcp"
+
+    return token, ob_url
+
+
+def _build_ob_client() -> Any | None:
+    """Build an open-brain client from environment / token file / config.json.
+
+    Delegates credential resolution to _resolve_ob_credentials().
+
+    Returns None when no token can be resolved.
+    """
+    import httpx
+
+    token, ob_url = _resolve_ob_credentials()
+
+    if not token:
+        return None
 
     class _OBClient:
         def __init__(self, url: str, token: str) -> None:
