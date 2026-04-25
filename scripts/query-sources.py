@@ -922,8 +922,15 @@ def _build_ob_client() -> Any | None:
             - SSE response parsing
             - capability negotiation
 
+            The open-brain MCP search tool accepts a single `type` string per call.
+            We call it once per type in type_filter and merge the results within a
+            single SDK session to avoid repeated session initialization overhead.
+
             The open-brain server authenticates via x-api-key header; Authorization: Bearer
             is rejected because api_key values are opaque strings, not JWTs.
+
+            Response format: the search tool returns {"total": N, "results": [...]} as
+            a JSON string in TextContent. We extract the "results" list.
             """
             # x-api-key is the correct authentication header for open-brain.
             # SDK passes these headers in the Streamable HTTP transport.
@@ -936,15 +943,28 @@ def _build_ob_client() -> Any | None:
                 ):
                     async with ClientSession(read_stream, write_stream) as session:
                         await session.initialize()
-                        result = await session.call_tool(
-                            "search",
-                            {
-                                "type": type_filter,
-                                "project": project,
-                                "date_start": date_start,
-                                "date_end": date_end,
-                            },
-                        )
+                        # Call search once per type — the tool accepts string, not list.
+                        all_entries: list[dict[str, Any]] = []
+                        for obs_type in type_filter:
+                            result = await session.call_tool(
+                                "search",
+                                {
+                                    "type": obs_type,
+                                    "project": project,
+                                    "date_start": date_start,
+                                    "date_end": date_end,
+                                },
+                            )
+                            # Parse CallToolResult content — response is {"total": N, "results": [...]}
+                            for block in result.content:
+                                if hasattr(block, "type") and block.type == "text":
+                                    parsed = json.loads(block.text)
+                                    if isinstance(parsed, dict):
+                                        # Normal response: {"total": N, "results": [...]}
+                                        all_entries.extend(parsed.get("results", []))
+                                    elif isinstance(parsed, list):
+                                        # Fallback: bare list (older server format)
+                                        all_entries.extend(parsed)
             except Exception as exc:
                 # Translate auth errors to actionable PermissionError.
                 # The SDK may wrap 401 in various exception types (httpx.HTTPStatusError,
@@ -959,14 +979,7 @@ def _build_ob_client() -> Any | None:
                     ) from exc
                 raise
 
-            # Parse CallToolResult content — content is list[ContentBlock]
-            # TextContent items carry the JSON-encoded search results.
-            entries: list[dict[str, Any]] = []
-            for block in result.content:
-                if hasattr(block, "type") and block.type == "text":
-                    # Let parse errors propagate — _collect_open_brain wraps in warning
-                    entries.extend(json.loads(block.text))
-            return entries
+            return all_entries
 
     return _OBClient(ob_url, token)
 
