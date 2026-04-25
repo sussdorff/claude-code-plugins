@@ -837,24 +837,54 @@ def _build_parser() -> argparse.ArgumentParser:
 
 
 def _build_ob_client() -> Any | None:
-    """Build an open-brain client from environment / token file.
+    """Build an open-brain client from environment / token file / config.json.
 
-    Returns None if OB_URL or token is not available.
+    Resolution order for the token:
+      1. OB_TOKEN env var
+      2. ~/.open-brain/token (plaintext file)
+      3. ~/.open-brain/config.json — reads "api_key" field
+
+    Resolution order for the endpoint URL:
+      1. OB_URL env var
+      2. ~/.open-brain/config.json — reads "server_url" + appends "/mcp/mcp"
+      3. Hardcoded default: "https://open-brain.sussdorff.org/mcp/mcp"
+
+    Returns None when no token can be resolved.
     """
+    import json as _json
     import os
 
     import httpx
 
-    ob_url = os.environ.get("OB_URL", "https://open-brain.sussdorff.org/mcp/mcp")
+    ob_home = Path.home() / ".open-brain"
     token_env = os.environ.get("OB_TOKEN")
-    token_file = Path.home() / ".open-brain" / "token"
+    token_file = ob_home / "token"
+    config_file = ob_home / "config.json"
 
     token: str | None = token_env
+    config_server_url: str | None = None
+
     if not token and token_file.exists():
-        token = token_file.read_text().strip()
+        token = token_file.read_text().strip() or None
+
+    if not token and config_file.exists():
+        try:
+            cfg = _json.loads(config_file.read_text())
+            token = cfg.get("api_key") or None
+            config_server_url = cfg.get("server_url") or None
+        except Exception:  # noqa: BLE001 — malformed config is non-fatal
+            pass
 
     if not token:
         return None
+
+    # Resolve URL: env var wins, then config.json server_url + path, then default
+    if os.environ.get("OB_URL"):
+        ob_url = os.environ["OB_URL"]
+    elif config_server_url:
+        ob_url = config_server_url.rstrip("/") + "/mcp/mcp"
+    else:
+        ob_url = "https://open-brain.sussdorff.org/mcp/mcp"
 
     class _OBClient:
         def __init__(self, url: str, token: str) -> None:

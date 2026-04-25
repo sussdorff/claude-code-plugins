@@ -256,17 +256,38 @@ def _save_to_open_brain(
         session_ref: Idempotent key ("daily-brief-YYYY-MM-DD").
         metadata: Additional metadata dict.
     """
-    ob_url = os.environ.get("OB_URL", "https://open-brain.sussdorff.org/mcp/mcp")
+    import json as _json
+
+    ob_home = Path.home() / ".open-brain"
     token_env = os.environ.get("OB_TOKEN")
-    token_file = Path.home() / ".open-brain" / "token"
+    token_file = ob_home / "token"
+    config_file = ob_home / "config.json"
 
     token: str | None = token_env
+    config_server_url: str | None = None
+
     if not token and token_file.exists():
-        token = token_file.read_text().strip()
+        token = token_file.read_text().strip() or None
+
+    if not token and config_file.exists():
+        try:
+            cfg = _json.loads(config_file.read_text())
+            token = cfg.get("api_key") or None
+            config_server_url = cfg.get("server_url") or None
+        except Exception:  # noqa: BLE001 — malformed config is non-fatal
+            pass
 
     if not token:
         # No credentials — skip silently
         return
+
+    # Resolve URL: env var wins, then config.json server_url + path, then default
+    if os.environ.get("OB_URL"):
+        ob_url = os.environ["OB_URL"]
+    elif config_server_url:
+        ob_url = config_server_url.rstrip("/") + "/mcp/mcp"
+    else:
+        ob_url = "https://open-brain.sussdorff.org/mcp/mcp"
 
     try:
         import httpx
