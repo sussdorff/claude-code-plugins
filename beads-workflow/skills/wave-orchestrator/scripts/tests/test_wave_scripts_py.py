@@ -738,5 +738,77 @@ def test_wave_status_elapsed_minutes_calculated() -> None:
     assert result["elapsed_minutes"] > 0
 
 
+def test_wave_dispatcher_skips_already_running_bead() -> None:
+    """Dispatch skips a bead that has an active process (pgrep returns PID)."""
+    wd = _wd()
+
+    cmux_split_calls: list = []
+
+    def mock_runner(cmd, **kwargs):
+        # pgrep returns a PID → bead is running
+        if cmd and cmd[0] == "pgrep":
+            return _MockResult(stdout="12345\n", returncode=0)
+        # git worktree list returns nothing relevant
+        if cmd and cmd[0] == "git" and "worktree" in cmd:
+            return _MockResult(stdout="worktree /other\nHEAD abc123\nbranch refs/heads/main\n\n")
+        if cmd and cmd[0] == "cmux" and "new-split" in cmd:
+            cmux_split_calls.append(cmd)
+            return _MockResult(stdout="surface:99\n")
+        return _MockResult()
+
+    dispatcher = wd.WaveDispatcher(runner=mock_runner)
+    exit_code, output = dispatcher.dispatch(
+        bead_ids=["proj-abc"],
+        quick_ids=[],
+        workspace="ws:1",
+        base_surface="surface:1",
+        wave_id="wave-test",
+        skip_scenarios=True,
+    )
+
+    # Dispatch should succeed overall (exit 0) but skip the already-running bead
+    assert exit_code == 0
+    # No cmux split should have been created for the running bead
+    assert cmux_split_calls == [], f"Expected no cmux splits, got: {cmux_split_calls}"
+    # Output should record the bead as already-running
+    assert len(output["beads"]) == 1
+    assert output["beads"][0]["status"] == "already-running"
+    assert "12345" in output["beads"][0]["pids"]
+
+
+def test_wave_dispatcher_proceeds_when_not_running() -> None:
+    """Dispatch proceeds normally when pgrep finds no process and no worktree exists."""
+    wd = _wd()
+
+    cmux_split_calls: list = []
+
+    def mock_runner(cmd, **kwargs):
+        # pgrep returns nothing → bead NOT running
+        if cmd and cmd[0] == "pgrep":
+            return _MockResult(stdout="", returncode=1)
+        # git worktree list returns no matching worktree
+        if cmd and cmd[0] == "git" and "worktree" in cmd:
+            return _MockResult(stdout="worktree /some/other/path\nHEAD abc123\nbranch refs/heads/main\n\n")
+        if cmd and cmd[0] == "cmux" and "new-split" in cmd:
+            cmux_split_calls.append(cmd)
+            return _MockResult(stdout="surface:42\n")
+        return _MockResult()
+
+    dispatcher = wd.WaveDispatcher(runner=mock_runner)
+    exit_code, output = dispatcher.dispatch(
+        bead_ids=["proj-abc"],
+        quick_ids=[],
+        workspace="ws:1",
+        base_surface="surface:1",
+        wave_id="wave-test",
+        skip_scenarios=True,
+    )
+
+    assert exit_code == 0
+    assert len(cmux_split_calls) == 1, f"Expected 1 cmux split, got: {cmux_split_calls}"
+    assert len(output["beads"]) == 1
+    assert output["beads"][0]["status"] == "dispatched"
+
+
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])
