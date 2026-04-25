@@ -59,35 +59,45 @@ defaults:
   timezone: Europe/Berlin
 ```
 
-## Storage Layout
+## Storage Layout (v1.5)
 
-Briefs are persisted flat under `<project>/.claude/daily-briefs/`:
+**open-brain is the primary system-of-record.** Disk is opt-in via `--persist-disk`.
 
 ```
-<project>/.claude/daily-briefs/
+open-brain (primary):
+  type=daily_brief, project=<slug>, session_ref=daily-brief-{slug}-{date}
+  metadata: {do_not_compact: true, schema_version: "1.5"}
+
+<project>/.claude/daily-briefs/ (opt-in, --persist-disk only):
   2026-04-24.md
   2026-04-23.md
   ...
 ```
+
+**Migration:** Run `python3 scripts/migrate-disk-briefs-to-open-brain.py --apply`
+once to import existing disk briefs into open-brain. See ADR-0002 for the full
+migration playbook.
 
 ## Orchestration (scripts/orchestrate-brief.py)
 
 The `orchestrate-brief.py` script is the main entry point. It handles all CLI
 args, backfill logic, and open-brain persistence.
 
-**Orchestration flow:**
+**Orchestration flow (v1.5):**
 1. Parse CLI args
 2. Load config, resolve project(s)
-3. For each (project, date): check `brief_exists` → if missing, call `render-brief.py`
-4. Persist each new brief to open-brain (idempotent via `session_ref`)
-5. Emit aggregated markdown
+3. For each (project, date): check open-brain first → if found, return cached content
+4. Fallback: check disk (for offline / OB-unavailable scenarios)
+5. If neither: call `render-brief.py` (with `--no-persist` unless `--persist-disk`)
+6. Persist each new brief to open-brain (hard error on failure)
+7. Emit aggregated markdown
 
-**Backfill rule:** Re-running the same args is a no-op. Already-persisted briefs are
-never re-queried. Force-regenerate is not supported in v1.
+**Backfill rule:** Re-running the same args is a no-op. open-brain is checked
+first; if the brief is already there, it is returned without re-rendering.
 
-**Open-brain persistence:** Each new brief is saved as `type=daily_brief`,
-`project=<slug>`, `session_ref=daily-brief-YYYY-MM-DD`. Non-blocking — failure
-never aborts the brief output.
+**Open-brain persistence (v1.5 — hard error):** Each new brief is saved as
+`type=daily_brief`, `project=<slug>`, `session_ref=daily-brief-{slug}-YYYY-MM-DD`,
+`do_not_compact=true`. Failure to write raises — OB credentials are required.
 
 **CLI args:**
 
@@ -99,6 +109,7 @@ never aborts the brief output.
 | `python3 scripts/orchestrate-brief.py --date=YYYY-MM-DD` | Specific date |
 | `python3 scripts/orchestrate-brief.py --range=YYYY-MM-DD..YYYY-MM-DD` | Date range |
 | `python3 scripts/orchestrate-brief.py --detailed` | Raise word cap ~150→~300/project |
+| `python3 scripts/orchestrate-brief.py --persist-disk` | Also write briefs to disk |
 
 **Range rollup:** For `--since` or `--range`, emits ONE aggregated markdown per
 project: single Executive Summary across the range, What Changed grouped by day,
