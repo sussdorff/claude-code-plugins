@@ -198,39 +198,43 @@ class TestParseArgs:
 
 class TestBackfillLogic:
     def test_skip_existing_brief(self, minimal_config: Path, tmp_path: Path) -> None:
-        """If brief already exists, run_for_project should not call render-brief."""
+        """If brief already exists on disk (OB offline), run_for_project should not call render-brief."""
         project_path = tmp_path / "claude-code-plugins"
         briefs_dir = project_path / ".claude" / "daily-briefs"
         briefs_dir.mkdir(parents=True)
         date = "2026-04-23"
         (briefs_dir / f"{date}.md").write_text("# existing brief")
 
-        with patch.object(ob, "_run_render_brief") as mock_render:
-            with patch.object(ob, "_save_to_open_brain") as mock_save:
-                result = ob.run_for_project(
-                    project_name="claude-code-plugins",
-                    date=date,
-                    detailed=False,
-                    config_path=minimal_config,
-                )
-        # Should not call render or save since brief exists
+        # v1.5: OB is checked first — mock it returning None (offline) so disk fallback fires
+        with patch.object(ob, "_read_from_open_brain", return_value=None):
+            with patch.object(ob, "_run_render_brief") as mock_render:
+                with patch.object(ob, "_save_to_open_brain") as mock_save:
+                    result = ob.run_for_project(
+                        project_name="claude-code-plugins",
+                        date=date,
+                        detailed=False,
+                        config_path=minimal_config,
+                    )
+        # Should not call render or save since brief exists on disk
         mock_render.assert_not_called()
         mock_save.assert_not_called()
         assert result["skipped"] is True
 
     def test_generate_missing_brief(self, minimal_config: Path, tmp_path: Path) -> None:
-        """If brief does not exist, run_for_project should call render-brief."""
+        """If brief does not exist (OB and disk both miss), run_for_project should call render-brief."""
         date = "2026-04-23"
         expected_content = "# claude-code-plugins — 2026-04-23\n\nTest content."
 
-        with patch.object(ob, "_run_render_brief", return_value=expected_content) as mock_render:
-            with patch.object(ob, "_save_to_open_brain") as mock_save:
-                result = ob.run_for_project(
-                    project_name="claude-code-plugins",
-                    date=date,
-                    detailed=False,
-                    config_path=minimal_config,
-                )
+        # v1.5: OB returns None (not found), disk also misses
+        with patch.object(ob, "_read_from_open_brain", return_value=None):
+            with patch.object(ob, "_run_render_brief", return_value=expected_content) as mock_render:
+                with patch.object(ob, "_save_to_open_brain") as mock_save:
+                    result = ob.run_for_project(
+                        project_name="claude-code-plugins",
+                        date=date,
+                        detailed=False,
+                        config_path=minimal_config,
+                    )
 
         mock_render.assert_called_once()
         mock_save.assert_called_once()
@@ -238,31 +242,33 @@ class TestBackfillLogic:
         assert result["content"] == expected_content
 
     def test_rerun_same_args_is_noop(self, minimal_config: Path, tmp_path: Path) -> None:
-        """Running twice for same (project, date) is idempotent — second call skips."""
+        """Running twice for same (project, date) is idempotent — second call skips (disk fallback)."""
         project_path = tmp_path / "claude-code-plugins"
         briefs_dir = project_path / ".claude" / "daily-briefs"
         briefs_dir.mkdir(parents=True)
         date = "2026-04-22"
-        # Simulate first run having persisted the brief
+        # Simulate first run having persisted the brief to disk
         (briefs_dir / f"{date}.md").write_text("# already persisted")
 
         call_count = 0
 
-        def fake_render(project_name: str, date: str, detailed: bool, config_path: Path) -> str:
+        def fake_render(project_name: str, date: str, detailed: bool, config_path: Path, **kwargs: object) -> str:
             nonlocal call_count
             call_count += 1
             return "# new brief"
 
-        with patch.object(ob, "_run_render_brief", side_effect=fake_render):
-            with patch.object(ob, "_save_to_open_brain"):
-                ob.run_for_project(
-                    project_name="claude-code-plugins",
-                    date=date,
-                    detailed=False,
-                    config_path=minimal_config,
-                )
+        # v1.5: OB returns None (offline), disk check fires
+        with patch.object(ob, "_read_from_open_brain", return_value=None):
+            with patch.object(ob, "_run_render_brief", side_effect=fake_render):
+                with patch.object(ob, "_save_to_open_brain"):
+                    ob.run_for_project(
+                        project_name="claude-code-plugins",
+                        date=date,
+                        detailed=False,
+                        config_path=minimal_config,
+                    )
 
-        assert call_count == 0, "render should not be called when brief exists"
+        assert call_count == 0, "render should not be called when brief exists on disk"
 
 
 # ---------------------------------------------------------------------------
@@ -313,13 +319,13 @@ class TestOpenBrainSave:
         # The actual MCP call is tested via integration
 
     def test_session_ref_format(self) -> None:
-        """session_ref must be 'daily-brief-YYYY-MM-DD'."""
+        """session_ref must be 'daily-brief-{project}-YYYY-MM-DD' (v1.5: includes project slug)."""
         ref = ob.make_session_ref("claude-code-plugins", "2026-04-23")
-        assert ref == "daily-brief-2026-04-23"
+        assert ref == "daily-brief-claude-code-plugins-2026-04-23"
 
     def test_session_ref_includes_date(self) -> None:
         ref = ob.make_session_ref("mira", "2026-04-20")
-        assert ref == "daily-brief-2026-04-20"
+        assert ref == "daily-brief-mira-2026-04-20"
 
 
 # ---------------------------------------------------------------------------
@@ -448,14 +454,15 @@ class TestMain:
         today = datetime.date.today()
         yesterday = (today - datetime.timedelta(days=1)).isoformat()
 
-        # Pre-create brief so backfill skips render
+        # Pre-create brief so disk fallback skips render (OB returns None = offline)
         for proj in ["claude-code-plugins", "mira"]:
             proj_path = tmp_path / proj
             briefs_dir = proj_path / ".claude" / "daily-briefs"
             briefs_dir.mkdir(parents=True)
             (briefs_dir / f"{yesterday}.md").write_text(f"# {proj} brief")
 
-        exit_code = ob.main(argv=["--config", str(minimal_config)])
+        with patch.object(ob, "_read_from_open_brain", return_value=None):
+            exit_code = ob.main(argv=["--config", str(minimal_config)])
         assert exit_code == 0
 
     def test_main_with_project_exits_zero(
@@ -470,7 +477,8 @@ class TestMain:
         briefs_dir.mkdir(parents=True)
         (briefs_dir / f"{yesterday}.md").write_text("# ccp brief")
 
-        exit_code = ob.main(argv=["claude-code-plugins", "--config", str(minimal_config)])
+        with patch.object(ob, "_read_from_open_brain", return_value=None):
+            exit_code = ob.main(argv=["claude-code-plugins", "--config", str(minimal_config)])
         assert exit_code == 0
 
     def test_main_unknown_project_exits_nonzero(self, minimal_config: Path) -> None:
@@ -479,7 +487,7 @@ class TestMain:
         assert exit_code != 0
 
     def test_main_since_3d_exits_zero(self, minimal_config: Path, tmp_path: Path) -> None:
-        """main() with --since=3d exits 0 (all briefs pre-exist)."""
+        """main() with --since=3d exits 0 (all briefs pre-exist on disk, OB offline)."""
         today = datetime.date.today()
         dates = [
             (today - datetime.timedelta(days=i)).isoformat() for i in range(1, 4)
@@ -491,7 +499,8 @@ class TestMain:
             for d in dates:
                 (briefs_dir / f"{d}.md").write_text(f"# {proj} {d}")
 
-        exit_code = ob.main(argv=["--since=3d", "--config", str(minimal_config)])
+        with patch.object(ob, "_read_from_open_brain", return_value=None):
+            exit_code = ob.main(argv=["--since=3d", "--config", str(minimal_config)])
         assert exit_code == 0
 
 
@@ -508,8 +517,8 @@ class TestSaveToOpenBrainConfigJson:
         { "server_url": "https://open-brain.sussdorff.org", "api_key": "ob_..." }
     """
 
-    def test_save_skips_silently_when_no_credentials(self, tmp_path: Path) -> None:
-        """_save_to_open_brain() skips when no token/config available — no exception raised."""
+    def test_save_raises_when_no_credentials(self, tmp_path: Path) -> None:
+        """_save_to_open_brain() raises RuntimeError when no token/config available (v1.5 hard error)."""
         import os
         from unittest.mock import patch
 
@@ -518,16 +527,16 @@ class TestSaveToOpenBrainConfigJson:
             with patch.dict(os.environ, {}, clear=False):
                 os.environ.pop("OB_TOKEN", None)
                 os.environ.pop("OB_URL", None)
-                # Should not raise even though there's no httpx available to call
-                ob._save_to_open_brain(
-                    title="test — 2026-04-23",
-                    text="# Test brief",
-                    ob_type="daily_brief",
-                    project="test",
-                    session_ref="daily-brief-2026-04-23",
-                    metadata={"source": "daily-brief"},
-                )
-        # If we reach here without exception, the test passes
+                # v1.5: must raise RuntimeError — persistence is mandatory
+                with pytest.raises(RuntimeError, match="open-brain"):
+                    ob._save_to_open_brain(
+                        title="test — 2026-04-23",
+                        text="# Test brief",
+                        ob_type="daily_brief",
+                        project="test",
+                        session_ref="daily-brief-test-2026-04-23",
+                        metadata={"source": "daily-brief"},
+                    )
 
     def test_save_uses_config_json_api_key(self, tmp_path: Path) -> None:
         """_save_to_open_brain() reads api_key from config.json when no OB_TOKEN set.
@@ -1105,10 +1114,9 @@ class TestPersistDiskFlag:
         assert args.persist_disk is False
 
     def test_run_render_brief_passes_no_persist_by_default(
-        self, minimal_config: Path, tmp_path: Path
+        self, minimal_config: Path
     ) -> None:
-        """When persist_disk=False (default), _run_render_brief is called with no_persist=True."""
-        import subprocess as sp
+        """When persist_disk=False (default), _run_render_brief command includes --no-persist."""
         captured_cmds: list[list[str]] = []
 
         def fake_run(cmd: list, **kwargs: object) -> object:
@@ -1118,13 +1126,12 @@ class TestPersistDiskFlag:
             result.stdout = "# brief content"
             return result
 
-        with patch.object(ob, "_read_from_open_brain", return_value=None):
-            with patch.object(ob._mod if hasattr(ob, "_mod") else ob, "subprocess") as _:
-                with patch("subprocess.run", side_effect=fake_run):
-                    with patch.object(ob, "_save_to_open_brain"):
-                        ob._run_render_brief(
-                            "claude-code-plugins", "2026-04-23", False, minimal_config
-                        )
+        # Patch subprocess.run on the orchestrate_brief module directly
+        import subprocess
+        with patch.object(subprocess, "run", side_effect=fake_run):
+            ob._run_render_brief(
+                "claude-code-plugins", "2026-04-23", False, minimal_config
+            )
 
         assert captured_cmds, "_run_render_brief must call subprocess.run"
         cmd = captured_cmds[0]
