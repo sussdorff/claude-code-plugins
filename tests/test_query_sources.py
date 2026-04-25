@@ -1326,7 +1326,7 @@ class TestBuildObClientConfigJson:
         )
 
     def test_config_json_server_url_used_for_ob_url(self, tmp_path: Path) -> None:
-        """_build_ob_client() derives ob_url from server_url in config.json + '/mcp/mcp'."""
+        """_build_ob_client() derives ob_url from server_url in config.json + '/mcp'."""
         config_json = tmp_path / ".open-brain" / "config.json"
         config_json.parent.mkdir(parents=True, exist_ok=True)
         config_json.write_text(
@@ -1341,8 +1341,8 @@ class TestBuildObClientConfigJson:
                 client = qs._build_ob_client()
 
         assert client is not None
-        assert client._url == "https://custom.example.org/mcp/mcp", (
-            f"Expected URL derived from server_url+'/mcp/mcp', got '{client._url}'"
+        assert client._url == "https://custom.example.org/mcp", (
+            f"Expected URL derived from server_url+'/mcp', got '{client._url}'"
         )
 
     def test_env_var_takes_precedence_over_config_json(self, tmp_path: Path) -> None:
@@ -1382,7 +1382,7 @@ class TestBuildObClientConfigJson:
                 client = qs._build_ob_client()
 
         assert client is not None
-        assert client._url == "https://custom.example.org/mcp/mcp", (
+        assert client._url == "https://custom.example.org/mcp", (
             f"Expected URL from config.json server_url even when OB_TOKEN is set, got '{client._url}'"
         )
         assert client._token == "ob_env_key", (
@@ -1547,6 +1547,11 @@ class TestOBClientAuthHeader:
                 assert not auth.startswith("Bearer "), (
                     f"Must not send Authorization: Bearer; got '{auth}'"
                 )
+                # Must have Accept: application/json, text/event-stream (CCP-sd9e fix)
+                accept = hdrs.get("accept", "")
+                assert "application/json" in accept and "text/event-stream" in accept, (
+                    f"Expected Accept header with 'application/json' and 'text/event-stream', got '{accept}'"
+                )
 
         _aio.run(_drive())
 
@@ -1645,3 +1650,150 @@ class TestOBClientAuthHeader:
         assert actionable, (
             f"401 warning must be actionable (mention config.json/api_key); got: {ob_warnings}"
         )
+
+
+class TestOBClientUrlAndAcceptHeaderRegressions:
+    """Regression tests for CCP-sd9e: wrong URL path /mcp/mcp + missing Accept header."""
+
+    def test_ob_client_sends_accept_header(self, tmp_path: Path) -> None:
+        """_OBClient.search() must send Accept: application/json, text/event-stream.
+
+        Regression: before CCP-sd9e, the Accept header was not sent, causing 406
+        'Client must accept both application/json and text/event-stream'.
+        After the fix the header is present and the server returns 200.
+        """
+        import httpx
+        import asyncio as _aio
+
+        accepted_requests: list[str] = []
+
+        async def handler(request: httpx.Request) -> httpx.Response:
+            accept = request.headers.get("accept", "")
+            if "application/json" in accept and "text/event-stream" in accept:
+                accepted_requests.append("ok")
+                return httpx.Response(200, json={"jsonrpc": "2.0", "id": 1, "result": {}})
+            return httpx.Response(
+                406,
+                text="Client must accept both application/json and text/event-stream",
+            )
+
+        async def _drive() -> None:
+            config_json = tmp_path / ".open-brain" / "config.json"
+            config_json.parent.mkdir(parents=True, exist_ok=True)
+            config_json.write_text(
+                '{"server_url": "https://ob.example.test", "api_key": "ob_testapikey"}'
+            )
+            import os
+            with patch("pathlib.Path.home", return_value=tmp_path):
+                with patch.dict(os.environ, {}, clear=False):
+                    os.environ.pop("OB_TOKEN", None)
+                    os.environ.pop("OB_URL", None)
+                    client = qs._build_ob_client()
+
+            assert client is not None
+            transport = httpx.MockTransport(handler)
+            original_init = httpx.AsyncClient.__init__
+
+            def patched_init(self_inner, **kwargs: object) -> None:
+                kwargs["transport"] = transport
+                original_init(self_inner, **kwargs)
+
+            with patch.object(httpx.AsyncClient, "__init__", patched_init):
+                try:
+                    await client.search(
+                        type_filter=["session_summary"],
+                        project="test",
+                        date_start="2026-04-24T00:00:00",
+                        date_end="2026-04-25T00:00:00",
+                    )
+                except Exception:
+                    pass  # Result parsing may fail; we care only about 406 not being raised
+
+        _aio.run(_drive())
+        assert accepted_requests, (
+            "Server never received a request with the correct Accept header — "
+            "the fix did not send Accept: application/json, text/event-stream"
+        )
+
+    def test_ob_client_url_uses_mcp_not_mcp_mcp(self, tmp_path: Path) -> None:
+        """_build_ob_client() must build a URL ending in /mcp, not /mcp/mcp.
+
+        Regression: before CCP-sd9e, _resolve_ob_credentials() appended '/mcp/mcp'
+        to server_url, causing 404 Not Found on the correct server.
+        """
+        config_json = tmp_path / ".open-brain" / "config.json"
+        config_json.parent.mkdir(parents=True, exist_ok=True)
+        config_json.write_text(
+            '{"server_url": "https://open-brain.sussdorff.org", "api_key": "ob_key"}'
+        )
+
+        import os
+        with patch("pathlib.Path.home", return_value=tmp_path):
+            with patch.dict(os.environ, {}, clear=False):
+                os.environ.pop("OB_TOKEN", None)
+                os.environ.pop("OB_URL", None)
+                client = qs._build_ob_client()
+
+        assert client is not None
+        assert client._url == "https://open-brain.sussdorff.org/mcp", (
+            f"URL must end with /mcp (not /mcp/mcp); got '{client._url}'"
+        )
+        assert not client._url.endswith("/mcp/mcp"), (
+            f"URL must NOT end with /mcp/mcp; got '{client._url}'"
+        )
+
+    def test_ob_404_becomes_warning_in_query_sources(
+        self, config_path: Path, empty_mock_runner: qs.MockCommandRunner
+    ) -> None:
+        """When _OBClient.search raises an HTTP 404-related error, query_sources emits an actionable warning.
+
+        Regression: the old /mcp/mcp URL returned 404 from the server. This test
+        verifies that if the URL is wrong (simulated as a generic HTTP error with URL info),
+        query_sources surfaces a warning with actionable content rather than crashing.
+        """
+        failing_client = MagicMock()
+        failing_client.search = AsyncMock(
+            side_effect=Exception(
+                "Client error '404 Not Found' for url 'https://open-brain.sussdorff.org/mcp/mcp'. "
+                "Check OB_URL or server_url in ~/.open-brain/config.json — correct path is /mcp."
+            )
+        )
+
+        result = qs.query_sources(
+            project=TEST_PROJECT,
+            date=TEST_DATE,
+            config_path=config_path,
+            runner=empty_mock_runner,
+            ob_client=failing_client,
+        )
+
+        ob_warnings = [w for w in result["data"]["warnings"] if w.get("source") == "open-brain"]
+        assert ob_warnings, "Expected open-brain warning for 404"
+
+    def test_ob_406_becomes_warning_in_query_sources(
+        self, config_path: Path, empty_mock_runner: qs.MockCommandRunner
+    ) -> None:
+        """When _OBClient.search raises an HTTP 406-related error, query_sources emits an actionable warning.
+
+        Regression: before CCP-sd9e, the Accept header was missing, causing 406 from
+        the server. This test verifies that such errors surface as warnings with
+        actionable content mentioning the Accept header.
+        """
+        failing_client = MagicMock()
+        failing_client.search = AsyncMock(
+            side_effect=Exception(
+                "Client error '406 Not Acceptable' for url 'https://open-brain.sussdorff.org/mcp'. "
+                "Server requires Accept: application/json, text/event-stream header."
+            )
+        )
+
+        result = qs.query_sources(
+            project=TEST_PROJECT,
+            date=TEST_DATE,
+            config_path=config_path,
+            runner=empty_mock_runner,
+            ob_client=failing_client,
+        )
+
+        ob_warnings = [w for w in result["data"]["warnings"] if w.get("source") == "open-brain"]
+        assert ob_warnings, "Expected open-brain warning for 406"

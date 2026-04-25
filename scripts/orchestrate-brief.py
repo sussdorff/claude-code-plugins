@@ -285,8 +285,8 @@ def _resolve_ob_credentials() -> tuple[str | None, str]:
 
     Resolution order for the endpoint URL:
       1. OB_URL env var
-      2. ~/.open-brain/config.json — reads "server_url" + appends "/mcp/mcp"
-      3. Hardcoded default: "https://open-brain.sussdorff.org/mcp/mcp"
+      2. ~/.open-brain/config.json — reads "server_url" + appends "/mcp"
+      3. Hardcoded default: "https://open-brain.sussdorff.org/mcp"
 
     Returns:
         (token, ob_url) — token is None when no credentials are available.
@@ -322,9 +322,9 @@ def _resolve_ob_credentials() -> tuple[str | None, str]:
     if os.environ.get("OB_URL"):
         ob_url = os.environ["OB_URL"]
     elif cfg.get("server_url"):
-        ob_url = cfg["server_url"].rstrip("/") + "/mcp/mcp"
+        ob_url = cfg["server_url"].rstrip("/") + "/mcp"
     else:
-        ob_url = "https://open-brain.sussdorff.org/mcp/mcp"
+        ob_url = "https://open-brain.sussdorff.org/mcp"
 
     return token, ob_url
 
@@ -398,6 +398,7 @@ async def _async_save_memory(
     headers = {
         "x-api-key": token,
         "Content-Type": "application/json",
+        "Accept": "application/json, text/event-stream",
     }
 
     async with httpx.AsyncClient(timeout=30) as client:
