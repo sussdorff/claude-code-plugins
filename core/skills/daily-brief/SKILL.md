@@ -1,10 +1,10 @@
 ---
 name: daily-brief
 description: >
-  Generate and manage daily project briefs. Loads project config from
-  ~/.claude/daily-brief.yml and persists per-project briefs to
-  <project>/.claude/daily-briefs/YYYY-MM-DD.md. Use for daily summaries
-  of git activity, bead progress, and open-brain entries across tracked projects.
+  Generate and manage daily project briefs. Reads from and writes to open-brain
+  as the system of record (type=daily_brief). Disk write is opt-in via
+  --persist-disk. Use for daily summaries of git activity, bead progress, and
+  open-brain entries across tracked projects.
 triggers:
   - daily brief
   - daily briefing

@@ -88,6 +88,13 @@ python3 scripts/orchestrate-brief.py --date 2026-04-23
 # Expected: brief read from OB (not re-rendered); skipped=True in logs
 ```
 
+**Note on legacy observations**: Pre-v1.5 daily-brief runs wrote to OB with
+`session_ref=daily-brief-{date}` (no project slug). These observations are
+**orphaned** — they will not be found by the v1.5 read path (which searches for
+`daily-brief-{project}-{date}`). They can be identified by their session_ref
+format and cleaned up manually if desired, but the migration script only migrates
+disk briefs to the new format; it does not attempt to rename existing OB entries.
+
 The migration script (`scripts/migrate-disk-briefs-to-open-brain.py`):
 - Reads all `<project>/.claude/daily-briefs/*.md` files
 - Parses date from filename (`YYYY-MM-DD.md`)
@@ -116,7 +123,7 @@ The migration script (`scripts/migrate-disk-briefs-to-open-brain.py`):
 
 ### Follow-up required
 
-- **CCP follow-up bead**: Verify open-brain lifecycle-pipeline.py honours
+- **CCP-mhjf**: Verify open-brain lifecycle-pipeline.py honours
   `do_not_compact: true`. If the flag is not respected, patch the pipeline.
   See acceptance criterion AK6 of CCP-glnq.
 

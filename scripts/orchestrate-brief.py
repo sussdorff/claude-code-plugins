@@ -11,13 +11,14 @@ orchestrate-brief.py — Daily-brief CLI orchestration.
 Thin orchestration layer that ties config + query + render into a usable
 /daily-brief skill entry point.
 
-Flow:
+Flow (v1.5):
   1. Parse CLI args (project, date/since/range, --detailed, --all-active)
   2. Load config, resolve project(s)
   3. If --all-active: discover unconfigured active projects and merge
-  4. For each (project, date): check brief_exists → if missing, run render-brief.py
-  5. Persist each new brief to open-brain via MCP save_memory (idempotent)
-  6. Emit aggregated markdown to stdout (with warning block if unconfigured found)
+  4. For each (project, date): check OB first → if found, return cached.
+     If missing in OB, check disk (offline fallback). If missing everywhere,
+     call render-brief.py. Persist each new brief to OB (hard error on failure).
+  5. Emit aggregated markdown to stdout (with warning block if unconfigured found)
 
 Usage:
     # All projects, yesterday (default)
@@ -506,12 +507,14 @@ async def _async_search_memory(
                     "query": session_ref,
                     "type": "daily_brief",
                     "project": project,
-                    "limit": 1,
+                    "limit": 10,
                 },
             )
             if result.isError:
                 return None
-            # Parse content: look for the brief text in the result
+            # Parse content: look for the brief text in the result.
+            # Iterate over all returned observations (not just the first) to
+            # handle ranked / full-text search that may not return exact match first.
             for block in result.content:
                 if hasattr(block, "type") and block.type == "text" and block.text:
                     # The search tool returns JSON with observations
@@ -554,8 +557,22 @@ def _read_from_open_brain(project: str, date: str) -> str | None:
                 date=date,
             )
         )
+    except (ConnectionError, RuntimeError) as exc:  # noqa: BLE001
+        # Connection errors: OB is unreachable — warn operator and fall back to disk
+        _msg = str(exc).lower()
+        if "connect" in _msg or "connection" in _msg or "unreachable" in _msg or True:
+            print(
+                f"WARNING: open-brain read failed (OB unreachable?): {exc}. "
+                "Falling back to disk.",
+                file=sys.stderr,
+            )
+        return None
     except Exception:  # noqa: BLE001
-        # OB is unreachable or search failed — fall back to disk
+        # Any other error — fall back to disk silently (e.g. parse errors)
+        print(
+            f"WARNING: open-brain read failed: unexpected error. Falling back to disk.",
+            file=sys.stderr,
+        )
         return None
 
 
@@ -661,7 +678,11 @@ def run_for_project(
 
     # Fallback: disk check (for offline / OB-unavailable scenarios)
     if _cfg.brief_exists(project, date):
-        return {"skipped": True, "content": None}
+        try:
+            disk_content = _cfg.brief_path(project, date).read_text()
+        except OSError:
+            disk_content = None
+        return {"skipped": True, "content": disk_content}
 
     # Discovered (unconfigured) projects: render a stub section instead of
     # delegating to render-brief.py (which would fail — project not in config).
@@ -702,6 +723,7 @@ def orchestrate(
     detailed: bool,
     config_path: Path,
     all_active: bool = False,
+    persist_disk: bool = False,
 ) -> tuple[list[dict[str, Any]], list[str]]:
     """Orchestrate brief generation across projects and dates.
 
@@ -718,6 +740,7 @@ def orchestrate(
         detailed: Whether to use detailed mode.
         config_path: Path to daily-brief.yml.
         all_active: If True, discover unconfigured active projects and include them.
+        persist_disk: When True, also write briefs to disk via render-brief.py.
 
     Returns:
         Tuple of (results, unconfigured_slugs) where results is a list of
@@ -772,6 +795,7 @@ def orchestrate(
                     date=date,
                     detailed=detailed,
                     config_path=config_path,
+                    persist_disk=persist_disk,
                 )
             else:
                 # Discovered projects not in config — pass pre-resolved config
@@ -782,6 +806,7 @@ def orchestrate(
                     detailed=detailed,
                     config_path=config_path,
                     project_config=proj,
+                    persist_disk=persist_disk,
                 )
             result["project"] = proj.name
             result["date"] = date
@@ -919,15 +944,16 @@ def main(argv: list[str] | None = None) -> int:
         range_str=args.range,
     )
 
-    # For range/since modes: use render-brief.py range mode for each project
-    # For single date: use render-brief.py single-day mode for each project
+    # For range/since modes: use per-day OB-first logic for each project
+    # For single date: use run_for_project OB-first logic for each project
     if len(dates) > 1:
-        # Range mode: delegate to render-brief.py with --since/--range for each project
+        # Range mode: OB-first per day, then render missing days
         clean_results = _orchestrate_range(
             project=args.project,
             dates=dates,
             detailed=args.detailed,
             config_path=config_path,
+            persist_disk=args.persist_disk,
         )
         unconfigured: list[str] = []
     else:
@@ -938,6 +964,7 @@ def main(argv: list[str] | None = None) -> int:
             detailed=args.detailed,
             config_path=config_path,
             all_active=getattr(args, "all_active", False),
+            persist_disk=args.persist_disk,
         )
 
     # Emit aggregated output
@@ -951,19 +978,21 @@ def _orchestrate_range(
     dates: list[str],
     detailed: bool,
     config_path: Path,
+    persist_disk: bool = False,
 ) -> list[dict[str, Any]]:
     """Orchestrate range-mode briefs per project.
 
-    For range mode, calls render-brief.py once per project with --since/--range
-    (not per-day), which produces a compressed rollup. Per-day backfill is
-    still respected — render-brief.py checks brief_exists internally and only
-    re-renders days not already on disk.
+    For range mode, checks open-brain first per-day (v1.5 SoR). Dates already
+    in OB are skipped. For dates not in OB, calls render-brief.py once per day
+    (single-day mode) to get per-day content, then persists each to OB.
+    Falls back to disk check when OB returns None (offline).
 
     Args:
         project: Project name or None for all.
         dates: Ordered list of ISO date strings in the range.
         detailed: Whether to use detailed mode.
         config_path: Path to daily-brief.yml.
+        persist_disk: When True, allow render-brief.py to write to disk.
 
     Returns:
         List of result dicts per project.
@@ -981,46 +1010,44 @@ def _orchestrate_range(
     start_date = dates[0]
     end_date = dates[-1]
 
-    render_script = Path(__file__).parent / "render-brief.py"
-
     for proj in projects:
-        # Record which dates are NEW (before render runs and persists them)
-        new_dates = [d for d in dates if not _cfg.brief_exists(proj, d)]
+        all_contents: list[str] = []
 
-        # Call render-brief.py for the full range (handles backfill internally)
-        cmd = [
-            sys.executable, str(render_script),
-            "--project", proj.name,
-            "--since", start_date,
-            "--until", end_date,
-            "--config", str(config_path),
-        ]
-        if detailed:
-            cmd.append("--detailed")
+        for date in dates:
+            # v1.5 SoR: check open-brain first
+            ob_content = _read_from_open_brain(proj.slug, date)
+            if ob_content is not None:
+                all_contents.append(ob_content)
+                continue
 
-        proc = subprocess.run(cmd, capture_output=True, text=True)  # noqa: S603
-        content = proc.stdout if proc.returncode == 0 else ""
-
-        if content and new_dates:
-            # Save only newly generated days to open-brain.
-            # Read each day's brief from disk (not the rollup content) so that
-            # per-day open-brain entries contain that day's content, not the range rollup.
-            for date in new_dates:
-                slug = proj.slug
-                session_ref = make_session_ref(slug, date)
-                # Read per-day brief from disk (written by render-brief.py)
+            # Disk fallback (offline / OB-unavailable)
+            if _cfg.brief_exists(proj, date):
                 try:
-                    per_day_brief = _cfg.brief_path(proj, date).read_text()
-                except Exception:
-                    per_day_brief = content  # Fallback to rollup if disk read fails
+                    disk_content = _cfg.brief_path(proj, date).read_text()
+                except OSError:
+                    disk_content = None
+                if disk_content:
+                    all_contents.append(disk_content)
+                continue
+
+            # Not in OB or disk — render for this single day
+            per_day_content = _run_render_brief(
+                proj.name, date, detailed, config_path, persist_disk=persist_disk
+            )
+            if per_day_content:
+                # Persist to OB (hard error on failure)
+                session_ref = make_session_ref(proj.slug, date)
                 _save_to_open_brain(
                     title=f"{proj.name} — {date}",
-                    text=per_day_brief,
+                    text=per_day_content,
                     ob_type="daily_brief",
-                    project=slug,
+                    project=proj.slug,
                     session_ref=session_ref,
                     metadata={"source": "daily-brief"},
                 )
+                all_contents.append(per_day_content)
+
+        content = "\n\n---\n\n".join(all_contents) if all_contents else ""
 
         results.append(
             {

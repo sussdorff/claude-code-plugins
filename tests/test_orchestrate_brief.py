@@ -345,6 +345,7 @@ class TestOrchestration:
             date: str,
             detailed: bool,
             config_path: Path,
+            **kwargs: object,
         ) -> dict:
             results.append({"project": project_name, "date": date})
             return {"skipped": True}
@@ -372,6 +373,7 @@ class TestOrchestration:
             date: str,
             detailed: bool,
             config_path: Path,
+            **kwargs: object,
         ) -> dict:
             results.append({"project": project_name, "date": date})
             return {"skipped": True}
@@ -398,6 +400,7 @@ class TestOrchestration:
             date: str,
             detailed: bool,
             config_path: Path,
+            **kwargs: object,
         ) -> dict:
             results.append({"project": project_name, "date": date})
             return {"skipped": True}
@@ -428,6 +431,7 @@ class TestOrchestration:
             date: str,
             detailed: bool,
             config_path: Path,
+            **kwargs: object,
         ) -> dict:
             captured_detailed.append(detailed)
             return {"skipped": True}
@@ -1318,4 +1322,271 @@ class TestIdempotency:
         # Total saves: only 1 (from first run), not 2
         assert save_call_count[0] == 1, (
             f"save_to_open_brain must be called exactly once across both runs; got {save_call_count[0]}"
+        )
+
+
+# ---------------------------------------------------------------------------
+# FIX-4 — _async_search_memory response-parsing logic
+# ---------------------------------------------------------------------------
+
+
+class TestAsyncSearchMemoryParsing:
+    """_async_search_memory must correctly parse the OB search response and
+    return the brief text on session_ref match, and None on mismatch."""
+
+    def _make_mock_session(self, result_mock: "MagicMock") -> "MagicMock":
+        """Build a mock ClientSession whose call_tool returns result_mock."""
+        from unittest.mock import AsyncMock
+        session = AsyncMock()
+        session.initialize = AsyncMock()
+        session.call_tool = AsyncMock(return_value=result_mock)
+        return session
+
+    def test_returns_brief_text_on_exact_session_ref_match(self) -> None:
+        """_async_search_memory returns observation text when session_ref matches exactly."""
+        import asyncio
+        from contextlib import asynccontextmanager
+        from typing import Any
+
+        expected_text = "# claude-code-plugins — 2026-04-23\n\nBrief content from OB."
+        target_ref = ob.make_session_ref("claude-code-plugins", "2026-04-23")
+
+        # Simulate OB returning multiple observations — only one matches session_ref
+        obs_json = json.dumps({
+            "observations": [
+                {"session_ref": "daily-brief-other-project-2026-04-23", "text": "wrong brief"},
+                {"session_ref": target_ref, "text": expected_text},
+                {"session_ref": "daily-brief-claude-code-plugins-2026-04-22", "text": "wrong date"},
+            ]
+        })
+
+        async def _drive() -> "str | None":
+            import mcp.client.streamable_http as sh_mod
+            import mcp as mcp_mod
+            from unittest.mock import AsyncMock, MagicMock
+
+            content_block = MagicMock()
+            content_block.type = "text"
+            content_block.text = obs_json
+
+            result_mock = MagicMock()
+            result_mock.isError = False
+            result_mock.content = [content_block]
+
+            mock_session = AsyncMock()
+            mock_session.initialize = AsyncMock()
+            mock_session.call_tool = AsyncMock(return_value=result_mock)
+
+            @asynccontextmanager
+            async def mock_sh(*args: Any, **kwargs: Any):
+                yield (MagicMock(), MagicMock(), lambda: "session-id")
+
+            class MockClientSession:
+                def __init__(self, *args: Any, **kwargs: Any) -> None:
+                    pass
+
+                async def __aenter__(self) -> Any:
+                    return mock_session
+
+                async def __aexit__(self, *args: Any) -> None:
+                    pass
+
+            original_sh = sh_mod.streamablehttp_client
+            original_cs = mcp_mod.ClientSession
+            sh_mod.streamablehttp_client = mock_sh  # type: ignore[assignment]
+            mcp_mod.ClientSession = MockClientSession  # type: ignore[assignment]
+            try:
+                return await ob._async_search_memory(
+                    ob_url="https://ob.example.test/mcp",
+                    token="ob_testtoken",
+                    project="claude-code-plugins",
+                    date="2026-04-23",
+                )
+            finally:
+                sh_mod.streamablehttp_client = original_sh  # type: ignore[assignment]
+                mcp_mod.ClientSession = original_cs  # type: ignore[assignment]
+
+        result = asyncio.run(_drive())
+        assert result == expected_text, (
+            f"Expected brief text on exact session_ref match; got: {result!r}"
+        )
+
+    def test_returns_none_on_session_ref_mismatch(self) -> None:
+        """_async_search_memory returns None when no observation has a matching session_ref."""
+        import asyncio
+        from contextlib import asynccontextmanager
+        from typing import Any
+
+        # OB returns observations but none match the target session_ref
+        obs_json = json.dumps({
+            "observations": [
+                {"session_ref": "daily-brief-other-project-2026-04-23", "text": "wrong project"},
+                {"session_ref": "daily-brief-claude-code-plugins-2026-04-01", "text": "wrong date"},
+            ]
+        })
+
+        async def _drive() -> "str | None":
+            import mcp.client.streamable_http as sh_mod
+            import mcp as mcp_mod
+            from unittest.mock import AsyncMock, MagicMock
+
+            content_block = MagicMock()
+            content_block.type = "text"
+            content_block.text = obs_json
+
+            result_mock = MagicMock()
+            result_mock.isError = False
+            result_mock.content = [content_block]
+
+            mock_session = AsyncMock()
+            mock_session.initialize = AsyncMock()
+            mock_session.call_tool = AsyncMock(return_value=result_mock)
+
+            @asynccontextmanager
+            async def mock_sh(*args: Any, **kwargs: Any):
+                yield (MagicMock(), MagicMock(), lambda: "session-id")
+
+            class MockClientSession:
+                def __init__(self, *args: Any, **kwargs: Any) -> None:
+                    pass
+
+                async def __aenter__(self) -> Any:
+                    return mock_session
+
+                async def __aexit__(self, *args: Any) -> None:
+                    pass
+
+            original_sh = sh_mod.streamablehttp_client
+            original_cs = mcp_mod.ClientSession
+            sh_mod.streamablehttp_client = mock_sh  # type: ignore[assignment]
+            mcp_mod.ClientSession = MockClientSession  # type: ignore[assignment]
+            try:
+                return await ob._async_search_memory(
+                    ob_url="https://ob.example.test/mcp",
+                    token="ob_testtoken",
+                    project="claude-code-plugins",
+                    date="2026-04-23",
+                )
+            finally:
+                sh_mod.streamablehttp_client = original_sh  # type: ignore[assignment]
+                mcp_mod.ClientSession = original_cs  # type: ignore[assignment]
+
+        result = asyncio.run(_drive())
+        assert result is None, (
+            f"Expected None when no session_ref matches; got: {result!r}"
+        )
+
+    def test_returns_none_on_isError(self) -> None:
+        """_async_search_memory returns None when result.isError is True."""
+        import asyncio
+        from contextlib import asynccontextmanager
+        from typing import Any
+
+        async def _drive() -> "str | None":
+            import mcp.client.streamable_http as sh_mod
+            import mcp as mcp_mod
+            from unittest.mock import AsyncMock, MagicMock
+
+            result_mock = MagicMock()
+            result_mock.isError = True
+            result_mock.content = []
+
+            mock_session = AsyncMock()
+            mock_session.initialize = AsyncMock()
+            mock_session.call_tool = AsyncMock(return_value=result_mock)
+
+            @asynccontextmanager
+            async def mock_sh(*args: Any, **kwargs: Any):
+                yield (MagicMock(), MagicMock(), lambda: "session-id")
+
+            class MockClientSession:
+                def __init__(self, *args: Any, **kwargs: Any) -> None:
+                    pass
+
+                async def __aenter__(self) -> Any:
+                    return mock_session
+
+                async def __aexit__(self, *args: Any) -> None:
+                    pass
+
+            original_sh = sh_mod.streamablehttp_client
+            original_cs = mcp_mod.ClientSession
+            sh_mod.streamablehttp_client = mock_sh  # type: ignore[assignment]
+            mcp_mod.ClientSession = MockClientSession  # type: ignore[assignment]
+            try:
+                return await ob._async_search_memory(
+                    ob_url="https://ob.example.test/mcp",
+                    token="ob_testtoken",
+                    project="claude-code-plugins",
+                    date="2026-04-23",
+                )
+            finally:
+                sh_mod.streamablehttp_client = original_sh  # type: ignore[assignment]
+                mcp_mod.ClientSession = original_cs  # type: ignore[assignment]
+
+        result = asyncio.run(_drive())
+        assert result is None, (
+            f"Expected None when result.isError is True; got: {result!r}"
+        )
+
+    def test_search_uses_limit_10(self) -> None:
+        """_async_search_memory sends limit=10 to handle ranked search returning non-exact first."""
+        import asyncio
+        from contextlib import asynccontextmanager
+        from typing import Any
+
+        captured_args: list[dict] = []
+
+        async def _drive() -> None:
+            import mcp.client.streamable_http as sh_mod
+            import mcp as mcp_mod
+            from unittest.mock import AsyncMock, MagicMock
+
+            result_mock = MagicMock()
+            result_mock.isError = False
+            result_mock.content = []
+
+            mock_session = AsyncMock()
+            mock_session.initialize = AsyncMock()
+
+            async def capture_call_tool(tool_name: str, args: dict, **kwargs: Any) -> Any:
+                captured_args.append({"tool": tool_name, "args": args})
+                return result_mock
+
+            mock_session.call_tool = capture_call_tool
+
+            @asynccontextmanager
+            async def mock_sh(*args: Any, **kwargs: Any):
+                yield (MagicMock(), MagicMock(), lambda: "session-id")
+
+            class MockClientSession:
+                def __init__(self, *args: Any, **kwargs: Any) -> None:
+                    pass
+
+                async def __aenter__(self) -> Any:
+                    return mock_session
+
+                async def __aexit__(self, *args: Any) -> None:
+                    pass
+
+            original_sh = sh_mod.streamablehttp_client
+            original_cs = mcp_mod.ClientSession
+            sh_mod.streamablehttp_client = mock_sh  # type: ignore[assignment]
+            mcp_mod.ClientSession = MockClientSession  # type: ignore[assignment]
+            try:
+                await ob._async_search_memory(
+                    ob_url="https://ob.example.test/mcp",
+                    token="ob_testtoken",
+                    project="claude-code-plugins",
+                    date="2026-04-23",
+                )
+            finally:
+                sh_mod.streamablehttp_client = original_sh  # type: ignore[assignment]
+                mcp_mod.ClientSession = original_cs  # type: ignore[assignment]
+
+        asyncio.run(_drive())
+        assert captured_args, "call_tool must have been invoked"
+        search_call = captured_args[0]
+        assert search_call["args"].get("limit") == 10, (
+            f"search limit must be 10 (to handle ranked results); got: {search_call['args'].get('limit')}"
         )

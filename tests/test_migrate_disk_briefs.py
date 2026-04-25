@@ -137,10 +137,44 @@ class TestDryRun:
         config_path, _ = config_with_briefs
 
         with patch.object(mig._ob_mod, "_save_to_open_brain") as mock_save:
-            result_code = mig.main(argv=["--config", str(config_path)])
+            with patch.object(mig._ob_mod, "_read_from_open_brain", return_value=None):
+                result_code = mig.main(argv=["--config", str(config_path)])
 
         mock_save.assert_not_called()
         assert result_code == 0
+
+    def test_dry_run_classifies_already_in_ob_vs_would_migrate(
+        self,
+        config_with_briefs: tuple[Path, Path],
+        capsys: pytest.CaptureFixture,
+    ) -> None:
+        """Dry-run classifies briefs as already_in_ob (found in OB) vs would_migrate (not in OB)."""
+        config_path, _ = config_with_briefs
+
+        def fake_read_from_ob(project: str, date: str) -> "str | None":
+            # Simulate 2026-04-23 already in OB, 2026-04-24 not yet
+            if date == "2026-04-23":
+                return "# CCP — 2026-04-23\n\nAlready in OB."
+            return None
+
+        with patch.object(mig._ob_mod, "_save_to_open_brain"):
+            with patch.object(mig._ob_mod, "_read_from_open_brain", side_effect=fake_read_from_ob):
+                mig.main(argv=["--config", str(config_path)])
+
+        captured = capsys.readouterr()
+        data = json.loads(captured.out)
+        assert data["status"] == "ok"
+        assert data["data"]["dry_run"] is True
+        already_in_ob = data["data"].get("already_in_ob", [])
+        would_migrate = data["data"].get("would_migrate", [])
+        already_dates = [item["date"] for item in already_in_ob]
+        would_dates = [item["date"] for item in would_migrate]
+        assert "2026-04-23" in already_dates, (
+            f"2026-04-23 should be in already_in_ob (OB returned content); got: {already_dates}"
+        )
+        assert "2026-04-24" in would_dates, (
+            f"2026-04-24 should be in would_migrate (OB returned None); got: {would_dates}"
+        )
 
     def test_dry_run_stdout_is_valid_json(
         self,
@@ -151,7 +185,8 @@ class TestDryRun:
         config_path, _ = config_with_briefs
 
         with patch.object(mig._ob_mod, "_save_to_open_brain"):
-            mig.main(argv=["--config", str(config_path)])
+            with patch.object(mig._ob_mod, "_read_from_open_brain", return_value=None):
+                mig.main(argv=["--config", str(config_path)])
 
         captured = capsys.readouterr()
         data = json.loads(captured.out)
@@ -168,7 +203,8 @@ class TestDryRun:
         config_path, _ = config_with_briefs
 
         with patch.object(mig._ob_mod, "_save_to_open_brain"):
-            mig.main(argv=["--config", str(config_path)])
+            with patch.object(mig._ob_mod, "_read_from_open_brain", return_value=None):
+                mig.main(argv=["--config", str(config_path)])
 
         captured = capsys.readouterr()
         data = json.loads(captured.out)
@@ -300,7 +336,8 @@ class TestApplyMode:
             yaml.dump(data, fh)
 
         with patch.object(mig._ob_mod, "_save_to_open_brain"):
-            mig.main(argv=["--config", str(config_path)])
+            with patch.object(mig._ob_mod, "_read_from_open_brain", return_value=None):
+                mig.main(argv=["--config", str(config_path)])
 
         captured = capsys.readouterr()
         result = json.loads(captured.out)
@@ -328,7 +365,8 @@ class TestProjectFilter:
             (briefs_dir / "2026-04-25.md").write_text(f"# {proj} brief")
 
         with patch.object(mig._ob_mod, "_save_to_open_brain"):
-            mig.main(argv=["--config", str(minimal_config), "--project", "mira"])
+            with patch.object(mig._ob_mod, "_read_from_open_brain", return_value=None):
+                mig.main(argv=["--config", str(minimal_config), "--project", "mira"])
 
         captured = capsys.readouterr()
         data = json.loads(captured.out)

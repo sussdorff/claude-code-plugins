@@ -234,20 +234,29 @@ def main(argv: list[str] | None = None) -> int:
         return 0
 
     if not args.apply:
-        # Dry-run: report what would be migrated
-        preview = [
-            {"project": b["project_name"], "date": b["date"], "path": b["path"]}
-            for b in briefs
-        ]
+        # Dry-run: classify briefs as "would_migrate" (not in OB) vs "already_in_ob" (found in OB)
+        would_migrate: list[dict] = []
+        already_in_ob: list[dict] = []
+        for b in briefs:
+            ob_text = _ob_mod._read_from_open_brain(b["slug"], b["date"])
+            entry = {"project": b["project_name"], "date": b["date"], "path": b["path"]}
+            if ob_text is not None:
+                already_in_ob.append(entry)
+            else:
+                would_migrate.append(entry)
         result = {
             "status": "ok",
-            "summary": f"Dry-run: {len(briefs)} brief(s) would be migrated. Use --apply to execute.",
+            "summary": (
+                f"Dry-run: {len(would_migrate)} brief(s) would be migrated, "
+                f"{len(already_in_ob)} already in OB. Use --apply to execute."
+            ),
             "data": {
                 "migrated": [],
                 "failed": [],
                 "dry_run": True,
                 "total": len(briefs),
-                "would_migrate": preview,
+                "would_migrate": would_migrate,
+                "already_in_ob": already_in_ob,
             },
             "errors": [],
             "next_steps": [
