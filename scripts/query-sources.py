@@ -955,6 +955,18 @@ def _build_ob_client() -> Any | None:
                                     "date_end": date_end,
                                 },
                             )
+                            # SDK tool-level errors: isError=True with error text in content.
+                            # Raise so _collect_open_brain can produce a warning instead of
+                            # silently returning empty results.
+                            if result.isError:
+                                error_text = " ".join(
+                                    block.text
+                                    for block in result.content
+                                    if hasattr(block, "type") and block.type == "text"
+                                )
+                                raise RuntimeError(
+                                    f"MCP search tool returned error: {error_text or 'unknown error'}"
+                                )
                             # Parse CallToolResult content — response is {"total": N, "results": [...]}
                             for block in result.content:
                                 if hasattr(block, "type") and block.type == "text":
@@ -967,10 +979,29 @@ def _build_ob_client() -> Any | None:
                                         all_entries.extend(parsed)
             except Exception as exc:
                 # Translate auth errors to actionable PermissionError.
-                # The SDK may wrap 401 in various exception types (httpx.HTTPStatusError,
-                # mcp exceptions, etc.). Check the string for 401/Unauthorized signals.
-                exc_str = str(exc)
-                if "401" in exc_str or "Unauthorized" in exc_str or "unauthorized" in exc_str:
+                # The SDK (and AnyIO) may wrap HTTP failures in ExceptionGroup or other
+                # nested exception types. Walk the full chain looking for 401 signals.
+                def _has_auth_failure(e: BaseException) -> bool:
+                    visited: set[int] = set()
+                    stack = [e]
+                    while stack:
+                        current = stack.pop()
+                        if id(current) in visited:
+                            continue
+                        visited.add(id(current))
+                        msg = str(current)
+                        if "401" in msg or "Unauthorized" in msg or "unauthorized" in msg:
+                            return True
+                        if current.__cause__ is not None:
+                            stack.append(current.__cause__)
+                        if current.__context__ is not None:
+                            stack.append(current.__context__)
+                        # ExceptionGroup (Python 3.11+) wraps multiple sub-exceptions
+                        if hasattr(current, "exceptions") and current.exceptions:
+                            stack.extend(current.exceptions)
+                    return False
+
+                if _has_auth_failure(exc):
                     raise PermissionError(
                         "open-brain auth failed (401 Unauthorized). "
                         "Check ~/.open-brain/config.json: verify 'api_key' is correct "

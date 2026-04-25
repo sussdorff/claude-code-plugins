@@ -416,7 +416,7 @@ async def _async_save_memory(
         async with ClientSession(read_stream, write_stream) as session:
             await session.initialize()
             # Call save_memory tool (idempotent via session_ref + dedup_mode=merge)
-            await session.call_tool(
+            result = await session.call_tool(
                 "save_memory",
                 {
                     "title": title,
@@ -428,6 +428,17 @@ async def _async_save_memory(
                     "dedup_mode": "merge",
                 },
             )
+            # SDK tool-level errors: isError=True means the tool reported failure.
+            # Raise so the caller (_save_to_open_brain) can log a warning.
+            if result.isError:
+                error_text = " ".join(
+                    block.text
+                    for block in result.content
+                    if hasattr(block, "type") and block.type == "text"
+                )
+                raise RuntimeError(
+                    f"MCP save_memory tool returned error: {error_text or 'unknown error'}"
+                )
 
 
 # ---------------------------------------------------------------------------
