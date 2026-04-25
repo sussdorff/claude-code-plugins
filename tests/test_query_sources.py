@@ -1479,3 +1479,169 @@ class TestBuildObClientConfigJson:
         assert has_real_failure, (
             f"Warning should describe the actual failure, got: {ob_warnings}"
         )
+
+
+class TestOBClientAuthHeader:
+    """Regression tests for CCP-scw5: _OBClient must use x-api-key header, not Authorization: Bearer."""
+
+    def test_ob_client_uses_x_api_key_header_not_bearer(self, tmp_path: Path) -> None:
+        """_OBClient.search() must send x-api-key header, not Authorization: Bearer.
+
+        The open-brain HTTP MCP endpoint authenticates via x-api-key. Sending
+        Authorization: Bearer is rejected with 401 because the server validates
+        Bearer tokens as JWTs — opaque api_key values are not JWTs.
+        """
+        import httpx
+        import asyncio as _aio
+
+        captured_headers: list[dict[str, str]] = []
+
+        async def handler(request: httpx.Request) -> httpx.Response:
+            captured_headers.append(dict(request.headers))
+            return httpx.Response(200, json={"jsonrpc": "2.0", "id": 1, "result": {}})
+
+        async def _drive() -> None:
+            config_json = tmp_path / ".open-brain" / "config.json"
+            config_json.parent.mkdir(parents=True, exist_ok=True)
+            config_json.write_text(
+                '{"server_url": "https://ob.example.test", "api_key": "ob_testapikey"}'
+            )
+            import os
+            with patch("pathlib.Path.home", return_value=tmp_path):
+                with patch.dict(os.environ, {}, clear=False):
+                    os.environ.pop("OB_TOKEN", None)
+                    os.environ.pop("OB_URL", None)
+                    client = qs._build_ob_client()
+
+            assert client is not None, "client must be built from config.json"
+            transport = httpx.MockTransport(handler)
+            # Patch httpx.AsyncClient to use mock transport
+            original_init = httpx.AsyncClient.__init__
+
+            def patched_init(self_inner, **kwargs: object) -> None:
+                kwargs["transport"] = transport
+                original_init(self_inner, **kwargs)
+
+            with patch.object(httpx.AsyncClient, "__init__", patched_init):
+                try:
+                    await client.search(
+                        type_filter=["session_summary"],
+                        project="test",
+                        date_start="2026-04-24T00:00:00",
+                        date_end="2026-04-25T00:00:00",
+                    )
+                except Exception:
+                    pass  # Response parsing may fail — we only care about headers
+
+            assert captured_headers, "No requests were made"
+            for hdrs in captured_headers:
+                # Must have x-api-key with the token value
+                assert "x-api-key" in hdrs, (
+                    f"Expected 'x-api-key' header but got: {list(hdrs.keys())}"
+                )
+                assert hdrs["x-api-key"] == "ob_testapikey", (
+                    f"Expected token 'ob_testapikey', got '{hdrs.get('x-api-key')}'"
+                )
+                # Must NOT have Authorization: Bearer (the old wrong scheme)
+                auth = hdrs.get("authorization", "")
+                assert not auth.startswith("Bearer "), (
+                    f"Must not send Authorization: Bearer; got '{auth}'"
+                )
+
+        _aio.run(_drive())
+
+    def test_ob_client_401_raises_permission_error_with_actionable_message(
+        self, tmp_path: Path
+    ) -> None:
+        """_OBClient.search() raises PermissionError with an actionable message on 401.
+
+        The error message must mention '~/.open-brain/config.json' and 'api_key' so
+        users know where to look for a fix.
+        """
+        import httpx
+        import asyncio as _aio
+
+        async def handler(request: httpx.Request) -> httpx.Response:
+            if b"initialize" in request.content:
+                return httpx.Response(200, json={"jsonrpc": "2.0", "id": 1, "result": {}})
+            return httpx.Response(401, json={"error": "unauthorized"})
+
+        async def _drive() -> None:
+            config_json = tmp_path / ".open-brain" / "config.json"
+            config_json.parent.mkdir(parents=True, exist_ok=True)
+            config_json.write_text(
+                '{"server_url": "https://ob.example.test", "api_key": "ob_expiredkey"}'
+            )
+            import os
+            with patch("pathlib.Path.home", return_value=tmp_path):
+                with patch.dict(os.environ, {}, clear=False):
+                    os.environ.pop("OB_TOKEN", None)
+                    os.environ.pop("OB_URL", None)
+                    client = qs._build_ob_client()
+
+            assert client is not None
+            transport = httpx.MockTransport(handler)
+            original_init = httpx.AsyncClient.__init__
+
+            def patched_init(self_inner, **kwargs: object) -> None:
+                kwargs["transport"] = transport
+                original_init(self_inner, **kwargs)
+
+            with patch.object(httpx.AsyncClient, "__init__", patched_init):
+                with pytest.raises(PermissionError) as exc_info:
+                    await client.search(
+                        type_filter=["session_summary"],
+                        project="test",
+                        date_start="2026-04-24T00:00:00",
+                        date_end="2026-04-25T00:00:00",
+                    )
+
+            msg = str(exc_info.value)
+            assert "401" in msg or "Unauthorized" in msg, (
+                f"Error message should mention 401/Unauthorized; got: {msg}"
+            )
+            assert "~/.open-brain/config.json" in msg, (
+                f"Error message should point to config file; got: {msg}"
+            )
+            assert "api_key" in msg, (
+                f"Error message should mention api_key field; got: {msg}"
+            )
+
+        _aio.run(_drive())
+
+    def test_ob_401_becomes_warning_in_query_sources(
+        self, config_path: Path, empty_mock_runner: qs.MockCommandRunner
+    ) -> None:
+        """When _OBClient.search raises PermissionError(401), query_sources emits an actionable warning.
+
+        The warning reason must contain the actionable guidance text so users
+        see it in the brief output rather than a raw HTTP error.
+        """
+        failing_client = MagicMock()
+        failing_client.search = AsyncMock(
+            side_effect=PermissionError(
+                "open-brain auth failed (401 Unauthorized). "
+                "Check ~/.open-brain/config.json: verify 'api_key' is correct "
+                "and not expired. Regenerate the token at your open-brain instance "
+                "if needed."
+            )
+        )
+
+        result = qs.query_sources(
+            project=TEST_PROJECT,
+            date=TEST_DATE,
+            config_path=config_path,
+            runner=empty_mock_runner,
+            ob_client=failing_client,
+        )
+
+        ob_warnings = [w for w in result["data"]["warnings"] if w.get("source") == "open-brain"]
+        assert ob_warnings, "Expected open-brain warning for 401"
+        # Warning reason must be actionable — must mention config.json
+        actionable = [
+            w for w in ob_warnings
+            if "config.json" in w.get("reason", "") or "api_key" in w.get("reason", "")
+        ]
+        assert actionable, (
+            f"401 warning must be actionable (mention config.json/api_key); got: {ob_warnings}"
+        )

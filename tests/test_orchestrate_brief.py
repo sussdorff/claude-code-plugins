@@ -678,3 +678,59 @@ class TestSaveToOpenBrainConfigJson:
         assert calls[0]["token"] == "ob_env_key", (
             "OB_TOKEN env var should still be used as the token"
         )
+
+
+class TestAsyncSaveMemoryAuthHeader:
+    """Regression tests for CCP-scw5: _async_save_memory must use x-api-key header, not Authorization: Bearer."""
+
+    def test_async_save_memory_uses_x_api_key_not_bearer(self, tmp_path: Path) -> None:
+        """_async_save_memory() must send x-api-key header, not Authorization: Bearer.
+
+        The open-brain HTTP MCP endpoint authenticates via x-api-key. Sending
+        Authorization: Bearer is rejected with 401 because the server validates
+        Bearer tokens as JWTs — opaque api_key values are not JWTs.
+        """
+        import asyncio
+        import httpx
+        from unittest.mock import patch
+
+        captured_headers: list[dict[str, str]] = []
+
+        async def handler(request: httpx.Request) -> httpx.Response:
+            captured_headers.append(dict(request.headers))
+            return httpx.Response(200, json={"jsonrpc": "2.0", "id": 1, "result": {}})
+
+        async def _drive() -> None:
+            transport = httpx.MockTransport(handler)
+            original_init = httpx.AsyncClient.__init__
+
+            def patched_init(self_inner, **kwargs: object) -> None:
+                kwargs["transport"] = transport
+                original_init(self_inner, **kwargs)
+
+            with patch.object(httpx.AsyncClient, "__init__", patched_init):
+                await ob._async_save_memory(
+                    ob_url="https://ob.example.test/mcp/mcp",
+                    token="ob_testapikey",
+                    title="test — 2026-04-23",
+                    text="# Test",
+                    ob_type="daily_brief",
+                    project="test",
+                    session_ref="daily-brief-2026-04-23",
+                    metadata={},
+                )
+
+        asyncio.run(_drive())
+
+        assert captured_headers, "No requests were captured"
+        for hdrs in captured_headers:
+            assert "x-api-key" in hdrs, (
+                f"Expected 'x-api-key' header but got: {list(hdrs.keys())}"
+            )
+            assert hdrs["x-api-key"] == "ob_testapikey", (
+                f"Expected token 'ob_testapikey', got '{hdrs.get('x-api-key')}'"
+            )
+            auth = hdrs.get("authorization", "")
+            assert not auth.startswith("Bearer "), (
+                f"Must not send Authorization: Bearer; got '{auth}'"
+            )
