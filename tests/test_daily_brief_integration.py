@@ -82,7 +82,9 @@ def _run_orchestrate(project: str, since: str = _SINCE) -> subprocess.CompletedP
         cmd,
         capture_output=True,
         text=True,
-        timeout=240,
+        # v1.5: _orchestrate_range makes 1 rollup + N per-day OB-save calls.
+        # Data-heavy projects (e.g. claude-code-plugins, 7d) need more budget.
+        timeout=480,
     )
 
 

@@ -11,13 +11,14 @@ orchestrate-brief.py — Daily-brief CLI orchestration.
 Thin orchestration layer that ties config + query + render into a usable
 /daily-brief skill entry point.
 
-Flow:
+Flow (v1.5):
   1. Parse CLI args (project, date/since/range, --detailed, --all-active)
   2. Load config, resolve project(s)
   3. If --all-active: discover unconfigured active projects and merge
-  4. For each (project, date): check brief_exists → if missing, run render-brief.py
-  5. Persist each new brief to open-brain via MCP save_memory (idempotent)
-  6. Emit aggregated markdown to stdout (with warning block if unconfigured found)
+  4. For each (project, date): check OB first → if found, return cached.
+     If missing in OB, check disk (offline fallback). If missing everywhere,
+     call render-brief.py. Persist each new brief to OB (hard error on failure).
+  5. Emit aggregated markdown to stdout (with warning block if unconfigured found)
 
 Usage:
     # All projects, yesterday (default)
@@ -44,8 +45,6 @@ Usage:
     # With explicit config path (for testing)
     python3 scripts/orchestrate-brief.py --config ~/.claude/daily-brief.yml
 """
-
-from __future__ import annotations
 
 import argparse
 import asyncio
@@ -254,6 +253,16 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
             "even if not in daily-brief.yml. Emits a warning block for unconfigured projects."
         ),
     )
+    p.add_argument(
+        "--persist-disk",
+        action="store_true",
+        dest="persist_disk",
+        default=False,
+        help=(
+            "Also write briefs to disk (<project>/.claude/daily-briefs/YYYY-MM-DD.md). "
+            "Default: open-brain only. Use this flag for local backups."
+        ),
+    )
     return p.parse_args(argv)
 
 
@@ -265,14 +274,17 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
 def make_session_ref(project: str, date: str) -> str:
     """Build the idempotent session_ref for open-brain storage.
 
+    Includes the project slug in the key to prevent collisions across projects
+    when searching open-brain by session_ref.
+
     Args:
         project: Project name (slug).
         date: ISO date string.
 
     Returns:
-        session_ref string like 'daily-brief-2026-04-23'.
+        session_ref string like 'daily-brief-claude-code-plugins-2026-04-23'.
     """
-    return f"daily-brief-{date}"
+    return f"daily-brief-{project}-{date}"
 
 
 def _resolve_ob_credentials() -> tuple[str | None, str]:
@@ -344,39 +356,51 @@ def _save_to_open_brain(
     handles session lifecycle (initialize handshake, session-id management,
     SSE parsing) transparently via the Streamable HTTP transport.
 
-    If open-brain is unavailable (no token / connection error), silently
-    skips — persistence failure must never block the brief output.
+    open-brain is the system-of-record for daily briefs (v1.5). Failure to
+    write is a hard error — raises RuntimeError if no credentials, re-raises
+    any connection/tool error so callers can surface it.
 
     Args:
         title: Brief title (e.g. "claude-code-plugins — 2026-04-23").
         text: Full brief markdown text.
         ob_type: Memory type (always "daily_brief").
         project: Project slug.
-        session_ref: Idempotent key ("daily-brief-YYYY-MM-DD").
-        metadata: Additional metadata dict.
+        session_ref: Idempotent key ("daily-brief-{project}-YYYY-MM-DD").
+        metadata: Additional metadata dict (do_not_compact and schema_version
+            are injected automatically).
+
+    Raises:
+        RuntimeError: When no credentials are configured.
+        Exception: Re-raised from _async_save_memory on connection/tool error.
     """
     token, ob_url = _resolve_ob_credentials()
 
     if not token:
-        # No credentials — skip silently
-        return
-
-    try:
-        asyncio.run(
-            _async_save_memory(
-                ob_url=ob_url,
-                token=token,
-                title=title,
-                text=text,
-                ob_type=ob_type,
-                project=project,
-                session_ref=session_ref,
-                metadata=metadata,
-            )
+        raise RuntimeError(
+            "open-brain: no credentials configured — cannot persist brief. "
+            "Set OB_TOKEN env var or create ~/.open-brain/token."
         )
-    except Exception:  # noqa: BLE001
-        # Non-blocking: persistence failure must not abort brief output
-        pass
+
+    # Inject required v1.5 metadata fields
+    effective_metadata = {
+        **metadata,
+        "do_not_compact": True,
+        "schema_version": "1.5",
+        "version": "v1.5",
+    }
+
+    asyncio.run(
+        _async_save_memory(
+            ob_url=ob_url,
+            token=token,
+            title=title,
+            text=text,
+            ob_type=ob_type,
+            project=project,
+            session_ref=session_ref,
+            metadata=effective_metadata,
+        )
+    )
 
 
 async def _async_save_memory(
@@ -441,6 +465,123 @@ async def _async_save_memory(
                 )
 
 
+async def _async_search_memory(
+    *,
+    ob_url: str,
+    token: str,
+    project: str,
+    date: str,
+) -> str | None:
+    """Search open-brain for an existing daily brief via the MCP search tool.
+
+    Uses session_ref as the search key for exact match. Returns the brief text
+    if found, or None if not present or if OB is unreachable.
+
+    Args:
+        ob_url: Open-brain MCP endpoint URL.
+        token: Open-brain API token.
+        project: Project slug.
+        date: ISO date string.
+
+    Returns:
+        Brief text string if found, None otherwise.
+    """
+    from mcp import ClientSession
+    from mcp.client.streamable_http import streamablehttp_client
+
+    session_ref = make_session_ref(project, date)
+    headers = {"x-api-key": token}
+
+    async with streamablehttp_client(ob_url, headers=headers) as (
+        read_stream,
+        write_stream,
+        _get_session_id,
+    ):
+        async with ClientSession(read_stream, write_stream) as session:
+            await session.initialize()
+            # Tool name "search" is verified per ADR-0001 (the open-brain MCP server
+            # exposes `search`, `search_by_concept`, `timeline`, `get_observations` —
+            # `search` is the correct general-purpose query tool). The companion
+            # `query-sources.py::_OBClient.search` calls the same tool.
+            result = await session.call_tool(
+                "search",
+                {
+                    "query": session_ref,
+                    "type": "daily_brief",
+                    "project": project,
+                    "limit": 10,
+                },
+            )
+            if result.isError:
+                return None
+            # Parse content: look for the brief text in the result.
+            # Iterate over all returned entries (not just the first) to handle
+            # ranked / full-text search that may not return exact match first.
+            #
+            # Production OB response shape (confirmed by query-sources.py):
+            #   {"total": N, "results": [{"session_ref": ..., "content": ..., ...}]}
+            # We also accept legacy `observations` key and `text` field for forward
+            # compatibility and to keep existing test fixtures working.
+            for block in result.content:
+                if hasattr(block, "type") and block.type == "text" and block.text:
+                    try:
+                        parsed = json.loads(block.text)
+                        entries = parsed.get("results") or parsed.get("observations") or []
+                        for obs in entries:
+                            obs_ref = obs.get("session_ref") or obs.get("sessionRef", "")
+                            if obs_ref == session_ref:
+                                return obs.get("content") or obs.get("text")
+                    except (json.JSONDecodeError, AttributeError):
+                        pass
+            return None
+
+
+def _read_from_open_brain(project: str, date: str) -> str | None:
+    """Read an existing daily brief from open-brain.
+
+    Attempts to find the brief by session_ref in open-brain. Returns the text
+    if found, or None if not found or if OB is unreachable (so callers can
+    fall back to disk).
+
+    Args:
+        project: Project slug.
+        date: ISO date string.
+
+    Returns:
+        Brief text if found in open-brain, None otherwise.
+    """
+    token, ob_url = _resolve_ob_credentials()
+    if not token:
+        return None
+
+    try:
+        return asyncio.run(
+            _async_search_memory(
+                ob_url=ob_url,
+                token=token,
+                project=project,
+                date=date,
+            )
+        )
+    except (ConnectionError, RuntimeError) as exc:  # noqa: BLE001
+        # Connection errors: OB is unreachable — warn operator and fall back to disk
+        _msg = str(exc).lower()
+        if "connect" in _msg or "connection" in _msg or "unreachable" in _msg or True:
+            print(
+                f"WARNING: open-brain read failed (OB unreachable?): {exc}. "
+                "Falling back to disk.",
+                file=sys.stderr,
+            )
+        return None
+    except Exception:  # noqa: BLE001
+        # Any other error — fall back to disk silently (e.g. parse errors)
+        print(
+            f"WARNING: open-brain read failed: unexpected error. Falling back to disk.",
+            file=sys.stderr,
+        )
+        return None
+
+
 # ---------------------------------------------------------------------------
 # Render dispatch
 # ---------------------------------------------------------------------------
@@ -451,14 +592,21 @@ def _run_render_brief(
     date: str,
     detailed: bool,
     config_path: Path,
+    persist_disk: bool = False,
 ) -> str:
     """Invoke render-brief.py as a subprocess for a single (project, date).
+
+    By default (persist_disk=False), passes --no-persist to render-brief.py so
+    that disk writes are suppressed. open-brain is the system-of-record (v1.5).
+    When persist_disk=True, omits --no-persist so render-brief.py writes to disk.
 
     Args:
         project_name: Project name from config.
         date: ISO date string.
         detailed: Whether to use higher word cap.
         config_path: Path to daily-brief.yml.
+        persist_disk: When True, allow render-brief.py to write brief to disk.
+            Default False: disk write is suppressed (OB-only mode).
 
     Returns:
         Rendered markdown string (empty string on failure).
@@ -472,6 +620,8 @@ def _run_render_brief(
     ]
     if detailed:
         cmd.append("--detailed")
+    if not persist_disk:
+        cmd.append("--no-persist")
 
     proc = subprocess.run(cmd, capture_output=True, text=True)  # noqa: S603
     if proc.returncode != 0:
@@ -490,13 +640,14 @@ def run_for_project(
     detailed: bool,
     config_path: Path,
     project_config: "_cfg.ProjectConfig | None" = None,
+    persist_disk: bool = False,
 ) -> dict[str, Any]:
     """Run the backfill + persist logic for one (project, date) pair.
 
-    Checks if a brief already exists on disk. If it does, returns
-    immediately (no-op). Otherwise, calls render-brief.py and persists
-    the result to disk (via render-brief.py's own --persist default) and
-    to open-brain.
+    Read path (v1.5 SoR): checks open-brain first. If the brief is found in OB,
+    returns immediately (skipped=True, content=ob_content). Falls back to disk
+    check when OB returns None (offline/unavailable). If neither OB nor disk has
+    the brief, calls render-brief.py and persists to OB (hard error on failure).
 
     Args:
         project_name: Project name from daily-brief.yml.
@@ -505,9 +656,14 @@ def run_for_project(
         config_path: Path to daily-brief.yml.
         project_config: Optional pre-resolved ProjectConfig (for discovered projects
             not in config). When provided, config lookup is skipped.
+        persist_disk: When True, also write brief to disk via render-brief.py.
+            Default False: OB-only mode.
 
     Returns:
         Dict with keys: skipped (bool), content (str or None).
+
+    Raises:
+        RuntimeError: When OB write fails (no credentials or connection error).
     """
     # Resolve the project to get its path for brief_exists check
     is_discovered = project_config is not None
@@ -519,9 +675,20 @@ def run_for_project(
             return {"skipped": False, "content": None, "error": "project-not-found"}
         project = _cfg.ProjectConfig.from_dict(resolve_result["data"]["projects"][0])
 
-    # Backfill check: skip if brief already exists on disk
+    slug = project.slug
+
+    # v1.5 SoR: check open-brain first
+    ob_content = _read_from_open_brain(slug, date)
+    if ob_content is not None:
+        return {"skipped": True, "content": ob_content}
+
+    # Fallback: disk check (for offline / OB-unavailable scenarios)
     if _cfg.brief_exists(project, date):
-        return {"skipped": True, "content": None}
+        try:
+            disk_content = _cfg.brief_path(project, date).read_text()
+        except OSError:
+            disk_content = None
+        return {"skipped": True, "content": disk_content}
 
     # Discovered (unconfigured) projects: render a stub section instead of
     # delegating to render-brief.py (which would fail — project not in config).
@@ -534,11 +701,10 @@ def run_for_project(
         return {"skipped": False, "content": content}
 
     # Generate brief via render-brief.py subprocess
-    content = _run_render_brief(project_name, date, detailed, config_path)
+    content = _run_render_brief(project_name, date, detailed, config_path, persist_disk=persist_disk)
 
     if content:
-        # Persist to open-brain (non-blocking — failure does not abort)
-        slug = project.slug
+        # Persist to open-brain — hard error on failure (v1.5)
         session_ref = make_session_ref(slug, date)
         _save_to_open_brain(
             title=f"{project_name} — {date}",
@@ -563,6 +729,7 @@ def orchestrate(
     detailed: bool,
     config_path: Path,
     all_active: bool = False,
+    persist_disk: bool = False,
 ) -> tuple[list[dict[str, Any]], list[str]]:
     """Orchestrate brief generation across projects and dates.
 
@@ -579,6 +746,7 @@ def orchestrate(
         detailed: Whether to use detailed mode.
         config_path: Path to daily-brief.yml.
         all_active: If True, discover unconfigured active projects and include them.
+        persist_disk: When True, also write briefs to disk via render-brief.py.
 
     Returns:
         Tuple of (results, unconfigured_slugs) where results is a list of
@@ -633,6 +801,7 @@ def orchestrate(
                     date=date,
                     detailed=detailed,
                     config_path=config_path,
+                    persist_disk=persist_disk,
                 )
             else:
                 # Discovered projects not in config — pass pre-resolved config
@@ -643,6 +812,7 @@ def orchestrate(
                     detailed=detailed,
                     config_path=config_path,
                     project_config=proj,
+                    persist_disk=persist_disk,
                 )
             result["project"] = proj.name
             result["date"] = date
@@ -670,7 +840,7 @@ def _inject_warning_block(content: str, unconfigured: list[str]) -> str:
         return content
 
     slugs_str = ", ".join(unconfigured)
-    warning = f"⚠️ Aktive Projekte nicht in Config: {slugs_str}\n\n"
+    warning = f"⚠️ Active projects not in config: {slugs_str}\n\n"
     return warning + content
 
 
@@ -780,15 +950,16 @@ def main(argv: list[str] | None = None) -> int:
         range_str=args.range,
     )
 
-    # For range/since modes: use render-brief.py range mode for each project
-    # For single date: use render-brief.py single-day mode for each project
+    # For range/since modes: use per-day OB-first logic for each project
+    # For single date: use run_for_project OB-first logic for each project
     if len(dates) > 1:
-        # Range mode: delegate to render-brief.py with --since/--range for each project
+        # Range mode: OB-first per day, then render missing days
         clean_results = _orchestrate_range(
             project=args.project,
             dates=dates,
             detailed=args.detailed,
             config_path=config_path,
+            persist_disk=args.persist_disk,
         )
         unconfigured: list[str] = []
     else:
@@ -799,6 +970,7 @@ def main(argv: list[str] | None = None) -> int:
             detailed=args.detailed,
             config_path=config_path,
             all_active=getattr(args, "all_active", False),
+            persist_disk=args.persist_disk,
         )
 
     # Emit aggregated output
@@ -812,19 +984,32 @@ def _orchestrate_range(
     dates: list[str],
     detailed: bool,
     config_path: Path,
+    persist_disk: bool = False,
 ) -> list[dict[str, Any]]:
     """Orchestrate range-mode briefs per project.
 
-    For range mode, calls render-brief.py once per project with --since/--range
-    (not per-day), which produces a compressed rollup. Per-day backfill is
-    still respected — render-brief.py checks brief_exists internally and only
-    re-renders days not already on disk.
+    Behavior (Option A — single Executive Summary per project):
+      1. AK1 compliance: check open-brain per date to determine which dates
+         already have a per-day OB entry (no re-save needed).
+      2. Display output: ALWAYS call render-brief.py ONCE per project with
+         --since/--until to produce a single compressed rollup (at most one
+         Executive Summary heading per project). This matches the expected
+         range-mode contract regardless of OB state.
+      3. OB saves: for each date NOT already in OB, call render-brief.py --date
+         individually to get per-day content for the OB write. When
+         persist_disk=True that same call also writes the disk file.
+
+    Rationale: the display rollup is a synthetic view across dates, not a
+    stored per-day artifact. The OB cache is per-day. The two concerns are
+    independent — checking OB determines which days need saving; rendering
+    determines what the user sees.
 
     Args:
         project: Project name or None for all.
         dates: Ordered list of ISO date strings in the range.
         detailed: Whether to use detailed mode.
         config_path: Path to daily-brief.yml.
+        persist_disk: When True, allow render-brief.py to write to disk.
 
     Returns:
         List of result dicts per project.
@@ -841,14 +1026,22 @@ def _orchestrate_range(
     results: list[dict[str, Any]] = []
     start_date = dates[0]
     end_date = dates[-1]
-
     render_script = Path(__file__).parent / "render-brief.py"
 
     for proj in projects:
-        # Record which dates are NEW (before render runs and persists them)
-        new_dates = [d for d in dates if not _cfg.brief_exists(proj, d)]
+        # Step 1 (AK1): Check OB per date — identify which dates need a new
+        # per-day OB save. Dates already in OB are skipped for saving only;
+        # the display rollup is always regenerated (see Step 2).
+        new_dates: list[str] = []
+        for date in dates:
+            ob_content = _read_from_open_brain(proj.slug, date)
+            if ob_content is None:
+                new_dates.append(date)
 
-        # Call render-brief.py for the full range (handles backfill internally)
+        # Step 2: Produce a SINGLE display rollup via --since/--until.
+        # This guarantees at most one Executive Summary heading per project,
+        # regardless of how many dates are in OB. Display output is always
+        # fresh — range rollups are synthetic views, not stored per-day artifacts.
         cmd = [
             sys.executable, str(render_script),
             "--project", proj.name,
@@ -858,29 +1051,37 @@ def _orchestrate_range(
         ]
         if detailed:
             cmd.append("--detailed")
+        # The rollup call is for display only. Per-day disk writes (when
+        # persist_disk=True) are handled by the --date calls in Step 3.
+        cmd.append("--no-persist")
 
         proc = subprocess.run(cmd, capture_output=True, text=True)  # noqa: S603
         content = proc.stdout if proc.returncode == 0 else ""
 
-        if content and new_dates:
-            # Save only newly generated days to open-brain.
-            # Read each day's brief from disk (not the rollup content) so that
-            # per-day open-brain entries contain that day's content, not the range rollup.
+        # Step 3: For each date not yet in OB, render per-day and save to OB.
+        # When persist_disk=True the per-day call also writes the disk file.
+        if new_dates:
             for date in new_dates:
-                slug = proj.slug
-                session_ref = make_session_ref(slug, date)
-                # Read per-day brief from disk (written by render-brief.py)
-                try:
-                    per_day_brief = _cfg.brief_path(proj, date).read_text()
-                except Exception:
-                    per_day_brief = content  # Fallback to rollup if disk read fails
+                per_day_content = _run_render_brief(
+                    proj.name,
+                    date,
+                    detailed,
+                    config_path,
+                    persist_disk=persist_disk,
+                )
+                if not per_day_content:
+                    continue
+                session_ref = make_session_ref(proj.slug, date)
                 _save_to_open_brain(
                     title=f"{proj.name} — {date}",
-                    text=per_day_brief,
+                    text=per_day_content,
                     ob_type="daily_brief",
-                    project=slug,
+                    project=proj.slug,
                     session_ref=session_ref,
-                    metadata={"source": "daily-brief"},
+                    metadata={
+                        "source": "daily-brief",
+                        "brief_kind": "single",
+                    },
                 )
 
         results.append(

@@ -198,39 +198,43 @@ class TestParseArgs:
 
 class TestBackfillLogic:
     def test_skip_existing_brief(self, minimal_config: Path, tmp_path: Path) -> None:
-        """If brief already exists, run_for_project should not call render-brief."""
+        """If brief already exists on disk (OB offline), run_for_project should not call render-brief."""
         project_path = tmp_path / "claude-code-plugins"
         briefs_dir = project_path / ".claude" / "daily-briefs"
         briefs_dir.mkdir(parents=True)
         date = "2026-04-23"
         (briefs_dir / f"{date}.md").write_text("# existing brief")
 
-        with patch.object(ob, "_run_render_brief") as mock_render:
-            with patch.object(ob, "_save_to_open_brain") as mock_save:
-                result = ob.run_for_project(
-                    project_name="claude-code-plugins",
-                    date=date,
-                    detailed=False,
-                    config_path=minimal_config,
-                )
-        # Should not call render or save since brief exists
+        # v1.5: OB is checked first — mock it returning None (offline) so disk fallback fires
+        with patch.object(ob, "_read_from_open_brain", return_value=None):
+            with patch.object(ob, "_run_render_brief") as mock_render:
+                with patch.object(ob, "_save_to_open_brain") as mock_save:
+                    result = ob.run_for_project(
+                        project_name="claude-code-plugins",
+                        date=date,
+                        detailed=False,
+                        config_path=minimal_config,
+                    )
+        # Should not call render or save since brief exists on disk
         mock_render.assert_not_called()
         mock_save.assert_not_called()
         assert result["skipped"] is True
 
     def test_generate_missing_brief(self, minimal_config: Path, tmp_path: Path) -> None:
-        """If brief does not exist, run_for_project should call render-brief."""
+        """If brief does not exist (OB and disk both miss), run_for_project should call render-brief."""
         date = "2026-04-23"
         expected_content = "# claude-code-plugins — 2026-04-23\n\nTest content."
 
-        with patch.object(ob, "_run_render_brief", return_value=expected_content) as mock_render:
-            with patch.object(ob, "_save_to_open_brain") as mock_save:
-                result = ob.run_for_project(
-                    project_name="claude-code-plugins",
-                    date=date,
-                    detailed=False,
-                    config_path=minimal_config,
-                )
+        # v1.5: OB returns None (not found), disk also misses
+        with patch.object(ob, "_read_from_open_brain", return_value=None):
+            with patch.object(ob, "_run_render_brief", return_value=expected_content) as mock_render:
+                with patch.object(ob, "_save_to_open_brain") as mock_save:
+                    result = ob.run_for_project(
+                        project_name="claude-code-plugins",
+                        date=date,
+                        detailed=False,
+                        config_path=minimal_config,
+                    )
 
         mock_render.assert_called_once()
         mock_save.assert_called_once()
@@ -238,31 +242,33 @@ class TestBackfillLogic:
         assert result["content"] == expected_content
 
     def test_rerun_same_args_is_noop(self, minimal_config: Path, tmp_path: Path) -> None:
-        """Running twice for same (project, date) is idempotent — second call skips."""
+        """Running twice for same (project, date) is idempotent — second call skips (disk fallback)."""
         project_path = tmp_path / "claude-code-plugins"
         briefs_dir = project_path / ".claude" / "daily-briefs"
         briefs_dir.mkdir(parents=True)
         date = "2026-04-22"
-        # Simulate first run having persisted the brief
+        # Simulate first run having persisted the brief to disk
         (briefs_dir / f"{date}.md").write_text("# already persisted")
 
         call_count = 0
 
-        def fake_render(project_name: str, date: str, detailed: bool, config_path: Path) -> str:
+        def fake_render(project_name: str, date: str, detailed: bool, config_path: Path, **kwargs: object) -> str:
             nonlocal call_count
             call_count += 1
             return "# new brief"
 
-        with patch.object(ob, "_run_render_brief", side_effect=fake_render):
-            with patch.object(ob, "_save_to_open_brain"):
-                ob.run_for_project(
-                    project_name="claude-code-plugins",
-                    date=date,
-                    detailed=False,
-                    config_path=minimal_config,
-                )
+        # v1.5: OB returns None (offline), disk check fires
+        with patch.object(ob, "_read_from_open_brain", return_value=None):
+            with patch.object(ob, "_run_render_brief", side_effect=fake_render):
+                with patch.object(ob, "_save_to_open_brain"):
+                    ob.run_for_project(
+                        project_name="claude-code-plugins",
+                        date=date,
+                        detailed=False,
+                        config_path=minimal_config,
+                    )
 
-        assert call_count == 0, "render should not be called when brief exists"
+        assert call_count == 0, "render should not be called when brief exists on disk"
 
 
 # ---------------------------------------------------------------------------
@@ -313,13 +319,13 @@ class TestOpenBrainSave:
         # The actual MCP call is tested via integration
 
     def test_session_ref_format(self) -> None:
-        """session_ref must be 'daily-brief-YYYY-MM-DD'."""
+        """session_ref must be 'daily-brief-{project}-YYYY-MM-DD' (v1.5: includes project slug)."""
         ref = ob.make_session_ref("claude-code-plugins", "2026-04-23")
-        assert ref == "daily-brief-2026-04-23"
+        assert ref == "daily-brief-claude-code-plugins-2026-04-23"
 
     def test_session_ref_includes_date(self) -> None:
         ref = ob.make_session_ref("mira", "2026-04-20")
-        assert ref == "daily-brief-2026-04-20"
+        assert ref == "daily-brief-mira-2026-04-20"
 
 
 # ---------------------------------------------------------------------------
@@ -339,6 +345,7 @@ class TestOrchestration:
             date: str,
             detailed: bool,
             config_path: Path,
+            **kwargs: object,
         ) -> dict:
             results.append({"project": project_name, "date": date})
             return {"skipped": True}
@@ -366,6 +373,7 @@ class TestOrchestration:
             date: str,
             detailed: bool,
             config_path: Path,
+            **kwargs: object,
         ) -> dict:
             results.append({"project": project_name, "date": date})
             return {"skipped": True}
@@ -392,6 +400,7 @@ class TestOrchestration:
             date: str,
             detailed: bool,
             config_path: Path,
+            **kwargs: object,
         ) -> dict:
             results.append({"project": project_name, "date": date})
             return {"skipped": True}
@@ -422,6 +431,7 @@ class TestOrchestration:
             date: str,
             detailed: bool,
             config_path: Path,
+            **kwargs: object,
         ) -> dict:
             captured_detailed.append(detailed)
             return {"skipped": True}
@@ -448,14 +458,15 @@ class TestMain:
         today = datetime.date.today()
         yesterday = (today - datetime.timedelta(days=1)).isoformat()
 
-        # Pre-create brief so backfill skips render
+        # Pre-create brief so disk fallback skips render (OB returns None = offline)
         for proj in ["claude-code-plugins", "mira"]:
             proj_path = tmp_path / proj
             briefs_dir = proj_path / ".claude" / "daily-briefs"
             briefs_dir.mkdir(parents=True)
             (briefs_dir / f"{yesterday}.md").write_text(f"# {proj} brief")
 
-        exit_code = ob.main(argv=["--config", str(minimal_config)])
+        with patch.object(ob, "_read_from_open_brain", return_value=None):
+            exit_code = ob.main(argv=["--config", str(minimal_config)])
         assert exit_code == 0
 
     def test_main_with_project_exits_zero(
@@ -470,7 +481,8 @@ class TestMain:
         briefs_dir.mkdir(parents=True)
         (briefs_dir / f"{yesterday}.md").write_text("# ccp brief")
 
-        exit_code = ob.main(argv=["claude-code-plugins", "--config", str(minimal_config)])
+        with patch.object(ob, "_read_from_open_brain", return_value=None):
+            exit_code = ob.main(argv=["claude-code-plugins", "--config", str(minimal_config)])
         assert exit_code == 0
 
     def test_main_unknown_project_exits_nonzero(self, minimal_config: Path) -> None:
@@ -479,7 +491,7 @@ class TestMain:
         assert exit_code != 0
 
     def test_main_since_3d_exits_zero(self, minimal_config: Path, tmp_path: Path) -> None:
-        """main() with --since=3d exits 0 (all briefs pre-exist)."""
+        """main() with --since=3d exits 0 (all briefs pre-exist on disk, OB offline)."""
         today = datetime.date.today()
         dates = [
             (today - datetime.timedelta(days=i)).isoformat() for i in range(1, 4)
@@ -491,7 +503,8 @@ class TestMain:
             for d in dates:
                 (briefs_dir / f"{d}.md").write_text(f"# {proj} {d}")
 
-        exit_code = ob.main(argv=["--since=3d", "--config", str(minimal_config)])
+        with patch.object(ob, "_read_from_open_brain", return_value=None):
+            exit_code = ob.main(argv=["--since=3d", "--config", str(minimal_config)])
         assert exit_code == 0
 
 
@@ -508,8 +521,8 @@ class TestSaveToOpenBrainConfigJson:
         { "server_url": "https://open-brain.sussdorff.org", "api_key": "ob_..." }
     """
 
-    def test_save_skips_silently_when_no_credentials(self, tmp_path: Path) -> None:
-        """_save_to_open_brain() skips when no token/config available — no exception raised."""
+    def test_save_raises_when_no_credentials(self, tmp_path: Path) -> None:
+        """_save_to_open_brain() raises RuntimeError when no token/config available (v1.5 hard error)."""
         import os
         from unittest.mock import patch
 
@@ -518,16 +531,16 @@ class TestSaveToOpenBrainConfigJson:
             with patch.dict(os.environ, {}, clear=False):
                 os.environ.pop("OB_TOKEN", None)
                 os.environ.pop("OB_URL", None)
-                # Should not raise even though there's no httpx available to call
-                ob._save_to_open_brain(
-                    title="test — 2026-04-23",
-                    text="# Test brief",
-                    ob_type="daily_brief",
-                    project="test",
-                    session_ref="daily-brief-2026-04-23",
-                    metadata={"source": "daily-brief"},
-                )
-        # If we reach here without exception, the test passes
+                # v1.5: must raise RuntimeError — persistence is mandatory
+                with pytest.raises(RuntimeError, match="open-brain"):
+                    ob._save_to_open_brain(
+                        title="test — 2026-04-23",
+                        text="# Test brief",
+                        ob_type="daily_brief",
+                        project="test",
+                        session_ref="daily-brief-test-2026-04-23",
+                        metadata={"source": "daily-brief"},
+                    )
 
     def test_save_uses_config_json_api_key(self, tmp_path: Path) -> None:
         """_save_to_open_brain() reads api_key from config.json when no OB_TOKEN set.
@@ -925,4 +938,655 @@ class TestAsyncSaveMemoryRegressions:
         # The Accept header is NOT in our dict — it is added by the SDK transport
         assert "accept" not in {k.lower() for k in hdrs}, (
             "Accept header must NOT be hardcoded in headers dict — SDK manages it"
+        )
+
+
+# ---------------------------------------------------------------------------
+# AK1 — Open-brain read path (search before disk)
+# ---------------------------------------------------------------------------
+
+
+class TestOpenBrainReadPath:
+    """AK1: /daily-brief reads existing briefs from open-brain before re-querying sources."""
+
+    def test_read_from_open_brain_returns_content_when_found(
+        self, minimal_config: Path, tmp_path: Path
+    ) -> None:
+        """When OB has the brief, run_for_project returns OB content without calling render-brief."""
+        ob_content = "# claude-code-plugins — 2026-04-23\n\nFrom open-brain."
+
+        with patch.object(ob, "_read_from_open_brain", return_value=ob_content) as mock_read:
+            with patch.object(ob, "_run_render_brief") as mock_render:
+                with patch.object(ob, "_save_to_open_brain") as mock_save:
+                    result = ob.run_for_project(
+                        project_name="claude-code-plugins",
+                        date="2026-04-23",
+                        detailed=False,
+                        config_path=minimal_config,
+                    )
+
+        mock_read.assert_called_once()
+        mock_render.assert_not_called()
+        mock_save.assert_not_called()
+        assert result["skipped"] is True
+        assert result["content"] == ob_content
+
+    def test_read_from_open_brain_fallback_to_disk_when_ob_returns_none(
+        self, minimal_config: Path, tmp_path: Path
+    ) -> None:
+        """When OB returns None (offline), fall back to disk check."""
+        project_path = tmp_path / "claude-code-plugins"
+        briefs_dir = project_path / ".claude" / "daily-briefs"
+        briefs_dir.mkdir(parents=True)
+        date = "2026-04-23"
+        (briefs_dir / f"{date}.md").write_text("# disk brief")
+
+        with patch.object(ob, "_read_from_open_brain", return_value=None):
+            with patch.object(ob, "_run_render_brief") as mock_render:
+                with patch.object(ob, "_save_to_open_brain") as mock_save:
+                    result = ob.run_for_project(
+                        project_name="claude-code-plugins",
+                        date=date,
+                        detailed=False,
+                        config_path=minimal_config,
+                    )
+
+        # Disk fallback: skipped=True, render not called
+        mock_render.assert_not_called()
+        assert result["skipped"] is True
+
+    def test_read_from_open_brain_function_exists(self) -> None:
+        """_read_from_open_brain must be defined on the module."""
+        assert hasattr(ob, "_read_from_open_brain"), (
+            "_read_from_open_brain must be defined in orchestrate-brief.py"
+        )
+
+    def test_async_search_memory_function_exists(self) -> None:
+        """_async_search_memory must be defined on the module."""
+        assert hasattr(ob, "_async_search_memory"), (
+            "_async_search_memory must be defined in orchestrate-brief.py"
+        )
+
+    def test_session_ref_includes_project_slug(self) -> None:
+        """session_ref must include project slug for cross-project safety (AK1 fix)."""
+        ref = ob.make_session_ref("claude-code-plugins", "2026-04-23")
+        assert "claude-code-plugins" in ref, (
+            "session_ref must include project slug, got: " + ref
+        )
+
+    def test_session_ref_includes_date(self) -> None:
+        """session_ref must include the date."""
+        ref = ob.make_session_ref("mira", "2026-04-20")
+        assert "2026-04-20" in ref, "session_ref must include the date"
+
+
+# ---------------------------------------------------------------------------
+# AK2 — Hard error on OB write failure
+# ---------------------------------------------------------------------------
+
+
+class TestOpenBrainWriteHardError:
+    """AK2: _save_to_open_brain MUST raise on failure; no silent skip, no bare except."""
+
+    def test_hard_error_on_ob_connection_failure(
+        self, tmp_path: Path
+    ) -> None:
+        """When _async_save_memory raises ConnectionError, _save_to_open_brain re-raises."""
+        import os
+
+        ob_home = tmp_path / ".open-brain"
+        ob_home.mkdir(parents=True)
+        (ob_home / "token").write_text("ob_testtoken")
+
+        async def fake_save_raises(**kwargs: object) -> None:
+            raise ConnectionError("Cannot connect to open-brain")
+
+        with patch("pathlib.Path.home", return_value=tmp_path):
+            with patch.dict(os.environ, {}, clear=False):
+                os.environ.pop("OB_TOKEN", None)
+                os.environ.pop("OB_URL", None)
+                with patch.object(ob, "_async_save_memory", side_effect=fake_save_raises):
+                    with pytest.raises(Exception):
+                        ob._save_to_open_brain(
+                            title="test — 2026-04-23",
+                            text="# Test",
+                            ob_type="daily_brief",
+                            project="test",
+                            session_ref="daily-brief-test-2026-04-23",
+                            metadata={},
+                        )
+
+    def test_hard_error_on_missing_token(self, tmp_path: Path) -> None:
+        """When no token is available, _save_to_open_brain raises RuntimeError (not silent skip)."""
+        import os
+
+        # Empty home: no .open-brain directory
+        with patch("pathlib.Path.home", return_value=tmp_path):
+            with patch.dict(os.environ, {}, clear=False):
+                os.environ.pop("OB_TOKEN", None)
+                os.environ.pop("OB_URL", None)
+                with pytest.raises(RuntimeError, match="open-brain"):
+                    ob._save_to_open_brain(
+                        title="test — 2026-04-23",
+                        text="# Test",
+                        ob_type="daily_brief",
+                        project="test",
+                        session_ref="daily-brief-test-2026-04-23",
+                        metadata={},
+                    )
+
+    def test_hard_error_propagates_from_run_for_project(
+        self, minimal_config: Path, tmp_path: Path
+    ) -> None:
+        """When OB write fails in run_for_project, the exception propagates (not swallowed)."""
+        import os
+        date = "2026-04-23"
+        content = "# claude-code-plugins — 2026-04-23\n\nSome content."
+
+        with patch.object(ob, "_read_from_open_brain", return_value=None):
+            with patch.object(ob, "_run_render_brief", return_value=content):
+                with patch.object(
+                    ob,
+                    "_save_to_open_brain",
+                    side_effect=RuntimeError("OB write failed"),
+                ):
+                    with pytest.raises(RuntimeError):
+                        ob.run_for_project(
+                            project_name="claude-code-plugins",
+                            date=date,
+                            detailed=False,
+                            config_path=minimal_config,
+                        )
+
+
+# ---------------------------------------------------------------------------
+# AK3 — Disk write opt-in via --persist-disk flag
+# ---------------------------------------------------------------------------
+
+
+class TestPersistDiskFlag:
+    """AK3: Disk write is opt-in via --persist-disk; default writes to open-brain only."""
+
+    def test_parse_args_accepts_persist_disk_flag(self) -> None:
+        """--persist-disk must be a valid CLI flag."""
+        args = ob.parse_args(["--persist-disk"])
+        assert args.persist_disk is True
+
+    def test_persist_disk_default_is_false(self) -> None:
+        """--persist-disk defaults to False."""
+        args = ob.parse_args([])
+        assert args.persist_disk is False
+
+    def test_run_render_brief_passes_no_persist_by_default(
+        self, minimal_config: Path
+    ) -> None:
+        """When persist_disk=False (default), _run_render_brief command includes --no-persist."""
+        captured_cmds: list[list[str]] = []
+
+        def fake_run(cmd: list, **kwargs: object) -> object:
+            captured_cmds.append(cmd)
+            result = MagicMock()
+            result.returncode = 0
+            result.stdout = "# brief content"
+            return result
+
+        # Patch subprocess.run on the orchestrate_brief module directly
+        import subprocess
+        with patch.object(subprocess, "run", side_effect=fake_run):
+            ob._run_render_brief(
+                "claude-code-plugins", "2026-04-23", False, minimal_config
+            )
+
+        assert captured_cmds, "_run_render_brief must call subprocess.run"
+        cmd = captured_cmds[0]
+        assert "--no-persist" in cmd, (
+            f"_run_render_brief must pass --no-persist by default; got cmd: {cmd}"
+        )
+
+    def test_run_render_brief_no_persist_flag_when_persist_disk_false(
+        self, minimal_config: Path
+    ) -> None:
+        """_run_render_brief with persist_disk=False must include --no-persist in subprocess cmd."""
+        captured_cmds: list[list[str]] = []
+
+        def fake_run(cmd: list, **kwargs: object) -> object:
+            captured_cmds.append(cmd)
+            result = MagicMock()
+            result.returncode = 0
+            result.stdout = "# brief content"
+            return result
+
+        with patch("subprocess.run", side_effect=fake_run):
+            ob._run_render_brief(
+                "claude-code-plugins", "2026-04-23", False, minimal_config,
+                persist_disk=False,
+            )
+
+        assert captured_cmds
+        cmd = captured_cmds[0]
+        assert "--no-persist" in cmd, (
+            f"--no-persist must be in cmd when persist_disk=False; cmd={cmd}"
+        )
+
+    def test_run_render_brief_no_persist_absent_when_persist_disk_true(
+        self, minimal_config: Path
+    ) -> None:
+        """_run_render_brief with persist_disk=True must NOT include --no-persist."""
+        captured_cmds: list[list[str]] = []
+
+        def fake_run(cmd: list, **kwargs: object) -> object:
+            captured_cmds.append(cmd)
+            result = MagicMock()
+            result.returncode = 0
+            result.stdout = "# brief content"
+            return result
+
+        with patch("subprocess.run", side_effect=fake_run):
+            ob._run_render_brief(
+                "claude-code-plugins", "2026-04-23", False, minimal_config,
+                persist_disk=True,
+            )
+
+        assert captured_cmds
+        cmd = captured_cmds[0]
+        assert "--no-persist" not in cmd, (
+            f"--no-persist must NOT be in cmd when persist_disk=True; cmd={cmd}"
+        )
+
+
+# ---------------------------------------------------------------------------
+# AK6 / do_not_compact metadata
+# ---------------------------------------------------------------------------
+
+
+class TestDoNotCompactMetadata:
+    """Every OB write must include do_not_compact: True in metadata."""
+
+    def test_save_to_open_brain_sets_do_not_compact(
+        self, tmp_path: Path
+    ) -> None:
+        """_save_to_open_brain must include do_not_compact: True in metadata sent to OB."""
+        import os
+
+        ob_home = tmp_path / ".open-brain"
+        ob_home.mkdir(parents=True)
+        (ob_home / "token").write_text("ob_testtoken")
+
+        captured: list[dict] = []
+
+        async def fake_async_save(**kwargs: object) -> None:
+            captured.append(dict(kwargs))
+
+        with patch("pathlib.Path.home", return_value=tmp_path):
+            with patch.dict(os.environ, {}, clear=False):
+                os.environ.pop("OB_TOKEN", None)
+                os.environ.pop("OB_URL", None)
+                with patch.object(ob, "_async_save_memory", side_effect=fake_async_save):
+                    ob._save_to_open_brain(
+                        title="test — 2026-04-25",
+                        text="# Test",
+                        ob_type="daily_brief",
+                        project="test",
+                        session_ref="daily-brief-test-2026-04-25",
+                        metadata={"source": "daily-brief"},
+                    )
+
+        assert captured, "_async_save_memory must have been called"
+        meta = captured[0]["metadata"]
+        assert meta.get("do_not_compact") is True, (
+            f"metadata.do_not_compact must be True, got: {meta}"
+        )
+
+    def test_save_metadata_includes_schema_version(
+        self, tmp_path: Path
+    ) -> None:
+        """metadata must include schema_version: '1.5'."""
+        import os
+
+        ob_home = tmp_path / ".open-brain"
+        ob_home.mkdir(parents=True)
+        (ob_home / "token").write_text("ob_testtoken")
+
+        captured: list[dict] = []
+
+        async def fake_async_save(**kwargs: object) -> None:
+            captured.append(dict(kwargs))
+
+        with patch("pathlib.Path.home", return_value=tmp_path):
+            with patch.dict(os.environ, {}, clear=False):
+                os.environ.pop("OB_TOKEN", None)
+                os.environ.pop("OB_URL", None)
+                with patch.object(ob, "_async_save_memory", side_effect=fake_async_save):
+                    ob._save_to_open_brain(
+                        title="test — 2026-04-25",
+                        text="# Test",
+                        ob_type="daily_brief",
+                        project="test",
+                        session_ref="daily-brief-test-2026-04-25",
+                        metadata={"source": "daily-brief"},
+                    )
+
+        assert captured
+        meta = captured[0]["metadata"]
+        assert meta.get("schema_version") == "1.5", (
+            f"metadata.schema_version must be '1.5', got: {meta}"
+        )
+
+
+# ---------------------------------------------------------------------------
+# AK7 + AK8 — Idempotency: no duplicate on second run
+# ---------------------------------------------------------------------------
+
+
+class TestIdempotency:
+    """AK8: Re-running /daily-brief for same project+date does not create a duplicate observation."""
+
+    def test_no_duplicate_on_second_run(
+        self, minimal_config: Path, tmp_path: Path
+    ) -> None:
+        """First run: OB returns None → saves. Second run: OB returns content → skipped. Save called once."""
+        date = "2026-04-23"
+        ob_content = "# claude-code-plugins — 2026-04-23\n\nContent."
+        save_call_count = [0]
+
+        def fake_save(**kwargs: object) -> None:
+            save_call_count[0] += 1
+
+        # First run: OB returns None (not yet saved)
+        with patch.object(ob, "_read_from_open_brain", return_value=None):
+            with patch.object(ob, "_run_render_brief", return_value=ob_content):
+                with patch.object(ob, "_save_to_open_brain", side_effect=fake_save):
+                    result1 = ob.run_for_project(
+                        project_name="claude-code-plugins",
+                        date=date,
+                        detailed=False,
+                        config_path=minimal_config,
+                    )
+
+        assert result1["skipped"] is False
+        assert save_call_count[0] == 1
+
+        # Second run: OB returns the content (already saved)
+        with patch.object(ob, "_read_from_open_brain", return_value=ob_content):
+            with patch.object(ob, "_run_render_brief") as mock_render:
+                with patch.object(ob, "_save_to_open_brain", side_effect=fake_save):
+                    result2 = ob.run_for_project(
+                        project_name="claude-code-plugins",
+                        date=date,
+                        detailed=False,
+                        config_path=minimal_config,
+                    )
+
+        assert result2["skipped"] is True
+        mock_render.assert_not_called()
+        # Total saves: only 1 (from first run), not 2
+        assert save_call_count[0] == 1, (
+            f"save_to_open_brain must be called exactly once across both runs; got {save_call_count[0]}"
+        )
+
+
+# ---------------------------------------------------------------------------
+# FIX-4 — _async_search_memory response-parsing logic
+# ---------------------------------------------------------------------------
+
+
+class TestAsyncSearchMemoryParsing:
+    """_async_search_memory must correctly parse the OB search response and
+    return the brief text on session_ref match, and None on mismatch."""
+
+    def _make_mock_session(self, result_mock: "MagicMock") -> "MagicMock":
+        """Build a mock ClientSession whose call_tool returns result_mock."""
+        from unittest.mock import AsyncMock
+        session = AsyncMock()
+        session.initialize = AsyncMock()
+        session.call_tool = AsyncMock(return_value=result_mock)
+        return session
+
+    def test_returns_brief_text_on_exact_session_ref_match(self) -> None:
+        """_async_search_memory returns observation text when session_ref matches exactly."""
+        import asyncio
+        from contextlib import asynccontextmanager
+        from typing import Any
+
+        expected_text = "# claude-code-plugins — 2026-04-23\n\nBrief content from OB."
+        target_ref = ob.make_session_ref("claude-code-plugins", "2026-04-23")
+
+        # Simulate OB returning multiple observations — only one matches session_ref
+        obs_json = json.dumps({
+            "observations": [
+                {"session_ref": "daily-brief-other-project-2026-04-23", "text": "wrong brief"},
+                {"session_ref": target_ref, "text": expected_text},
+                {"session_ref": "daily-brief-claude-code-plugins-2026-04-22", "text": "wrong date"},
+            ]
+        })
+
+        async def _drive() -> "str | None":
+            import mcp.client.streamable_http as sh_mod
+            import mcp as mcp_mod
+            from unittest.mock import AsyncMock, MagicMock
+
+            content_block = MagicMock()
+            content_block.type = "text"
+            content_block.text = obs_json
+
+            result_mock = MagicMock()
+            result_mock.isError = False
+            result_mock.content = [content_block]
+
+            mock_session = AsyncMock()
+            mock_session.initialize = AsyncMock()
+            mock_session.call_tool = AsyncMock(return_value=result_mock)
+
+            @asynccontextmanager
+            async def mock_sh(*args: Any, **kwargs: Any):
+                yield (MagicMock(), MagicMock(), lambda: "session-id")
+
+            class MockClientSession:
+                def __init__(self, *args: Any, **kwargs: Any) -> None:
+                    pass
+
+                async def __aenter__(self) -> Any:
+                    return mock_session
+
+                async def __aexit__(self, *args: Any) -> None:
+                    pass
+
+            original_sh = sh_mod.streamablehttp_client
+            original_cs = mcp_mod.ClientSession
+            sh_mod.streamablehttp_client = mock_sh  # type: ignore[assignment]
+            mcp_mod.ClientSession = MockClientSession  # type: ignore[assignment]
+            try:
+                return await ob._async_search_memory(
+                    ob_url="https://ob.example.test/mcp",
+                    token="ob_testtoken",
+                    project="claude-code-plugins",
+                    date="2026-04-23",
+                )
+            finally:
+                sh_mod.streamablehttp_client = original_sh  # type: ignore[assignment]
+                mcp_mod.ClientSession = original_cs  # type: ignore[assignment]
+
+        result = asyncio.run(_drive())
+        assert result == expected_text, (
+            f"Expected brief text on exact session_ref match; got: {result!r}"
+        )
+
+    def test_returns_none_on_session_ref_mismatch(self) -> None:
+        """_async_search_memory returns None when no observation has a matching session_ref."""
+        import asyncio
+        from contextlib import asynccontextmanager
+        from typing import Any
+
+        # OB returns observations but none match the target session_ref
+        obs_json = json.dumps({
+            "observations": [
+                {"session_ref": "daily-brief-other-project-2026-04-23", "text": "wrong project"},
+                {"session_ref": "daily-brief-claude-code-plugins-2026-04-01", "text": "wrong date"},
+            ]
+        })
+
+        async def _drive() -> "str | None":
+            import mcp.client.streamable_http as sh_mod
+            import mcp as mcp_mod
+            from unittest.mock import AsyncMock, MagicMock
+
+            content_block = MagicMock()
+            content_block.type = "text"
+            content_block.text = obs_json
+
+            result_mock = MagicMock()
+            result_mock.isError = False
+            result_mock.content = [content_block]
+
+            mock_session = AsyncMock()
+            mock_session.initialize = AsyncMock()
+            mock_session.call_tool = AsyncMock(return_value=result_mock)
+
+            @asynccontextmanager
+            async def mock_sh(*args: Any, **kwargs: Any):
+                yield (MagicMock(), MagicMock(), lambda: "session-id")
+
+            class MockClientSession:
+                def __init__(self, *args: Any, **kwargs: Any) -> None:
+                    pass
+
+                async def __aenter__(self) -> Any:
+                    return mock_session
+
+                async def __aexit__(self, *args: Any) -> None:
+                    pass
+
+            original_sh = sh_mod.streamablehttp_client
+            original_cs = mcp_mod.ClientSession
+            sh_mod.streamablehttp_client = mock_sh  # type: ignore[assignment]
+            mcp_mod.ClientSession = MockClientSession  # type: ignore[assignment]
+            try:
+                return await ob._async_search_memory(
+                    ob_url="https://ob.example.test/mcp",
+                    token="ob_testtoken",
+                    project="claude-code-plugins",
+                    date="2026-04-23",
+                )
+            finally:
+                sh_mod.streamablehttp_client = original_sh  # type: ignore[assignment]
+                mcp_mod.ClientSession = original_cs  # type: ignore[assignment]
+
+        result = asyncio.run(_drive())
+        assert result is None, (
+            f"Expected None when no session_ref matches; got: {result!r}"
+        )
+
+    def test_returns_none_on_isError(self) -> None:
+        """_async_search_memory returns None when result.isError is True."""
+        import asyncio
+        from contextlib import asynccontextmanager
+        from typing import Any
+
+        async def _drive() -> "str | None":
+            import mcp.client.streamable_http as sh_mod
+            import mcp as mcp_mod
+            from unittest.mock import AsyncMock, MagicMock
+
+            result_mock = MagicMock()
+            result_mock.isError = True
+            result_mock.content = []
+
+            mock_session = AsyncMock()
+            mock_session.initialize = AsyncMock()
+            mock_session.call_tool = AsyncMock(return_value=result_mock)
+
+            @asynccontextmanager
+            async def mock_sh(*args: Any, **kwargs: Any):
+                yield (MagicMock(), MagicMock(), lambda: "session-id")
+
+            class MockClientSession:
+                def __init__(self, *args: Any, **kwargs: Any) -> None:
+                    pass
+
+                async def __aenter__(self) -> Any:
+                    return mock_session
+
+                async def __aexit__(self, *args: Any) -> None:
+                    pass
+
+            original_sh = sh_mod.streamablehttp_client
+            original_cs = mcp_mod.ClientSession
+            sh_mod.streamablehttp_client = mock_sh  # type: ignore[assignment]
+            mcp_mod.ClientSession = MockClientSession  # type: ignore[assignment]
+            try:
+                return await ob._async_search_memory(
+                    ob_url="https://ob.example.test/mcp",
+                    token="ob_testtoken",
+                    project="claude-code-plugins",
+                    date="2026-04-23",
+                )
+            finally:
+                sh_mod.streamablehttp_client = original_sh  # type: ignore[assignment]
+                mcp_mod.ClientSession = original_cs  # type: ignore[assignment]
+
+        result = asyncio.run(_drive())
+        assert result is None, (
+            f"Expected None when result.isError is True; got: {result!r}"
+        )
+
+    def test_search_uses_limit_10(self) -> None:
+        """_async_search_memory sends limit=10 to handle ranked search returning non-exact first."""
+        import asyncio
+        from contextlib import asynccontextmanager
+        from typing import Any
+
+        captured_args: list[dict] = []
+
+        async def _drive() -> None:
+            import mcp.client.streamable_http as sh_mod
+            import mcp as mcp_mod
+            from unittest.mock import AsyncMock, MagicMock
+
+            result_mock = MagicMock()
+            result_mock.isError = False
+            result_mock.content = []
+
+            mock_session = AsyncMock()
+            mock_session.initialize = AsyncMock()
+
+            async def capture_call_tool(tool_name: str, args: dict, **kwargs: Any) -> Any:
+                captured_args.append({"tool": tool_name, "args": args})
+                return result_mock
+
+            mock_session.call_tool = capture_call_tool
+
+            @asynccontextmanager
+            async def mock_sh(*args: Any, **kwargs: Any):
+                yield (MagicMock(), MagicMock(), lambda: "session-id")
+
+            class MockClientSession:
+                def __init__(self, *args: Any, **kwargs: Any) -> None:
+                    pass
+
+                async def __aenter__(self) -> Any:
+                    return mock_session
+
+                async def __aexit__(self, *args: Any) -> None:
+                    pass
+
+            original_sh = sh_mod.streamablehttp_client
+            original_cs = mcp_mod.ClientSession
+            sh_mod.streamablehttp_client = mock_sh  # type: ignore[assignment]
+            mcp_mod.ClientSession = MockClientSession  # type: ignore[assignment]
+            try:
+                await ob._async_search_memory(
+                    ob_url="https://ob.example.test/mcp",
+                    token="ob_testtoken",
+                    project="claude-code-plugins",
+                    date="2026-04-23",
+                )
+            finally:
+                sh_mod.streamablehttp_client = original_sh  # type: ignore[assignment]
+                mcp_mod.ClientSession = original_cs  # type: ignore[assignment]
+
+        asyncio.run(_drive())
+        assert captured_args, "call_tool must have been invoked"
+        search_call = captured_args[0]
+        assert search_call["args"].get("limit") == 10, (
+            f"search limit must be 10 (to handle ranked results); got: {search_call['args'].get('limit')}"
         )
