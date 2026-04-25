@@ -501,6 +501,10 @@ async def _async_search_memory(
     ):
         async with ClientSession(read_stream, write_stream) as session:
             await session.initialize()
+            # Tool name "search" is verified per ADR-0001 (the open-brain MCP server
+            # exposes `search`, `search_by_concept`, `timeline`, `get_observations` —
+            # `search` is the correct general-purpose query tool). The companion
+            # `query-sources.py::_OBClient.search` calls the same tool.
             result = await session.call_tool(
                 "search",
                 {
@@ -513,18 +517,22 @@ async def _async_search_memory(
             if result.isError:
                 return None
             # Parse content: look for the brief text in the result.
-            # Iterate over all returned observations (not just the first) to
-            # handle ranked / full-text search that may not return exact match first.
+            # Iterate over all returned entries (not just the first) to handle
+            # ranked / full-text search that may not return exact match first.
+            #
+            # Production OB response shape (confirmed by query-sources.py):
+            #   {"total": N, "results": [{"session_ref": ..., "content": ..., ...}]}
+            # We also accept legacy `observations` key and `text` field for forward
+            # compatibility and to keep existing test fixtures working.
             for block in result.content:
                 if hasattr(block, "type") and block.type == "text" and block.text:
-                    # The search tool returns JSON with observations
                     try:
                         parsed = json.loads(block.text)
-                        observations = parsed.get("observations") or parsed.get("results") or []
-                        for obs in observations:
+                        entries = parsed.get("results") or parsed.get("observations") or []
+                        for obs in entries:
                             obs_ref = obs.get("session_ref") or obs.get("sessionRef", "")
                             if obs_ref == session_ref:
-                                return obs.get("text") or obs.get("content")
+                                return obs.get("content") or obs.get("text")
                     except (json.JSONDecodeError, AttributeError):
                         pass
             return None
