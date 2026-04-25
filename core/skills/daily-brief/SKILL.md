@@ -222,3 +222,12 @@ python3 core/skills/daily-brief/scripts/config.py load
 python3 core/skills/daily-brief/scripts/config.py resolve mira
 python3 core/skills/daily-brief/scripts/config.py brief-exists mira 2026-04-24
 ```
+
+## Reference Docs
+
+- [`references/data-sources.md`](references/data-sources.md) — canonical field→source map, dedup rules, fallback behavior, deterministic vs synthesized sections
+- [`references/config-schema.md`](references/config-schema.md) — full YAML config schema with annotated fields and examples
+
+## Sample Output
+
+- [`docs/examples/daily-brief-sample.md`](../../../../docs/examples/daily-brief-sample.md) — live sample from `--since=7d` on claude-code-plugins, with v1.0 Product Contract review
