@@ -908,8 +908,11 @@ def _build_ob_client() -> Any | None:
             date_start: str,
             date_end: str,
         ) -> list[dict[str, Any]]:
+            # The open-brain HTTP MCP endpoint authenticates via x-api-key header.
+            # Sending Authorization: Bearer is rejected with 401 because the server
+            # verifies Bearer tokens as JWTs, but api_key values are opaque strings.
             headers = {
-                "Authorization": f"Bearer {self._token}",
+                "x-api-key": self._token,
                 "Content-Type": "application/json",
             }
             async with httpx.AsyncClient(timeout=30) as client:
@@ -942,6 +945,13 @@ def _build_ob_client() -> Any | None:
                     },
                 }
                 resp = await client.post(self._url, json=call_payload, headers=headers)
+                if resp.status_code == 401:
+                    raise PermissionError(
+                        "open-brain auth failed (401 Unauthorized). "
+                        "Check ~/.open-brain/config.json: verify 'api_key' is correct "
+                        "and not expired. Regenerate the token at your open-brain instance "
+                        "if needed."
+                    )
                 resp.raise_for_status()
                 body = resp.json()
                 # MCP / JSON-RPC error envelopes arrive with HTTP 200. Detect

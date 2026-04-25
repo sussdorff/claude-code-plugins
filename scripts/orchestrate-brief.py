@@ -392,8 +392,11 @@ async def _async_save_memory(
     """Drive the MCP JSON-RPC save_memory call asynchronously."""
     import httpx
 
+    # The open-brain HTTP MCP endpoint authenticates via x-api-key header.
+    # Sending Authorization: Bearer is rejected with 401 because the server
+    # verifies Bearer tokens as JWTs, but api_key values are opaque strings.
     headers = {
-        "Authorization": f"Bearer {token}",
+        "x-api-key": token,
         "Content-Type": "application/json",
     }
 
