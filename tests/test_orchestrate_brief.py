@@ -926,3 +926,389 @@ class TestAsyncSaveMemoryRegressions:
         assert "accept" not in {k.lower() for k in hdrs}, (
             "Accept header must NOT be hardcoded in headers dict — SDK manages it"
         )
+
+
+# ---------------------------------------------------------------------------
+# AK1 — Open-brain read path (search before disk)
+# ---------------------------------------------------------------------------
+
+
+class TestOpenBrainReadPath:
+    """AK1: /daily-brief reads existing briefs from open-brain before re-querying sources."""
+
+    def test_read_from_open_brain_returns_content_when_found(
+        self, minimal_config: Path, tmp_path: Path
+    ) -> None:
+        """When OB has the brief, run_for_project returns OB content without calling render-brief."""
+        ob_content = "# claude-code-plugins — 2026-04-23\n\nFrom open-brain."
+
+        with patch.object(ob, "_read_from_open_brain", return_value=ob_content) as mock_read:
+            with patch.object(ob, "_run_render_brief") as mock_render:
+                with patch.object(ob, "_save_to_open_brain") as mock_save:
+                    result = ob.run_for_project(
+                        project_name="claude-code-plugins",
+                        date="2026-04-23",
+                        detailed=False,
+                        config_path=minimal_config,
+                    )
+
+        mock_read.assert_called_once()
+        mock_render.assert_not_called()
+        mock_save.assert_not_called()
+        assert result["skipped"] is True
+        assert result["content"] == ob_content
+
+    def test_read_from_open_brain_fallback_to_disk_when_ob_returns_none(
+        self, minimal_config: Path, tmp_path: Path
+    ) -> None:
+        """When OB returns None (offline), fall back to disk check."""
+        project_path = tmp_path / "claude-code-plugins"
+        briefs_dir = project_path / ".claude" / "daily-briefs"
+        briefs_dir.mkdir(parents=True)
+        date = "2026-04-23"
+        (briefs_dir / f"{date}.md").write_text("# disk brief")
+
+        with patch.object(ob, "_read_from_open_brain", return_value=None):
+            with patch.object(ob, "_run_render_brief") as mock_render:
+                with patch.object(ob, "_save_to_open_brain") as mock_save:
+                    result = ob.run_for_project(
+                        project_name="claude-code-plugins",
+                        date=date,
+                        detailed=False,
+                        config_path=minimal_config,
+                    )
+
+        # Disk fallback: skipped=True, render not called
+        mock_render.assert_not_called()
+        assert result["skipped"] is True
+
+    def test_read_from_open_brain_function_exists(self) -> None:
+        """_read_from_open_brain must be defined on the module."""
+        assert hasattr(ob, "_read_from_open_brain"), (
+            "_read_from_open_brain must be defined in orchestrate-brief.py"
+        )
+
+    def test_async_search_memory_function_exists(self) -> None:
+        """_async_search_memory must be defined on the module."""
+        assert hasattr(ob, "_async_search_memory"), (
+            "_async_search_memory must be defined in orchestrate-brief.py"
+        )
+
+    def test_session_ref_includes_project_slug(self) -> None:
+        """session_ref must include project slug for cross-project safety (AK1 fix)."""
+        ref = ob.make_session_ref("claude-code-plugins", "2026-04-23")
+        assert "claude-code-plugins" in ref, (
+            "session_ref must include project slug, got: " + ref
+        )
+
+    def test_session_ref_includes_date(self) -> None:
+        """session_ref must include the date."""
+        ref = ob.make_session_ref("mira", "2026-04-20")
+        assert "2026-04-20" in ref, "session_ref must include the date"
+
+
+# ---------------------------------------------------------------------------
+# AK2 — Hard error on OB write failure
+# ---------------------------------------------------------------------------
+
+
+class TestOpenBrainWriteHardError:
+    """AK2: _save_to_open_brain MUST raise on failure; no silent skip, no bare except."""
+
+    def test_hard_error_on_ob_connection_failure(
+        self, tmp_path: Path
+    ) -> None:
+        """When _async_save_memory raises ConnectionError, _save_to_open_brain re-raises."""
+        import os
+
+        ob_home = tmp_path / ".open-brain"
+        ob_home.mkdir(parents=True)
+        (ob_home / "token").write_text("ob_testtoken")
+
+        async def fake_save_raises(**kwargs: object) -> None:
+            raise ConnectionError("Cannot connect to open-brain")
+
+        with patch("pathlib.Path.home", return_value=tmp_path):
+            with patch.dict(os.environ, {}, clear=False):
+                os.environ.pop("OB_TOKEN", None)
+                os.environ.pop("OB_URL", None)
+                with patch.object(ob, "_async_save_memory", side_effect=fake_save_raises):
+                    with pytest.raises(Exception):
+                        ob._save_to_open_brain(
+                            title="test — 2026-04-23",
+                            text="# Test",
+                            ob_type="daily_brief",
+                            project="test",
+                            session_ref="daily-brief-test-2026-04-23",
+                            metadata={},
+                        )
+
+    def test_hard_error_on_missing_token(self, tmp_path: Path) -> None:
+        """When no token is available, _save_to_open_brain raises RuntimeError (not silent skip)."""
+        import os
+
+        # Empty home: no .open-brain directory
+        with patch("pathlib.Path.home", return_value=tmp_path):
+            with patch.dict(os.environ, {}, clear=False):
+                os.environ.pop("OB_TOKEN", None)
+                os.environ.pop("OB_URL", None)
+                with pytest.raises(RuntimeError, match="open-brain"):
+                    ob._save_to_open_brain(
+                        title="test — 2026-04-23",
+                        text="# Test",
+                        ob_type="daily_brief",
+                        project="test",
+                        session_ref="daily-brief-test-2026-04-23",
+                        metadata={},
+                    )
+
+    def test_hard_error_propagates_from_run_for_project(
+        self, minimal_config: Path, tmp_path: Path
+    ) -> None:
+        """When OB write fails in run_for_project, the exception propagates (not swallowed)."""
+        import os
+        date = "2026-04-23"
+        content = "# claude-code-plugins — 2026-04-23\n\nSome content."
+
+        with patch.object(ob, "_read_from_open_brain", return_value=None):
+            with patch.object(ob, "_run_render_brief", return_value=content):
+                with patch.object(
+                    ob,
+                    "_save_to_open_brain",
+                    side_effect=RuntimeError("OB write failed"),
+                ):
+                    with pytest.raises(RuntimeError):
+                        ob.run_for_project(
+                            project_name="claude-code-plugins",
+                            date=date,
+                            detailed=False,
+                            config_path=minimal_config,
+                        )
+
+
+# ---------------------------------------------------------------------------
+# AK3 — Disk write opt-in via --persist-disk flag
+# ---------------------------------------------------------------------------
+
+
+class TestPersistDiskFlag:
+    """AK3: Disk write is opt-in via --persist-disk; default writes to open-brain only."""
+
+    def test_parse_args_accepts_persist_disk_flag(self) -> None:
+        """--persist-disk must be a valid CLI flag."""
+        args = ob.parse_args(["--persist-disk"])
+        assert args.persist_disk is True
+
+    def test_persist_disk_default_is_false(self) -> None:
+        """--persist-disk defaults to False."""
+        args = ob.parse_args([])
+        assert args.persist_disk is False
+
+    def test_run_render_brief_passes_no_persist_by_default(
+        self, minimal_config: Path, tmp_path: Path
+    ) -> None:
+        """When persist_disk=False (default), _run_render_brief is called with no_persist=True."""
+        import subprocess as sp
+        captured_cmds: list[list[str]] = []
+
+        def fake_run(cmd: list, **kwargs: object) -> object:
+            captured_cmds.append(cmd)
+            result = MagicMock()
+            result.returncode = 0
+            result.stdout = "# brief content"
+            return result
+
+        with patch.object(ob, "_read_from_open_brain", return_value=None):
+            with patch.object(ob._mod if hasattr(ob, "_mod") else ob, "subprocess") as _:
+                with patch("subprocess.run", side_effect=fake_run):
+                    with patch.object(ob, "_save_to_open_brain"):
+                        ob._run_render_brief(
+                            "claude-code-plugins", "2026-04-23", False, minimal_config
+                        )
+
+        assert captured_cmds, "_run_render_brief must call subprocess.run"
+        cmd = captured_cmds[0]
+        assert "--no-persist" in cmd, (
+            f"_run_render_brief must pass --no-persist by default; got cmd: {cmd}"
+        )
+
+    def test_run_render_brief_no_persist_flag_when_persist_disk_false(
+        self, minimal_config: Path
+    ) -> None:
+        """_run_render_brief with persist_disk=False must include --no-persist in subprocess cmd."""
+        captured_cmds: list[list[str]] = []
+
+        def fake_run(cmd: list, **kwargs: object) -> object:
+            captured_cmds.append(cmd)
+            result = MagicMock()
+            result.returncode = 0
+            result.stdout = "# brief content"
+            return result
+
+        with patch("subprocess.run", side_effect=fake_run):
+            ob._run_render_brief(
+                "claude-code-plugins", "2026-04-23", False, minimal_config,
+                persist_disk=False,
+            )
+
+        assert captured_cmds
+        cmd = captured_cmds[0]
+        assert "--no-persist" in cmd, (
+            f"--no-persist must be in cmd when persist_disk=False; cmd={cmd}"
+        )
+
+    def test_run_render_brief_no_persist_absent_when_persist_disk_true(
+        self, minimal_config: Path
+    ) -> None:
+        """_run_render_brief with persist_disk=True must NOT include --no-persist."""
+        captured_cmds: list[list[str]] = []
+
+        def fake_run(cmd: list, **kwargs: object) -> object:
+            captured_cmds.append(cmd)
+            result = MagicMock()
+            result.returncode = 0
+            result.stdout = "# brief content"
+            return result
+
+        with patch("subprocess.run", side_effect=fake_run):
+            ob._run_render_brief(
+                "claude-code-plugins", "2026-04-23", False, minimal_config,
+                persist_disk=True,
+            )
+
+        assert captured_cmds
+        cmd = captured_cmds[0]
+        assert "--no-persist" not in cmd, (
+            f"--no-persist must NOT be in cmd when persist_disk=True; cmd={cmd}"
+        )
+
+
+# ---------------------------------------------------------------------------
+# AK6 / do_not_compact metadata
+# ---------------------------------------------------------------------------
+
+
+class TestDoNotCompactMetadata:
+    """Every OB write must include do_not_compact: True in metadata."""
+
+    def test_save_to_open_brain_sets_do_not_compact(
+        self, tmp_path: Path
+    ) -> None:
+        """_save_to_open_brain must include do_not_compact: True in metadata sent to OB."""
+        import os
+
+        ob_home = tmp_path / ".open-brain"
+        ob_home.mkdir(parents=True)
+        (ob_home / "token").write_text("ob_testtoken")
+
+        captured: list[dict] = []
+
+        async def fake_async_save(**kwargs: object) -> None:
+            captured.append(dict(kwargs))
+
+        with patch("pathlib.Path.home", return_value=tmp_path):
+            with patch.dict(os.environ, {}, clear=False):
+                os.environ.pop("OB_TOKEN", None)
+                os.environ.pop("OB_URL", None)
+                with patch.object(ob, "_async_save_memory", side_effect=fake_async_save):
+                    ob._save_to_open_brain(
+                        title="test — 2026-04-25",
+                        text="# Test",
+                        ob_type="daily_brief",
+                        project="test",
+                        session_ref="daily-brief-test-2026-04-25",
+                        metadata={"source": "daily-brief"},
+                    )
+
+        assert captured, "_async_save_memory must have been called"
+        meta = captured[0]["metadata"]
+        assert meta.get("do_not_compact") is True, (
+            f"metadata.do_not_compact must be True, got: {meta}"
+        )
+
+    def test_save_metadata_includes_schema_version(
+        self, tmp_path: Path
+    ) -> None:
+        """metadata must include schema_version: '1.5'."""
+        import os
+
+        ob_home = tmp_path / ".open-brain"
+        ob_home.mkdir(parents=True)
+        (ob_home / "token").write_text("ob_testtoken")
+
+        captured: list[dict] = []
+
+        async def fake_async_save(**kwargs: object) -> None:
+            captured.append(dict(kwargs))
+
+        with patch("pathlib.Path.home", return_value=tmp_path):
+            with patch.dict(os.environ, {}, clear=False):
+                os.environ.pop("OB_TOKEN", None)
+                os.environ.pop("OB_URL", None)
+                with patch.object(ob, "_async_save_memory", side_effect=fake_async_save):
+                    ob._save_to_open_brain(
+                        title="test — 2026-04-25",
+                        text="# Test",
+                        ob_type="daily_brief",
+                        project="test",
+                        session_ref="daily-brief-test-2026-04-25",
+                        metadata={"source": "daily-brief"},
+                    )
+
+        assert captured
+        meta = captured[0]["metadata"]
+        assert meta.get("schema_version") == "1.5", (
+            f"metadata.schema_version must be '1.5', got: {meta}"
+        )
+
+
+# ---------------------------------------------------------------------------
+# AK7 + AK8 — Idempotency: no duplicate on second run
+# ---------------------------------------------------------------------------
+
+
+class TestIdempotency:
+    """AK8: Re-running /daily-brief for same project+date does not create a duplicate observation."""
+
+    def test_no_duplicate_on_second_run(
+        self, minimal_config: Path, tmp_path: Path
+    ) -> None:
+        """First run: OB returns None → saves. Second run: OB returns content → skipped. Save called once."""
+        date = "2026-04-23"
+        ob_content = "# claude-code-plugins — 2026-04-23\n\nContent."
+        save_call_count = [0]
+
+        def fake_save(**kwargs: object) -> None:
+            save_call_count[0] += 1
+
+        # First run: OB returns None (not yet saved)
+        with patch.object(ob, "_read_from_open_brain", return_value=None):
+            with patch.object(ob, "_run_render_brief", return_value=ob_content):
+                with patch.object(ob, "_save_to_open_brain", side_effect=fake_save):
+                    result1 = ob.run_for_project(
+                        project_name="claude-code-plugins",
+                        date=date,
+                        detailed=False,
+                        config_path=minimal_config,
+                    )
+
+        assert result1["skipped"] is False
+        assert save_call_count[0] == 1
+
+        # Second run: OB returns the content (already saved)
+        with patch.object(ob, "_read_from_open_brain", return_value=ob_content):
+            with patch.object(ob, "_run_render_brief") as mock_render:
+                with patch.object(ob, "_save_to_open_brain", side_effect=fake_save):
+                    result2 = ob.run_for_project(
+                        project_name="claude-code-plugins",
+                        date=date,
+                        detailed=False,
+                        config_path=minimal_config,
+                    )
+
+        assert result2["skipped"] is True
+        mock_render.assert_not_called()
+        # Total saves: only 1 (from first run), not 2
+        assert save_call_count[0] == 1, (
+            f"save_to_open_brain must be called exactly once across both runs; got {save_call_count[0]}"
+        )
