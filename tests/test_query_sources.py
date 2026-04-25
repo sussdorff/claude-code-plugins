@@ -107,19 +107,19 @@ def assert_required_data_fields(data: dict[str, Any]) -> None:
 
 
 @pytest.fixture(autouse=True)
-def _ensure_test_beads_db() -> None:
-    """Ensure the fixture project path has a .beads/*.db file.
+def _ensure_test_beads_dir() -> None:
+    """Ensure the fixture project path has a .beads/config.yaml file.
 
-    `query_sources` now resolves the beads DB from `<project_path>/.beads/*.db`
-    so it never leaks beads from the caller's cwd. The test fixture project
-    points at /tmp/test-ccp-repo; we stub a dummy .db there so the bd queries
-    actually fire (MockCommandRunner ignores the --db flag when matching).
+    `query_sources` detects beads availability via .beads/config.yaml or
+    .beads/issues.jsonl. The test fixture project points at /tmp/test-ccp-repo;
+    we create a minimal config.yaml there so the bd queries actually fire
+    (MockCommandRunner handles cwd-scoped bd commands).
     """
     beads_dir = Path("/tmp/test-ccp-repo/.beads")
     beads_dir.mkdir(parents=True, exist_ok=True)
-    db_file = beads_dir / "test.db"
-    if not db_file.exists():
-        db_file.touch()
+    config_file = beads_dir / "config.yaml"
+    if not config_file.exists():
+        config_file.write_text("version: 1\n")
 
 
 @pytest.fixture()
@@ -924,18 +924,18 @@ class TestNoActivity:
 # ---------------------------------------------------------------------------
 
 
-class TestBdDbFlagScoping:
-    """REGRESSION: bd commands must run against the project-resolved DB, not cwd."""
+class TestBdCwdScoping:
+    """REGRESSION: bd commands must run via cwd=<project_path>, not --db flag."""
 
-    def test_bd_commands_include_db_flag_from_project_path(
-        self, config_path: Path
-    ) -> None:
-        """All bd invocations must be scoped by --db <project>/.beads/*.db."""
+    def test_bd_commands_use_cwd_not_db_flag(self, config_path: Path) -> None:
+        """bd commands must use cwd=<project_path>, not --db, for scoping."""
         captured_cmds: list[list[str]] = []
+        captured_kwargs: list[dict[str, Any]] = []
 
         class CapturingRunner(qs.CommandRunner):
             def run(self, cmd: list[str], **kwargs: Any) -> subprocess.CompletedProcess[str]:
                 captured_cmds.append(list(cmd))
+                captured_kwargs.append(dict(kwargs))
                 if cmd and cmd[0] == "git":
                     return subprocess.CompletedProcess(args=cmd, returncode=0, stdout="", stderr="")
                 return subprocess.CompletedProcess(args=cmd, returncode=0, stdout="[]", stderr="")
@@ -950,26 +950,92 @@ class TestBdDbFlagScoping:
         bd_cmds = [c for c in captured_cmds if c and c[0] == "bd"]
         assert bd_cmds, "Expected at least one bd command to be issued"
         for cmd in bd_cmds:
-            assert len(cmd) >= 3 and cmd[1] == "--db", (
-                f"bd command missing --db scoping: {cmd}"
-            )
-            assert cmd[2].startswith("/tmp/test-ccp-repo/.beads/"), (
-                f"bd --db path should point at the project beads DB, got: {cmd[2]}"
-            )
+            assert "--db" not in cmd, f"bd command must not use --db scoping: {cmd}"
+        bd_kwargs = [kw for cmd, kw in zip(captured_cmds, captured_kwargs) if cmd and cmd[0] == "bd"]
+        for kw in bd_kwargs:
+            assert "cwd" in kw, f"bd command must pass cwd kwarg for project-scoped execution, got kwargs: {kw}"
+            assert kw["cwd"] == "/tmp/test-ccp-repo", f"cwd should point at project path, got: {kw['cwd']}"
 
-    def test_resolve_bd_db_flag_returns_none_when_no_db(self, tmp_path: Path) -> None:
-        """_resolve_bd_db_flag returns None when there is no .beads/*.db file."""
-        assert qs._resolve_bd_db_flag(tmp_path) is None
-
-    def test_resolve_bd_db_flag_returns_first_db(self, tmp_path: Path) -> None:
-        """_resolve_bd_db_flag picks the first matching *.db file in .beads/."""
+    def test_detect_beads_available_returns_false_when_no_config(self, tmp_path: Path) -> None:
+        """_detect_beads_available returns False when .beads/ has no config.yaml or issues.jsonl."""
         beads_dir = tmp_path / ".beads"
         beads_dir.mkdir()
-        (beads_dir / "issues.db").touch()
-        flag = qs._resolve_bd_db_flag(tmp_path)
-        assert flag is not None
-        assert flag[0] == "--db"
-        assert flag[1].endswith("issues.db")
+        # No config.yaml and no issues.jsonl — only a .db file
+        (beads_dir / "legacy.db").touch()
+        assert qs._detect_beads_available(tmp_path) is False
+
+    def test_detect_beads_available_returns_true_for_config_yaml(self, tmp_path: Path) -> None:
+        """_detect_beads_available returns True when .beads/config.yaml exists."""
+        beads_dir = tmp_path / ".beads"
+        beads_dir.mkdir()
+        (beads_dir / "config.yaml").write_text("version: 1\n")
+        assert qs._detect_beads_available(tmp_path) is True
+
+    def test_detect_beads_available_returns_true_for_issues_jsonl(self, tmp_path: Path) -> None:
+        """_detect_beads_available returns True when .beads/issues.jsonl exists (no .db needed)."""
+        beads_dir = tmp_path / ".beads"
+        beads_dir.mkdir()
+        (beads_dir / "issues.jsonl").write_text("")  # empty file — detection is existence-based
+        assert qs._detect_beads_available(tmp_path) is True
+
+    def test_project_with_issues_jsonl_but_no_db_returns_populated_beads(
+        self, config_path: Path
+    ) -> None:
+        """REGRESSION: a project with .beads/issues.jsonl but no .db returns bead data (not empty)."""
+        import tempfile
+
+        import yaml
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            project_path = Path(tmpdir)
+            beads_dir = project_path / ".beads"
+            beads_dir.mkdir()
+            (beads_dir / "issues.jsonl").write_text("")  # modern beads, no .db
+
+            # Patch the fixture config to point at our tmp project path
+            custom_config = project_path / "daily-brief.yml"
+            custom_config.write_text(
+                f"projects:\n"
+                f"  - name: testproject\n"
+                f"    path: {tmpdir}\n"
+                f"    slug: testproject\n"
+                f"    beads: true\n"
+                f"defaults:\n"
+                f"  since: yesterday\n"
+                f"  format: markdown\n"
+                f"  detailed: false\n"
+                f"  language: de\n"
+                f"  timezone: Europe/Berlin\n"
+            )
+
+            bead = {"id": "CCP-test", "title": "Test bead", "status": "open"}
+            runner = qs.MockCommandRunner({
+                "bd list --status=closed": "[]",
+                "bd list --status=open": json.dumps([bead]),
+                "bd list --status=in_progress": "[]",
+                "bd list": "[]",
+                "bd ready": "[]",
+                "bd blocked": "[]",
+                "bd human": "[]",
+                "git": "",
+            })
+
+            result = qs.query_sources(
+                project="testproject",
+                date=TEST_DATE,
+                config_path=custom_config,
+                runner=runner,
+                ob_client=None,
+            )
+            # Should NOT warn about missing .db
+            beads_warnings = [
+                w for w in result["data"]["warnings"]
+                if w.get("source") == "beads" and ".db" in w.get("reason", "")
+            ]
+            assert not beads_warnings, f"Got unexpected .db warning: {beads_warnings}"
+            # Should have populated open_beads
+            assert len(result["data"]["open_beads"]) == 1
+            assert result["data"]["open_beads"][0]["id"] == "CCP-test"
 
 
 class TestClosedBeadFallbackRegression:
@@ -996,12 +1062,8 @@ class TestClosedBeadFallbackRegression:
 
             def run(self, cmd: list[str], **kwargs: Any) -> subprocess.CompletedProcess[str]:
                 self.calls.append(list(cmd))
-                # strip --db <path>
-                logical = list(cmd)
-                if logical and logical[0] == "bd" and len(logical) >= 3 and logical[1] == "--db":
-                    logical = [logical[0]] + logical[3:]
-                joined = " ".join(logical)
-                if logical and logical[0] == "git":
+                joined = " ".join(cmd)
+                if cmd and cmd[0] == "git":
                     return subprocess.CompletedProcess(args=cmd, returncode=0, stdout="", stderr="")
                 # Date-filtered closed query fails
                 if "--closed-after" in joined:
@@ -1009,7 +1071,7 @@ class TestClosedBeadFallbackRegression:
                         args=cmd, returncode=2, stdout="", stderr="unknown flag: --closed-after"
                     )
                 # Unfiltered --status=closed would return historical data — must NOT be called
-                if logical == ["bd", "list", "--status=closed", "--json"]:
+                if cmd == ["bd", "list", "--status=closed", "--json"]:
                     return subprocess.CompletedProcess(
                         args=cmd, returncode=0, stdout=json.dumps([historical_bead]), stderr=""
                     )
