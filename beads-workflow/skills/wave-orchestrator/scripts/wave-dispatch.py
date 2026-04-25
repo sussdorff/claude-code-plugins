@@ -86,6 +86,54 @@ class WaveDispatcher:
         except Exception:
             return False
 
+    def check_already_running(self, bead_id: str) -> dict | None:
+        """Check if bead is already dispatched in a live session.
+
+        Returns a dict {"pids": [...], "worktree_path": str} if already running, else None.
+        A bead is considered already running if:
+        - A process with '--worktree bead-<bead_id>' is in the process list, OR
+        - A git worktree at path '*/bead-<bead_id>' exists
+        """
+        pids: list[str] = []
+        worktree_path = ""
+
+        # Check 1: live claude process with --worktree bead-<id>
+        try:
+            result = self._runner(
+                ["pgrep", "-f", f"worktree bead-{re.escape(bead_id)}( |$)"],
+                capture_output=True,
+                text=True,
+                timeout=10,
+            )
+            if result.returncode == 0 and result.stdout.strip():
+                pids = [p.strip() for p in result.stdout.strip().splitlines() if p.strip()]
+        except Exception as e:
+            print(f"Warning: check_already_running failed for {bead_id}: {e}", file=sys.stderr)
+
+        # Check 2: git worktree exists for this bead
+        try:
+            result = self._runner(
+                ["git", "worktree", "list", "--porcelain"],
+                capture_output=True,
+                text=True,
+                timeout=10,
+            )
+            if result.returncode == 0:
+                for line in result.stdout.splitlines():
+                    if line.startswith("worktree "):
+                        path = line.split(" ", 1)[1].strip()
+                        # Match exact directory name to prevent prefix false-positives
+                        # (e.g. "bead-CCP-x" must not match "bead-CCP-xtba")
+                        if Path(path).name == f"bead-{bead_id}":
+                            worktree_path = path
+                            break
+        except Exception as e:
+            print(f"Warning: check_already_running failed for {bead_id}: {e}", file=sys.stderr)
+
+        if pids or worktree_path:
+            return {"pids": pids, "worktree_path": worktree_path}
+        return None
+
     def dispatch(
         self,
         bead_ids: list[str],
@@ -150,6 +198,27 @@ class WaveDispatcher:
             cld_flag = "-bq" if is_quick else "-b"
             surface_suffix = "qf" if is_quick else "impl"
             short_id = bid.split("-")[-1] if "-" in bid else bid
+            mode = "quick" if is_quick else "full"
+
+            # Duplicate-dispatch guard
+            already = self.check_already_running(bid)
+            if already is not None:
+                pid_list = ", ".join(already["pids"]) if already["pids"] else "none"
+                wt_path = already["worktree_path"] or "none"
+                print(
+                    f"ALREADY-RUNNING: {bid} — worktree={wt_path}, pids=[{pid_list}] "
+                    f"— skipping dispatch to avoid duplicate session",
+                    file=sys.stderr,
+                )
+                beads_json.append({
+                    "id": bid,
+                    "surface": "",
+                    "mode": mode,
+                    "status": "already-running",
+                    "pids": already["pids"],
+                    "worktree_path": already["worktree_path"],
+                })
+                continue
 
             # Create new split
             try:
@@ -201,8 +270,7 @@ class WaveDispatcher:
                 print(f"Warning: failed to send command to {surface} for bead {bid}: {e}", file=sys.stderr)
                 continue
 
-            mode = "quick" if is_quick else "full"
-            beads_json.append({"id": bid, "surface": surface, "mode": mode})
+            beads_json.append({"id": bid, "surface": surface, "mode": mode, "status": "dispatched"})
             print(
                 f"Dispatched ({cld_flag}): {bid} → {surface} ({short_id}-{surface_suffix})",
                 file=sys.stderr,

@@ -45,7 +45,7 @@ done
 # Environment
 # ---------------------------------------------------------------------------
 if ! command -v bd &>/dev/null; then
-  echo '{"error":"bd_not_found","closed":[],"close_failed":[],"missing_reason":[],"dolt_sync":{"status":"skipped","detail":"bd not found"},"metrics_ingest":{"status":"skipped","detail":"bd not found"}}' >&2
+  echo '{"error":"bd_not_found","closed":[],"close_failed":[],"missing_reason":[],"skipped_not_owned":[],"dolt_sync":{"status":"skipped","detail":"bd not found"},"metrics_ingest":{"status":"skipped","detail":"bd not found"}}' >&2
   exit 0
 fi
 
@@ -58,6 +58,7 @@ PLUGIN_LIB="${CLAUDE_PLUGIN_ROOT:-${REPO_ROOT:-$HOME/code/claude-code-plugins}/b
 CLOSED_BEADS=()        # JSON objects: {id, type, title, close_reason}
 CLOSE_FAILED_BEADS=()  # JSON objects: {id, type, title, close_reason} — bd close failed
 MISSING_REASON=()      # bead IDs that need a close reason
+SKIPPED_NOT_OWNED=()   # bead IDs skipped because owned by a different session
 
 # ---------------------------------------------------------------------------
 # Find in-progress beads
@@ -71,7 +72,7 @@ IN_PROGRESS_COUNT=$(echo "$IN_PROGRESS_JSON" | python3 -c \
 echo "    found $IN_PROGRESS_COUNT in-progress bead(s)" >&2
 
 if [[ "$IN_PROGRESS_COUNT" -eq 0 ]]; then
-  echo '{"closed":[],"close_failed":[],"missing_reason":[],"dolt_sync":{"status":"skipped","detail":"no in-progress beads"},"metrics_ingest":{"status":"skipped","detail":"no beads to close"}}'
+  echo '{"closed":[],"close_failed":[],"missing_reason":[],"skipped_not_owned":[],"dolt_sync":{"status":"skipped","detail":"no in-progress beads"},"metrics_ingest":{"status":"skipped","detail":"no beads to close"}}'
   exit 0
 fi
 
@@ -95,6 +96,16 @@ for bead_id in $BEAD_IDS; do
     "import sys,json; d=json.load(sys.stdin); print(d[0].get('type','task'))" 2>/dev/null || echo "task")
   BEAD_NOTES=$(echo "$BEAD_JSON" | python3 -c \
     "import sys,json; d=json.load(sys.stdin); print(d[0].get('notes',''))" 2>/dev/null || echo "")
+
+  # Ownership check: if CCP_SESSION_ID is set, only close beads owned by this session
+  BEAD_ASSIGNEE=$(echo "$BEAD_JSON" | python3 -c \
+    "import sys,json; d=json.load(sys.stdin); print(d[0].get('assignee',''))" 2>/dev/null || echo "")
+  CURRENT_SESSION="${CCP_SESSION_ID:-}"
+  if [[ -n "$CURRENT_SESSION" && "$BEAD_ASSIGNEE" != "$CURRENT_SESSION" ]]; then
+    echo "    $bead_id: skipping — assignee='$BEAD_ASSIGNEE' does not match current session '$CURRENT_SESSION'" >&2
+    SKIPPED_NOT_OWNED+=("$bead_id")
+    continue
+  fi
 
   # Extract 'Close reason:' from notes
   CLOSE_REASON=$(echo "$BEAD_NOTES" | grep -i '^Close reason:' | head -1 | sed 's/^[Cc]lose reason:[[:space:]]*//' || echo "")
@@ -141,15 +152,21 @@ if [[ "${#MISSING_REASON[@]}" -gt 0 ]]; then
   if [[ "${#CLOSE_FAILED_BEADS[@]}" -gt 0 ]]; then
     CLOSE_FAILED_JSON="[$(IFS=','; echo "${CLOSE_FAILED_BEADS[*]}")]"
   fi
+  SKIPPED_NOT_OWNED_JSON="[]"
+  if [[ "${#SKIPPED_NOT_OWNED[@]}" -gt 0 ]]; then
+    SKIPPED_NOT_OWNED_JSON=$(printf '%s\n' "${SKIPPED_NOT_OWNED[@]}" | jq -R . | jq -s .)
+  fi
 
   jq -cn \
     --argjson closed "$CLOSED_JSON" \
     --argjson close_failed "$CLOSE_FAILED_JSON" \
     --argjson missing "$MISSING_JSON" \
+    --argjson skipped_not_owned "$SKIPPED_NOT_OWNED_JSON" \
     '{
       closed: $closed,
       close_failed: $close_failed,
       missing_reason: $missing,
+      skipped_not_owned: $skipped_not_owned,
       dolt_sync: {status: "skipped", detail: "missing close reasons — sync deferred"},
       metrics_ingest: {status: "skipped", detail: "missing close reasons — ingest deferred"}
     }'
@@ -254,16 +271,23 @@ fi
 MISSING_JSON="[]"
 # (MISSING_REASON is empty here — we returned early above if non-empty)
 
+SKIPPED_NOT_OWNED_FINAL_JSON="[]"
+if [[ "${#SKIPPED_NOT_OWNED[@]}" -gt 0 ]]; then
+  SKIPPED_NOT_OWNED_FINAL_JSON=$(printf '%s\n' "${SKIPPED_NOT_OWNED[@]}" | jq -R . | jq -s .)
+fi
+
 jq -cn \
   --argjson closed "$CLOSED_JSON" \
   --argjson close_failed "$CLOSE_FAILED_JSON" \
   --argjson missing "$MISSING_JSON" \
+  --argjson skipped_not_owned "$SKIPPED_NOT_OWNED_FINAL_JSON" \
   --arg ds "$DOLT_STATUS" --arg dd "$DOLT_DETAIL" \
   --arg ms "$METRICS_STATUS" --arg md "$METRICS_DETAIL" \
   '{
     closed: $closed,
     close_failed: $close_failed,
     missing_reason: $missing,
+    skipped_not_owned: $skipped_not_owned,
     dolt_sync: {status: $ds, detail: $dd},
     metrics_ingest: {status: $ms, detail: $md}
   }'

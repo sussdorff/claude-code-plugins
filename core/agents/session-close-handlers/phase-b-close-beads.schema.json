@@ -3,7 +3,7 @@
   "title": "phase-b-close-beads output",
   "description": "JSON emitted by phase-b-close-beads.sh (Step 16b). Harvests close reasons, closes in-progress beads, ingests metrics, and syncs Dolt. Exit 3 = one or more beads missing a close reason (partial JSON with missing_reason list). Exit 0 = all beads closed (or no in-progress beads). The closed list is used by Step 17 (What's New synthesis) without extra bd show calls.",
   "type": "object",
-  "required": ["closed", "close_failed", "missing_reason", "dolt_sync", "metrics_ingest"],
+  "required": ["closed", "close_failed", "missing_reason", "skipped_not_owned", "dolt_sync", "metrics_ingest"],
   "properties": {
     "closed": {
       "type": "array",
@@ -48,6 +48,11 @@
     "missing_reason": {
       "type": "array",
       "description": "Bead IDs that have no 'Close reason:' note. Non-empty = exit 3. Caller must compose reasons and rerun.",
+      "items": {"type": "string"}
+    },
+    "skipped_not_owned": {
+      "type": "array",
+      "description": "Bead IDs skipped because CCP_SESSION_ID is set and the bead's assignee does not match this session. These beads are NOT closed — they belong to a different session.",
       "items": {"type": "string"}
     },
     "dolt_sync": {

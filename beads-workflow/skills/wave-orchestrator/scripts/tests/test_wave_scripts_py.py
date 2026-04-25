@@ -738,5 +738,191 @@ def test_wave_status_elapsed_minutes_calculated() -> None:
     assert result["elapsed_minutes"] > 0
 
 
+def test_wave_dispatcher_skips_already_running_bead() -> None:
+    """Dispatch skips a bead that has an active process (pgrep returns PID)."""
+    wd = _wd()
+
+    cmux_split_calls: list = []
+
+    def mock_runner(cmd, **kwargs):
+        # pgrep returns a PID → bead is running
+        if cmd and cmd[0] == "pgrep":
+            return _MockResult(stdout="12345\n", returncode=0)
+        # git worktree list returns nothing relevant
+        if cmd and cmd[0] == "git" and "worktree" in cmd:
+            return _MockResult(stdout="worktree /other\nHEAD abc123\nbranch refs/heads/main\n\n")
+        if cmd and cmd[0] == "cmux" and "new-split" in cmd:
+            cmux_split_calls.append(cmd)
+            return _MockResult(stdout="surface:99\n")
+        return _MockResult()
+
+    dispatcher = wd.WaveDispatcher(runner=mock_runner)
+    exit_code, output = dispatcher.dispatch(
+        bead_ids=["proj-abc"],
+        quick_ids=[],
+        workspace="ws:1",
+        base_surface="surface:1",
+        wave_id="wave-test",
+        skip_scenarios=True,
+    )
+
+    # Dispatch should succeed overall (exit 0) but skip the already-running bead
+    assert exit_code == 0
+    # No cmux split should have been created for the running bead
+    assert cmux_split_calls == [], f"Expected no cmux splits, got: {cmux_split_calls}"
+    # Output should record the bead as already-running
+    assert len(output["beads"]) == 1
+    assert output["beads"][0]["status"] == "already-running"
+    assert "12345" in output["beads"][0]["pids"]
+
+
+def test_wave_dispatcher_proceeds_when_not_running() -> None:
+    """Dispatch proceeds normally when pgrep finds no process and no worktree exists."""
+    wd = _wd()
+
+    cmux_split_calls: list = []
+
+    def mock_runner(cmd, **kwargs):
+        # pgrep returns nothing → bead NOT running
+        if cmd and cmd[0] == "pgrep":
+            return _MockResult(stdout="", returncode=1)
+        # git worktree list returns no matching worktree
+        if cmd and cmd[0] == "git" and "worktree" in cmd:
+            return _MockResult(stdout="worktree /some/other/path\nHEAD abc123\nbranch refs/heads/main\n\n")
+        if cmd and cmd[0] == "cmux" and "new-split" in cmd:
+            cmux_split_calls.append(cmd)
+            return _MockResult(stdout="surface:42\n")
+        return _MockResult()
+
+    dispatcher = wd.WaveDispatcher(runner=mock_runner)
+    exit_code, output = dispatcher.dispatch(
+        bead_ids=["proj-abc"],
+        quick_ids=[],
+        workspace="ws:1",
+        base_surface="surface:1",
+        wave_id="wave-test",
+        skip_scenarios=True,
+    )
+
+    assert exit_code == 0
+    assert len(cmux_split_calls) == 1, f"Expected 1 cmux split, got: {cmux_split_calls}"
+    assert len(output["beads"]) == 1
+    assert output["beads"][0]["status"] == "dispatched"
+
+
+def test_wave_dispatcher_skips_already_running_bead_worktree_only() -> None:
+    """Dispatch skips a bead when only a worktree exists (no live process).
+
+    Regression test for AK1/AK3: the worktree check alone must be sufficient
+    to prevent duplicate dispatch even when pgrep returns nothing.
+    """
+    wd = _wd()
+
+    cmux_split_calls: list = []
+
+    def mock_runner(cmd, **kwargs):
+        # pgrep finds nothing → no live process
+        if cmd and cmd[0] == "pgrep":
+            return _MockResult(stdout="", returncode=1)
+        # git worktree list returns the bead's worktree
+        if cmd and cmd[0] == "git" and "worktree" in cmd:
+            return _MockResult(
+                stdout=(
+                    "worktree /path/bead-proj-wt\n"
+                    "HEAD abc123\n"
+                    "branch refs/heads/worktree-bead-proj-wt\n"
+                    "\n"
+                ),
+                returncode=0,
+            )
+        if cmd and cmd[0] == "cmux" and "new-split" in cmd:
+            cmux_split_calls.append(cmd)
+            return _MockResult(stdout="surface:99\n")
+        return _MockResult()
+
+    dispatcher = wd.WaveDispatcher(runner=mock_runner)
+    exit_code, output = dispatcher.dispatch(
+        bead_ids=["proj-wt"],
+        quick_ids=[],
+        workspace="ws:1",
+        base_surface="surface:1",
+        wave_id="wave-test",
+        skip_scenarios=True,
+    )
+
+    # Dispatch should succeed overall (exit 0) but skip the bead with worktree
+    assert exit_code == 0
+    # No cmux split should have been created
+    assert cmux_split_calls == [], f"Expected no cmux splits, got: {cmux_split_calls}"
+    # Output should record the bead as already-running with worktree_path populated
+    assert len(output["beads"]) == 1
+    bead = output["beads"][0]
+    assert bead["status"] == "already-running"
+    assert bead["pids"] == []
+    assert "/path/bead-proj-wt" in bead["worktree_path"]
+
+
+def test_phase_b_close_beads_skips_foreign_bead(tmp_path: Path) -> None:
+    """phase-b-close-beads.sh skips beads owned by a different session (AK4).
+
+    Creates a mock bd binary that returns one in-progress bead assigned to a
+    different session. Verifies the bead appears in skipped_not_owned and not
+    in closed.
+    """
+    # Create mock bd binary
+    mock_bd = tmp_path / "bd"
+    mock_bd.write_text(
+        "#!/usr/bin/env bash\n"
+        "# Mock bd for ownership test\n"
+        "if [[ \"$1\" == 'list' ]]; then\n"
+        "  echo '[{\"id\":\"TEST-001\",\"status\":\"in_progress\"}]'\n"
+        "elif [[ \"$1\" == 'show' ]]; then\n"
+        "  echo '[{\"id\":\"TEST-001\",\"title\":\"Foreign bead\",\"type\":\"task\","
+        "\"notes\":\"\",\"assignee\":\"session-OTHER-999\"}]'\n"
+        "elif [[ \"$1\" == 'dolt' ]]; then\n"
+        "  echo 'ok'\n"
+        "fi\n"
+    )
+    mock_bd.chmod(0o755)
+
+    script = (
+        Path(__file__).resolve().parents[5]
+        / "core" / "agents" / "session-close-handlers" / "phase-b-close-beads.sh"
+    )
+
+    env = os.environ.copy()
+    env["PATH"] = str(tmp_path) + ":" + env.get("PATH", "")
+    env["CCP_SESSION_ID"] = "session-test-111"
+    # Prevent git from complaining about repo root
+    env["GIT_DIR"] = str(tmp_path / ".git")
+
+    result = subprocess.run(
+        ["bash", str(script), "--dry-run"],
+        capture_output=True,
+        text=True,
+        env=env,
+        timeout=30,
+    )
+
+    # Script should succeed (exit 0 — no beads to close, just skipped)
+    assert result.returncode == 0, (
+        f"Expected exit 0, got {result.returncode}; stderr={result.stderr!r}"
+    )
+
+    try:
+        output = json.loads(result.stdout)
+    except json.JSONDecodeError:
+        pytest.fail(f"Output was not valid JSON: {result.stdout!r}")
+
+    # Foreign bead should be in skipped_not_owned
+    assert "skipped_not_owned" in output, f"Missing skipped_not_owned key: {output}"
+    assert "TEST-001" in output["skipped_not_owned"], (
+        f"Expected TEST-001 in skipped_not_owned, got: {output['skipped_not_owned']}"
+    )
+    # Foreign bead should NOT be in closed
+    closed_ids = [b["id"] if isinstance(b, dict) else b for b in output.get("closed", [])]
+    assert "TEST-001" not in closed_ids, f"Foreign bead should not be in closed: {closed_ids}"
+
+
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])

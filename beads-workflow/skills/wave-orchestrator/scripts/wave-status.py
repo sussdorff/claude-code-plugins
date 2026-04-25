@@ -157,6 +157,18 @@ def check_wave_status(config: dict, runner=None) -> dict:
     for i, bead in enumerate(beads):
         bead_id = bead.get("id", "")
         surface = bead.get("surface", "")
+        # Skip beads that were already running when dispatched — they have no
+        # surface assigned and should not be polled via _read_surface.
+        if bead.get("status") == "already-running":
+            results[i].append({
+                "id": bead_id,
+                "surface": "",
+                "status": "tracked-elsewhere",
+                "detail": "Session already running in another pane",
+                "bd_status": "",
+                "follow_up_beads": [],
+            })
+            continue
         t = threading.Thread(
             target=_check_bead,
             args=(bead_id, surface, results[i], runner),
@@ -176,7 +188,9 @@ def check_wave_status(config: dict, runner=None) -> dict:
         if res_list:
             bead_result = res_list[0]
             bead_results.append(bead_result)
-            if bead_result["status"] != "done":
+            # "tracked-elsewhere" beads are running in another pane — don't
+            # block all_done on them since we cannot observe their completion.
+            if bead_result["status"] not in ("done", "tracked-elsewhere"):
                 all_done = False
             if bead_result["status"] == "pipeline_failed":
                 all_done = False
