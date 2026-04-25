@@ -70,13 +70,26 @@ import config as _cfg  # noqa: E402  (after sys.path manipulation)
 # Import discover-projects via importlib (hyphen in filename)
 import importlib.util as _importlib_util
 
-_DISCOVER_SPEC = _importlib_util.spec_from_file_location(
-    "discover_projects", Path(__file__).parent / "discover-projects.py"
-)
-_discover_mod = _importlib_util.module_from_spec(_DISCOVER_SPEC)  # type: ignore[arg-type]
-_DISCOVER_SPEC.loader.exec_module(_discover_mod)  # type: ignore[union-attr]
-
-discover_active_projects = _discover_mod.discover_active_projects
+try:
+    _DISCOVER_SPEC = _importlib_util.spec_from_file_location(
+        "discover_projects", Path(__file__).parent / "discover-projects.py"
+    )
+    _discover_mod = _importlib_util.module_from_spec(_DISCOVER_SPEC)  # type: ignore[arg-type]
+    _DISCOVER_SPEC.loader.exec_module(_discover_mod)  # type: ignore[union-attr]
+    discover_active_projects = _discover_mod.discover_active_projects
+except Exception as _discover_import_err:  # noqa: BLE001
+    # Discovery is an optional feature; if the module fails to load, provide a
+    # stub that returns an error envelope so --all-active degrades gracefully.
+    def discover_active_projects(**kwargs):  # type: ignore[misc]
+        return {
+            "status": "error",
+            "summary": f"discover-projects.py failed to load: {_discover_import_err}",
+            "data": {"unconfigured": [], "unconfigured_configs": [], "all_projects": []},
+            "errors": [{"code": "import-error", "message": str(_discover_import_err)}],
+            "next_steps": [],
+            "open_items": [],
+            "meta": {"contract_version": "1", "producer": "orchestrate-brief.py"},
+        }
 
 # ---------------------------------------------------------------------------
 # Constants
@@ -104,8 +117,13 @@ def parse_since(since_str: str) -> list[str]:
     Raises:
         ValueError: If format is invalid.
     """
+    if since_str == "yesterday":
+        since_str = "1d"
+
     if not since_str.endswith("d") or not since_str[:-1].isdigit():
-        raise ValueError(f"Invalid --since format '{since_str}'. Expected Nd (e.g. 3d).")
+        raise ValueError(
+            f"Invalid --since format '{since_str}'. Expected Nd (e.g. 3d) or 'yesterday'."
+        )
 
     n = int(since_str[:-1])
     today = datetime.date.today()
@@ -483,6 +501,7 @@ def run_for_project(
         Dict with keys: skipped (bool), content (str or None).
     """
     # Resolve the project to get its path for brief_exists check
+    is_discovered = project_config is not None
     if project_config is not None:
         project = project_config
     else:
@@ -494,6 +513,16 @@ def run_for_project(
     # Backfill check: skip if brief already exists on disk
     if _cfg.brief_exists(project, date):
         return {"skipped": True, "content": None}
+
+    # Discovered (unconfigured) projects: render a stub section instead of
+    # delegating to render-brief.py (which would fail — project not in config).
+    if is_discovered:
+        content = (
+            f"## {project_name} (discovered, not configured)\n\n"
+            f"> ⚠️ This project was found via git activity but is not in daily-brief.yml.\n"
+            f"> No brief content is available. To include full briefs, add this project to your config.\n"
+        )
+        return {"skipped": False, "content": content}
 
     # Generate brief via render-brief.py subprocess
     content = _run_render_brief(project_name, date, detailed, config_path)
@@ -525,11 +554,12 @@ def orchestrate(
     detailed: bool,
     config_path: Path,
     all_active: bool = False,
-) -> list[dict[str, Any]]:
+) -> tuple[list[dict[str, Any]], list[str]]:
     """Orchestrate brief generation across projects and dates.
 
     For each (project, date) pair: run_for_project. Results are returned
-    as a list for caller to aggregate into output.
+    as a tuple (results, unconfigured_slugs) to avoid mixing metadata into
+    the results list.
 
     When all_active=True, discover_active_projects() is called to find active
     projects not in config and they are merged into the project list.
@@ -542,12 +572,14 @@ def orchestrate(
         all_active: If True, discover unconfigured active projects and include them.
 
     Returns:
-        List of result dicts per (project, date) pair.
+        Tuple of (results, unconfigured_slugs) where results is a list of
+        run_for_project result dicts and unconfigured_slugs is a sorted list
+        of project slugs that were discovered but are not in config.
     """
     # Resolve configured project list
     resolve_result = _cfg.resolve_project(project, config_path)
     if resolve_result["status"] != "ok":
-        return [{"error": resolve_result.get("summary", "config-error")}]
+        return [{"error": resolve_result.get("summary", "config-error")}], []
 
     # List of (ProjectConfig, is_configured) tuples
     configured_projects = [
@@ -607,10 +639,7 @@ def orchestrate(
             result["date"] = date
             results.append(result)
 
-    # Store unconfigured slugs for caller to inject warning block
-    results.append({"_unconfigured": unconfigured_slugs})
-
-    return results
+    return results, unconfigured_slugs
 
 
 # ---------------------------------------------------------------------------
@@ -726,6 +755,15 @@ def main(argv: list[str] | None = None) -> int:
             )
             return 1
 
+    # Validate --all-active compatibility: not supported with multi-date modes
+    if getattr(args, "all_active", False) and (args.since or args.range):
+        print(
+            "Error: --all-active cannot be combined with --since or --range. "
+            "Use --all-active with a single --date (or omit for yesterday).",
+            file=sys.stderr,
+        )
+        return 1
+
     # Resolve dates
     dates = dates_for_args(
         date=args.date,
@@ -737,30 +775,22 @@ def main(argv: list[str] | None = None) -> int:
     # For single date: use render-brief.py single-day mode for each project
     if len(dates) > 1:
         # Range mode: delegate to render-brief.py with --since/--range for each project
-        results = _orchestrate_range(
+        clean_results = _orchestrate_range(
             project=args.project,
             dates=dates,
             detailed=args.detailed,
             config_path=config_path,
         )
+        unconfigured: list[str] = []
     else:
         # Single date or default
-        results = orchestrate(
+        clean_results, unconfigured = orchestrate(
             project=args.project,
             dates=dates,
             detailed=args.detailed,
             config_path=config_path,
             all_active=getattr(args, "all_active", False),
         )
-
-    # Extract unconfigured projects sentinel from results
-    unconfigured: list[str] = []
-    clean_results = []
-    for r in results:
-        if "_unconfigured" in r:
-            unconfigured = r["_unconfigured"]
-        else:
-            clean_results.append(r)
 
     # Emit aggregated output
     output = _aggregate_output(clean_results, dates, unconfigured_projects=unconfigured)

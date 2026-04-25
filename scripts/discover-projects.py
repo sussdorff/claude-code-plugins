@@ -87,6 +87,38 @@ def _envelope(
 
 
 # ---------------------------------------------------------------------------
+# Slug extraction
+# ---------------------------------------------------------------------------
+
+
+def _extract_slug(raw_path: str) -> str:
+    """Extract a meaningful project slug from a raw filesystem path.
+
+    Handles the common case where the last path component is a worktree bead
+    directory (e.g. `bead-CCP-xyz`) — in that case, walk up to find the first
+    ancestor under `~/code/` instead.
+
+    Args:
+        raw_path: Raw path string from projectPath or cwd field.
+
+    Returns:
+        Best-effort slug string (may be empty string if path is malformed).
+    """
+    p = Path(raw_path)
+    # Walk up the path looking for a component under ~/code/ that is not a
+    # worktree/bead directory
+    parts = p.parts
+    code_home = str(Path.home() / "code")
+    for i, part in enumerate(parts):
+        # Find the position of 'code' in the home directory path
+        if i + 1 < len(parts) and "/".join(parts[:i + 1]) == code_home:
+            candidate = parts[i + 1] if i + 1 < len(parts) else ""
+            return candidate
+    # Fallback: use the last path component
+    return p.name
+
+
+# ---------------------------------------------------------------------------
 # JSONL discovery
 # ---------------------------------------------------------------------------
 
@@ -116,7 +148,10 @@ def discover_from_jsonl(
 
     since_ts = datetime.datetime.combine(since, datetime.time.min).timestamp()
 
-    for jsonl_file in projects_dir.iterdir():
+    # Use rglob to recurse into subdirectories — real ~/.claude/projects/ contains
+    # escaped-path subdirectories (e.g. -Users-malte-code-myproject/) with UUID
+    # JSONL files inside them.
+    for jsonl_file in projects_dir.rglob("*.jsonl"):
         if not jsonl_file.is_file():
             continue
 
@@ -138,11 +173,11 @@ def discover_from_jsonl(
             continue
 
         for line_no, line in enumerate(text.splitlines(), start=1):
-            line = line.strip()
-            if not line:
+            stripped = line.strip()
+            if not stripped:
                 continue
             try:
-                obj = json.loads(line)
+                obj = json.loads(stripped)
             except json.JSONDecodeError as exc:
                 print(
                     f"warning: {jsonl_file}:{line_no}: malformed JSON — {exc}",
@@ -154,7 +189,7 @@ def discover_from_jsonl(
             for field in ("projectPath", "cwd"):
                 raw_path = obj.get(field)
                 if raw_path:
-                    slug = Path(raw_path).name
+                    slug = _extract_slug(raw_path)
                     if slug:
                         slugs.add(slug)
                     break
@@ -283,23 +318,23 @@ def discover_active_projects(
     # Build ProjectConfig objects for unconfigured projects
     unconfigured_configs: list[_cfg.ProjectConfig] = []
     for slug in unconfigured_slugs:
-        # Try to resolve path: check code_dir/slug first
+        # Only create a config if the directory actually exists
         candidate = code_dir / slug
         if candidate.is_dir():
-            resolved_path = candidate
-        else:
-            # Fallback: use code_dir/slug as path even if it doesn't exist
-            resolved_path = code_dir / slug
-
-        unconfigured_configs.append(
-            _cfg.ProjectConfig(
-                name=slug,
-                path=resolved_path,
-                slug=slug,
-                beads=False,
-                docs_dir="docs",
+            unconfigured_configs.append(
+                _cfg.ProjectConfig(
+                    name=slug,
+                    path=candidate,
+                    slug=slug,
+                    beads=False,
+                    docs_dir="docs",
+                )
             )
-        )
+        else:
+            print(
+                f"warning: discovered slug '{slug}' has no directory at {candidate} — skipping",
+                file=sys.stderr,
+            )
 
     # Merge all projects: configured first, then unconfigured
     all_projects = [p.to_dict() for p in configured_projects] + [

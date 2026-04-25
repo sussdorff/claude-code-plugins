@@ -249,6 +249,28 @@ class TestDiscoverFromJsonl:
         assert "beta" in result
         assert "gamma" in result
 
+    def test_discovers_jsonl_in_subdirectory(self, tmp_path: Path) -> None:
+        """Real ~/.claude/projects/ layout: escaped-path subdirs contain UUID JSONL files.
+
+        Layout: projects_dir / -Users-foo-bar / abc.jsonl
+        The JSONL inside references projectPath /Users/foo/bar → slug 'bar'.
+        """
+        projects_dir = tmp_path / "projects"
+        # Create the escaped-path subdirectory (as real Claude Code does)
+        subdir = projects_dir / "-Users-foo-bar"
+        subdir.mkdir(parents=True)
+        jsonl_file = subdir / "abc.jsonl"
+        jsonl_file.write_text(
+            json.dumps({"projectPath": "/Users/foo/bar"}) + "\n"
+        )
+        now = time.time()
+        os.utime(jsonl_file, (now, now))
+
+        since = datetime.date.today() - datetime.timedelta(days=1)
+        result = dp.discover_from_jsonl(projects_dir=projects_dir, since=since)
+
+        assert "bar" in result
+
 
 # ---------------------------------------------------------------------------
 # Tests: discover_from_git()
@@ -476,6 +498,42 @@ class TestDiscoverActiveProjects:
 # ---------------------------------------------------------------------------
 
 
+# ---------------------------------------------------------------------------
+# Tests: parse_since() helpers
+# ---------------------------------------------------------------------------
+
+
+class TestParseSince:
+    """Tests for parse_since() date parsing."""
+
+    def test_yesterday_alias_returns_one_date(self) -> None:
+        """'yesterday' is a valid alias for '1d' and returns yesterday's date."""
+        result = ob.parse_since("yesterday")
+        assert len(result) == 1
+        expected = (datetime.date.today() - datetime.timedelta(days=1)).isoformat()
+        assert result[0] == expected
+
+    def test_1d_returns_one_date(self) -> None:
+        """'1d' returns a list with yesterday."""
+        result = ob.parse_since("1d")
+        assert len(result) == 1
+
+    def test_3d_returns_three_dates(self) -> None:
+        """'3d' returns dates from 3 days ago through yesterday."""
+        result = ob.parse_since("3d")
+        assert len(result) == 3
+
+    def test_invalid_format_raises_valueerror(self) -> None:
+        """Non-Nd and non-'yesterday' format raises ValueError."""
+        with pytest.raises(ValueError):
+            ob.parse_since("abc")
+
+    def test_invalid_format_no_d_suffix(self) -> None:
+        """Missing 'd' suffix raises ValueError."""
+        with pytest.raises(ValueError):
+            ob.parse_since("3")
+
+
 class TestAllActiveFlag:
     """Tests for --all-active flag in orchestrate-brief.py parse_args."""
 
@@ -494,6 +552,21 @@ class TestAllActiveFlag:
         config_path = tmp_path / "daily-brief.yml"
         args = ob.parse_args(["--all-active", "--config", str(config_path)])
         assert args.all_active is True
+
+    def test_all_active_with_since_returns_error(self, tmp_path: Path) -> None:
+        """--all-active combined with --since returns exit code 1 (CLI error)."""
+        config_path = _make_config(tmp_path, [])
+        ret = ob.main(argv=["--all-active", "--since=3d", "--config", str(config_path)])
+        assert ret == 1
+
+    def test_all_active_with_range_returns_error(self, tmp_path: Path) -> None:
+        """--all-active combined with --range returns exit code 1 (CLI error)."""
+        config_path = _make_config(tmp_path, [])
+        ret = ob.main(argv=[
+            "--all-active", "--range=2026-04-20..2026-04-22",
+            "--config", str(config_path),
+        ])
+        assert ret == 1
 
 
 # ---------------------------------------------------------------------------
