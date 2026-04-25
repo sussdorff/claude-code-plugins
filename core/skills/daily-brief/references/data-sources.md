@@ -18,6 +18,7 @@ fallback behavior, and which output sections are deterministic vs synthesized.
 | `decisions` | open-brain (type=decision) | **Authoritative** | Decision entries in memory |
 | `followups` | open-brain | **Authoritative** | Lines with `Decide:`, `Need input:`, `Follow-up:` prefixes |
 | `rework_signals` | git (revert commits) + beads (supersede events) | **Authoritative** | Revert commits + bead supersede events |
+| `capabilities` | capability-extractor.py (derives from closed_beads + sessions) | Synthesized | Empty list |
 | `warnings` | — | Diagnostic | Source unavailability notices (partial data indicator) |
 
 ## Dedup Rules

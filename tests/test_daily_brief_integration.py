@@ -1,3 +1,10 @@
+#!/usr/bin/env -S uv run --quiet --script
+# /// script
+# dependencies = [
+#   "pyyaml>=6.0",
+#   "pytest>=8.0",
+# ]
+# ///
 """
 Integration tests for the daily-brief skill.
 
@@ -17,6 +24,17 @@ import sys
 from pathlib import Path
 
 import pytest
+
+# ---------------------------------------------------------------------------
+# Module-level skip guard — requires live config
+# ---------------------------------------------------------------------------
+
+_CONFIG_PATH = Path.home() / ".claude" / "daily-brief.yml"
+if not _CONFIG_PATH.exists():
+    pytest.skip(
+        "~/.claude/daily-brief.yml not found — integration tests require live config",
+        allow_module_level=True,
+    )
 
 # ---------------------------------------------------------------------------
 # Path setup

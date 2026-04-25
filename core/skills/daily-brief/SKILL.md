@@ -230,4 +230,4 @@ python3 core/skills/daily-brief/scripts/config.py brief-exists mira 2026-04-24
 
 ## Sample Output
 
-- [`docs/examples/daily-brief-sample.md`](../../../../docs/examples/daily-brief-sample.md) — live sample from `--since=7d` on claude-code-plugins, with v1.0 Product Contract review
+- [`docs/examples/daily-brief-sample.md`](../../../docs/examples/daily-brief-sample.md) — live sample from `--since=7d` on claude-code-plugins, with v1.0 Product Contract review
