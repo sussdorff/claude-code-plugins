@@ -50,6 +50,11 @@
       "description": "Bead IDs that have no 'Close reason:' note. Non-empty = exit 3. Caller must compose reasons and rerun.",
       "items": {"type": "string"}
     },
+    "skipped_not_owned": {
+      "type": "array",
+      "description": "Bead IDs skipped because CCP_SESSION_ID is set and the bead's assignee does not match this session. These beads are NOT closed — they belong to a different session.",
+      "items": {"type": "string"}
+    },
     "dolt_sync": {
       "type": "object",
       "description": "Dolt commit + pull + push --force result",
