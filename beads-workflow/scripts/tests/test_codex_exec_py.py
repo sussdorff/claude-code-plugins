@@ -294,6 +294,51 @@ def test_py_timeout_exits_124(tmp_path: Path) -> None:
 
 
 # ---------------------------------------------------------------------------
+# Timeout: process group is killed (child processes don't block the read loop)
+# ---------------------------------------------------------------------------
+
+
+def test_py_timeout_kills_child_processes_promptly(tmp_path: Path) -> None:
+    """When codex times out, child processes are killed promptly (not just the parent).
+
+    Bug: proc.kill() only kills the bash/codex process but not its children.
+    Children hold the stdout pipe open, blocking the read loop until they exit naturally.
+    Fix: start_new_session=True + os.killpg() kills the entire process group.
+    """
+    import time
+
+    db = tmp_path / "metrics.db"
+    run_id = start_run("TEST-CCP-py-killpg", mode="quick-fix", db_path=db)
+
+    # Mock sleeps 10s (much longer than timeout to prove children are killed, not just waited out)
+    mock_dir = _make_mock_codex(tmp_path / "mock_bin", sleep_secs=10)
+    codex_config = _make_mock_config(tmp_path / "codex_cfg")
+    env = _env_for_script(run_id=run_id, db=db, mock_bin_dir=mock_dir, codex_config=codex_config)
+    env["CODEX_EXEC_TIMEOUT"] = "1"
+
+    start = time.monotonic()
+    result = subprocess.run(
+        ["python3", str(_CODEX_EXEC_PY)],
+        env=env,
+        capture_output=True,
+        text=True,
+        timeout=30,
+    )
+    elapsed = time.monotonic() - start
+
+    assert result.returncode == 124, (
+        f"Expected exit code 124 (timeout), got {result.returncode}\n"
+        f"stderr={result.stderr!r}"
+    )
+    # Must complete within 4s of the 1s timeout, not the full 10s sleep.
+    # Without the fix, this takes ~10s (child sleep runs to completion).
+    assert elapsed < 5, (
+        f"Expected <5s (timeout=1s + overhead), got {elapsed:.1f}s — "
+        "child processes were not killed by the timeout handler"
+    )
+
+
+# ---------------------------------------------------------------------------
 # Module-level unit tests (no subprocess)
 # ---------------------------------------------------------------------------
 
