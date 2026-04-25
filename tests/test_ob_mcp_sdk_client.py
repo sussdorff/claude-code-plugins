@@ -208,9 +208,7 @@ class TestSDKOBClientSearchInterface:
         self, tmp_path: Path
     ) -> None:
         """query_sources uses the result of client.search() for sessions/learnings/decisions."""
-        from tests.test_query_sources import make_config_path  # noqa: PLC0415
-
-        config_path = make_config_path()
+        config_path = _REPO_ROOT / "tests" / "fixtures" / "daily_brief_config.yml"
 
         session_entry = {
             "id": "ob-session-sdk",
@@ -249,9 +247,7 @@ class TestSDKOBClientSearchInterface:
 
     def test_search_401_from_client_becomes_warning_in_query_sources(self, tmp_path: Path) -> None:
         """When client.search raises PermissionError (401), query_sources emits actionable warning."""
-        from tests.test_query_sources import make_config_path  # noqa: PLC0415
-
-        config_path = make_config_path()
+        config_path = _REPO_ROOT / "tests" / "fixtures" / "daily_brief_config.yml"
 
         mock_client = MagicMock()
         mock_client.search = AsyncMock(
