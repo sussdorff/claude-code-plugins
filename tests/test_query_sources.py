@@ -1193,3 +1193,205 @@ class TestMcpJsonRpcErrorDetection:
         assert any("MCP error" in w.get("reason", "") for w in ob_warnings), (
             f"Warning should mention MCP error, got: {ob_warnings}"
         )
+
+
+# ---------------------------------------------------------------------------
+# Regression tests — config.json token resolution (CCP-yosw)
+# ---------------------------------------------------------------------------
+
+
+class TestBuildObClientConfigJson:
+    """_build_ob_client() must read credentials from ~/.open-brain/config.json
+    when neither OB_TOKEN env var nor ~/.open-brain/token file exist.
+
+    The config.json format:
+        { "server_url": "https://open-brain.sussdorff.org", "api_key": "ob_..." }
+    """
+
+    def test_returns_client_when_config_json_present(self, tmp_path: Path) -> None:
+        """_build_ob_client() returns a non-None client when config.json exists."""
+        config_json = tmp_path / ".open-brain" / "config.json"
+        config_json.parent.mkdir(parents=True, exist_ok=True)
+        config_json.write_text(
+            '{"server_url": "https://open-brain.example.org", "api_key": "ob_testkey123"}'
+        )
+
+        import os
+        # Patch home() to point at tmp_path and clear env vars that would override
+        with patch("pathlib.Path.home", return_value=tmp_path):
+            with patch.dict(os.environ, {}, clear=False):
+                # Remove OB_TOKEN if present
+                os.environ.pop("OB_TOKEN", None)
+                client = qs._build_ob_client()
+
+        assert client is not None, (
+            "_build_ob_client() returned None even though config.json has a valid api_key"
+        )
+
+    def test_returns_none_when_no_config_and_no_token(self, tmp_path: Path) -> None:
+        """_build_ob_client() returns None when neither config.json nor token file exist."""
+        import os
+        # Point home() at tmp_path — empty, no .open-brain/ at all
+        with patch("pathlib.Path.home", return_value=tmp_path):
+            with patch.dict(os.environ, {}, clear=False):
+                os.environ.pop("OB_TOKEN", None)
+                os.environ.pop("OB_URL", None)
+                client = qs._build_ob_client()
+
+        assert client is None, (
+            "_build_ob_client() should return None when no credentials are available"
+        )
+
+    def test_config_json_api_key_used_as_token(self, tmp_path: Path) -> None:
+        """_build_ob_client() uses api_key from config.json as the bearer token."""
+        expected_key = "ob_cc803d51e92797b223d773614113040c391c8c1d225c5d09"
+        config_json = tmp_path / ".open-brain" / "config.json"
+        config_json.parent.mkdir(parents=True, exist_ok=True)
+        config_json.write_text(
+            f'{{"server_url": "https://open-brain.sussdorff.org", "api_key": "{expected_key}"}}'
+        )
+
+        import os
+        with patch("pathlib.Path.home", return_value=tmp_path):
+            with patch.dict(os.environ, {}, clear=False):
+                os.environ.pop("OB_TOKEN", None)
+                client = qs._build_ob_client()
+
+        # The client should have been built — verify it has the token
+        assert client is not None
+        assert client._token == expected_key, (
+            f"Expected token '{expected_key}', got '{client._token}'"
+        )
+
+    def test_config_json_server_url_used_for_ob_url(self, tmp_path: Path) -> None:
+        """_build_ob_client() derives ob_url from server_url in config.json + '/mcp/mcp'."""
+        config_json = tmp_path / ".open-brain" / "config.json"
+        config_json.parent.mkdir(parents=True, exist_ok=True)
+        config_json.write_text(
+            '{"server_url": "https://custom.example.org", "api_key": "ob_somekey"}'
+        )
+
+        import os
+        with patch("pathlib.Path.home", return_value=tmp_path):
+            with patch.dict(os.environ, {}, clear=False):
+                os.environ.pop("OB_TOKEN", None)
+                os.environ.pop("OB_URL", None)
+                client = qs._build_ob_client()
+
+        assert client is not None
+        assert client._url == "https://custom.example.org/mcp/mcp", (
+            f"Expected URL derived from server_url+'/mcp/mcp', got '{client._url}'"
+        )
+
+    def test_env_var_takes_precedence_over_config_json(self, tmp_path: Path) -> None:
+        """OB_TOKEN env var takes precedence over config.json api_key."""
+        config_json = tmp_path / ".open-brain" / "config.json"
+        config_json.parent.mkdir(parents=True, exist_ok=True)
+        config_json.write_text(
+            '{"server_url": "https://open-brain.example.org", "api_key": "ob_config_key"}'
+        )
+
+        import os
+        with patch("pathlib.Path.home", return_value=tmp_path):
+            with patch.dict(os.environ, {"OB_TOKEN": "ob_env_key"}, clear=False):
+                client = qs._build_ob_client()
+
+        assert client is not None
+        assert client._token == "ob_env_key", (
+            "OB_TOKEN env var should take precedence over config.json api_key"
+        )
+
+    def test_query_sources_uses_config_json_when_available(
+        self, tmp_path: Path, config_path: Path, empty_mock_runner: qs.MockCommandRunner
+    ) -> None:
+        """query_sources() result has sessions populated when config.json provides credentials.
+
+        This is an integration-style test: _build_ob_client reads config.json,
+        produces a client whose .search() we mock, and query_sources uses it.
+        The warning 'ob_client not provided' must NOT appear in the result.
+        """
+        from unittest.mock import AsyncMock, MagicMock
+
+        # Write config.json into tmp_path so _build_ob_client() can find it
+        config_json = tmp_path / ".open-brain" / "config.json"
+        config_json.parent.mkdir(parents=True, exist_ok=True)
+        config_json.write_text(
+            '{"server_url": "https://open-brain.example.org", "api_key": "ob_test"}'
+        )
+
+        session_entry = {
+            "id": "ob-session-1",
+            "type": "session_summary",
+            "content": "Session content",
+            "session_ref": "sess-config-json",
+            "project": "claude-code-plugins",
+            "created_at": "2026-04-23T10:00:00Z",
+        }
+
+        import os
+        with patch("pathlib.Path.home", return_value=tmp_path):
+            with patch.dict(os.environ, {}, clear=False):
+                os.environ.pop("OB_TOKEN", None)
+                os.environ.pop("OB_URL", None)
+                # Build the real client from config.json, but mock its search
+                client = qs._build_ob_client()
+
+        assert client is not None, "client should be built from config.json"
+        client.search = AsyncMock(return_value=[session_entry])
+
+        result = qs.query_sources(
+            project=TEST_PROJECT,
+            date=TEST_DATE,
+            config_path=config_path,
+            runner=empty_mock_runner,
+            ob_client=client,
+        )
+
+        # No "ob_client not provided" warning
+        ob_warnings = [w for w in result["data"]["warnings"] if w.get("source") == "open-brain"]
+        not_provided = [w for w in ob_warnings if "not provided" in w.get("reason", "")]
+        assert not not_provided, (
+            f"'ob_client not provided' warning should not appear when config.json is used: {ob_warnings}"
+        )
+        # Session should be in the result
+        assert len(result["data"]["sessions"]) == 1
+        assert result["data"]["sessions"][0]["id"] == "ob-session-1"
+
+    def test_unreachable_ob_emits_honest_warning(
+        self, tmp_path: Path, config_path: Path, empty_mock_runner: qs.MockCommandRunner
+    ) -> None:
+        """When ob_client raises a connection error, an honest warning is emitted.
+
+        This verifies AC#3: real failures (endpoint down) produce a warning,
+        not silence or a generic 'not provided' message.
+        """
+        from unittest.mock import AsyncMock, MagicMock
+
+        failing_client = MagicMock()
+        failing_client.search = AsyncMock(
+            side_effect=Exception("Connection refused: endpoint down")
+        )
+
+        result = qs.query_sources(
+            project=TEST_PROJECT,
+            date=TEST_DATE,
+            config_path=config_path,
+            runner=empty_mock_runner,
+            ob_client=failing_client,
+        )
+
+        ob_warnings = [w for w in result["data"]["warnings"] if w.get("source") == "open-brain"]
+        assert ob_warnings, "Expected open-brain warning when endpoint is unreachable"
+        # The warning reason should NOT be the generic "not provided" message
+        not_provided = [w for w in ob_warnings if w.get("reason") == "ob_client not provided — open-brain data unavailable"]
+        assert not not_provided, (
+            "A real connection failure should not produce the 'not provided' warning"
+        )
+        # It should mention the actual failure
+        has_real_failure = any(
+            "Connection refused" in w.get("reason", "") or "search failed" in w.get("reason", "")
+            for w in ob_warnings
+        )
+        assert has_real_failure, (
+            f"Warning should describe the actual failure, got: {ob_warnings}"
+        )

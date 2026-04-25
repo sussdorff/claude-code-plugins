@@ -493,3 +493,148 @@ class TestMain:
 
         exit_code = ob.main(argv=["--since=3d", "--config", str(minimal_config)])
         assert exit_code == 0
+
+
+# ---------------------------------------------------------------------------
+# Regression tests — config.json token resolution in write path (CCP-yosw)
+# ---------------------------------------------------------------------------
+
+
+class TestSaveToOpenBrainConfigJson:
+    """_save_to_open_brain() must read credentials from ~/.open-brain/config.json
+    when neither OB_TOKEN env var nor ~/.open-brain/token file exist.
+
+    The config.json format:
+        { "server_url": "https://open-brain.sussdorff.org", "api_key": "ob_..." }
+    """
+
+    def test_save_skips_silently_when_no_credentials(self, tmp_path: Path) -> None:
+        """_save_to_open_brain() skips when no token/config available — no exception raised."""
+        import os
+        from unittest.mock import patch
+
+        # Empty home directory — no .open-brain/ at all
+        with patch("pathlib.Path.home", return_value=tmp_path):
+            with patch.dict(os.environ, {}, clear=False):
+                os.environ.pop("OB_TOKEN", None)
+                os.environ.pop("OB_URL", None)
+                # Should not raise even though there's no httpx available to call
+                ob._save_to_open_brain(
+                    title="test — 2026-04-23",
+                    text="# Test brief",
+                    ob_type="daily_brief",
+                    project="test",
+                    session_ref="daily-brief-2026-04-23",
+                    metadata={"source": "daily-brief"},
+                )
+        # If we reach here without exception, the test passes
+
+    def test_save_uses_config_json_api_key(self, tmp_path: Path) -> None:
+        """_save_to_open_brain() reads api_key from config.json when no OB_TOKEN set.
+
+        We verify this by patching asyncio.run and asserting it was called
+        (meaning a token was found), not skipped silently.
+        """
+        import asyncio
+        import os
+        from unittest.mock import AsyncMock, patch
+
+        config_json = tmp_path / ".open-brain" / "config.json"
+        config_json.parent.mkdir(parents=True, exist_ok=True)
+        config_json.write_text(
+            '{"server_url": "https://open-brain.example.org", "api_key": "ob_configkey"}'
+        )
+
+        calls: list[dict] = []
+
+        async def fake_async_save(**kwargs: object) -> None:
+            calls.append(dict(kwargs))
+
+        with patch("pathlib.Path.home", return_value=tmp_path):
+            with patch.dict(os.environ, {}, clear=False):
+                os.environ.pop("OB_TOKEN", None)
+                os.environ.pop("OB_URL", None)
+                with patch.object(ob, "_async_save_memory", side_effect=fake_async_save):
+                    ob._save_to_open_brain(
+                        title="test — 2026-04-23",
+                        text="# Test brief",
+                        ob_type="daily_brief",
+                        project="test",
+                        session_ref="daily-brief-2026-04-23",
+                        metadata={"source": "daily-brief"},
+                    )
+
+        assert calls, (
+            "_save_to_open_brain() should have called _async_save_memory when config.json has credentials"
+        )
+        assert calls[0]["token"] == "ob_configkey", (
+            f"Expected token 'ob_configkey' from config.json, got '{calls[0].get('token')}'"
+        )
+
+    def test_save_uses_config_json_server_url(self, tmp_path: Path) -> None:
+        """_save_to_open_brain() derives ob_url from server_url in config.json + '/mcp/mcp'."""
+        import os
+        from unittest.mock import patch
+
+        config_json = tmp_path / ".open-brain" / "config.json"
+        config_json.parent.mkdir(parents=True, exist_ok=True)
+        config_json.write_text(
+            '{"server_url": "https://custom.myhost.org", "api_key": "ob_somekey"}'
+        )
+
+        calls: list[dict] = []
+
+        async def fake_async_save(**kwargs: object) -> None:
+            calls.append(dict(kwargs))
+
+        with patch("pathlib.Path.home", return_value=tmp_path):
+            with patch.dict(os.environ, {}, clear=False):
+                os.environ.pop("OB_TOKEN", None)
+                os.environ.pop("OB_URL", None)
+                with patch.object(ob, "_async_save_memory", side_effect=fake_async_save):
+                    ob._save_to_open_brain(
+                        title="test — 2026-04-23",
+                        text="# Test brief",
+                        ob_type="daily_brief",
+                        project="test",
+                        session_ref="daily-brief-2026-04-23",
+                        metadata={"source": "daily-brief"},
+                    )
+
+        assert calls, "_async_save_memory should have been called"
+        assert calls[0]["ob_url"] == "https://custom.myhost.org/mcp/mcp", (
+            f"Expected ob_url from config.json server_url+'/mcp/mcp', got '{calls[0].get('ob_url')}'"
+        )
+
+    def test_env_token_takes_precedence_over_config_json(self, tmp_path: Path) -> None:
+        """OB_TOKEN env var takes precedence over config.json api_key in write path."""
+        import os
+        from unittest.mock import patch
+
+        config_json = tmp_path / ".open-brain" / "config.json"
+        config_json.parent.mkdir(parents=True, exist_ok=True)
+        config_json.write_text(
+            '{"server_url": "https://open-brain.example.org", "api_key": "ob_config_key"}'
+        )
+
+        calls: list[dict] = []
+
+        async def fake_async_save(**kwargs: object) -> None:
+            calls.append(dict(kwargs))
+
+        with patch("pathlib.Path.home", return_value=tmp_path):
+            with patch.dict(os.environ, {"OB_TOKEN": "ob_env_key"}, clear=False):
+                with patch.object(ob, "_async_save_memory", side_effect=fake_async_save):
+                    ob._save_to_open_brain(
+                        title="test — 2026-04-23",
+                        text="# Test brief",
+                        ob_type="daily_brief",
+                        project="test",
+                        session_ref="daily-brief-2026-04-23",
+                        metadata={"source": "daily-brief"},
+                    )
+
+        assert calls, "_async_save_memory should have been called"
+        assert calls[0]["token"] == "ob_env_key", (
+            "OB_TOKEN env var should take precedence over config.json api_key"
+        )
