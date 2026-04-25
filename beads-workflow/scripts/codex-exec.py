@@ -31,6 +31,7 @@ Exit code: propagates codex's exact exit code (or 124 on timeout).
 import json
 import os
 import re
+import signal
 import subprocess
 import sys
 import threading
@@ -221,6 +222,7 @@ def _run_codex(
             stdout=subprocess.PIPE,
             stderr=None,  # inherit stderr
             stdin=subprocess.DEVNULL,
+            start_new_session=True,  # creates a new process group for codex and all its children
         )
     except FileNotFoundError:
         print("codex-exec.py: ERROR: 'codex' not found on PATH", file=sys.stderr)
@@ -229,7 +231,14 @@ def _run_codex(
     def _kill_on_timeout():
         nonlocal timed_out
         timed_out = True
-        proc.kill()
+        try:
+            os.killpg(os.getpgid(proc.pid), signal.SIGKILL)
+        except (ProcessLookupError, PermissionError):
+            # Process already exited or pgid lookup failed — fall back to direct kill
+            try:
+                proc.kill()
+            except (ProcessLookupError, PermissionError):
+                pass
 
     timer = threading.Timer(timeout_secs, _kill_on_timeout)
     timer.start()
