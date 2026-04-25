@@ -91,29 +91,56 @@ def _envelope(
 # ---------------------------------------------------------------------------
 
 
-def _extract_slug(raw_path: str) -> str:
+def _extract_slug(raw_path: str, code_dir: Path | None = None) -> str:
     """Extract a meaningful project slug from a raw filesystem path.
 
     Handles the common case where the last path component is a worktree bead
     directory (e.g. `bead-CCP-xyz`) — in that case, walk up to find the first
-    ancestor under `~/code/` instead.
+    ancestor under `code_dir` (default: `~/code/`) instead.
 
     Args:
         raw_path: Raw path string from projectPath or cwd field.
+        code_dir: Code root to anchor slug extraction. Defaults to ~/code/.
 
     Returns:
         Best-effort slug string (may be empty string if path is malformed).
     """
     p = Path(raw_path)
-    # Walk up the path looking for a component under ~/code/ that is not a
-    # worktree/bead directory
+    code_home = (code_dir if code_dir is not None else Path.home() / "code").resolve()
+
+    # If the path is under code_home, the slug is the first component after it.
+    try:
+        # Resolve only if the path is absolute; otherwise match parts directly.
+        candidate_path = p.resolve() if p.is_absolute() else p
+    except OSError:
+        candidate_path = p
+
+    try:
+        rel = candidate_path.relative_to(code_home)
+    except ValueError:
+        rel = None
+
+    if rel is not None and rel.parts:
+        return rel.parts[0]
+
+    # Fallback: walk parts looking for "code" segment match (handles non-absolute
+    # paths from JSONL fields like "/code/alpha" used in tests).
     parts = p.parts
-    code_home = str(Path.home() / "code")
-    for i, part in enumerate(parts):
-        # Find the position of 'code' in the home directory path
-        if i + 1 < len(parts) and "/".join(parts[:i + 1]) == code_home:
-            candidate = parts[i + 1] if i + 1 < len(parts) else ""
-            return candidate
+    code_parts = code_home.parts
+    # Try to find code_home as a contiguous sub-sequence in parts
+    for i in range(len(parts) - len(code_parts) + 1):
+        if parts[i : i + len(code_parts)] == code_parts:
+            next_idx = i + len(code_parts)
+            if next_idx < len(parts):
+                return parts[next_idx]
+    # Also try matching just the basename of code_home (e.g. "code") for
+    # short-form paths like "/code/alpha".
+    code_basename = code_parts[-1] if code_parts else ""
+    if code_basename:
+        for i, part in enumerate(parts):
+            if part == code_basename and i + 1 < len(parts):
+                return parts[i + 1]
+
     # Fallback: use the last path component
     return p.name
 
@@ -185,10 +212,20 @@ def discover_from_jsonl(
                 )
                 continue
 
+            # JSONL line must be a JSON object (dict). Other valid JSON values
+            # like null, lists, strings, or numbers are not session records and
+            # are skipped with a warning.
+            if not isinstance(obj, dict):
+                print(
+                    f"warning: {jsonl_file}:{line_no}: JSON value is not an object — skipping",
+                    file=sys.stderr,
+                )
+                continue
+
             # Extract slug from projectPath or cwd
             for field in ("projectPath", "cwd"):
                 raw_path = obj.get(field)
-                if raw_path:
+                if isinstance(raw_path, str) and raw_path:
                     slug = _extract_slug(raw_path)
                     if slug:
                         slugs.add(slug)
