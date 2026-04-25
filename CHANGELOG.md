@@ -15,6 +15,7 @@
 
 ### 🐛 Bug Fixes
 
+- *(CCP-sd9e)* **Daily-brief open-brain MCP URL + Accept header fix** — corrects URL path from `/mcp/mcp` to `/mcp` in `_OBClient` (both `query-sources.py` and `orchestrate-brief.py`); adds required `Accept: application/json, text/event-stream` header for MCP Streamable-HTTP compliance. Both bugs verified via curl probing against live endpoint.
 - *(CCP-scw5)* **Daily-brief open-brain auth fix** — `_OBClient.search()` in `query-sources.py` and `_async_save_memory()` in `orchestrate-brief.py` now send `x-api-key` header instead of `Authorization: Bearer`. The open-brain HTTP MCP endpoint validates Bearer tokens as JWTs; raw `ob_` api_keys are opaque strings that must go in `x-api-key`. Also adds 401-specific `PermissionError` with actionable guidance pointing to `~/.open-brain/config.json`. Regression tests: happy-path (header assertion via `httpx.MockTransport`) + 401-path (actionable warning propagation). 95 tests passing.
 - *(CCP-die)* **Codex diff resolution** now uses size-based budgeting instead of file-count cap, with bounded guidance for large-diff fallback
 - *(CCP-b9d)* Use ${CLAUDE_PLUGIN_ROOT} for plugin script paths + add lint gate
