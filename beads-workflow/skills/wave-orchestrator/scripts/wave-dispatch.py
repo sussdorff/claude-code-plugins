@@ -100,15 +100,15 @@ class WaveDispatcher:
         # Check 1: live claude process with --worktree bead-<id>
         try:
             result = self._runner(
-                ["pgrep", "-f", f"worktree bead-{bead_id}"],
+                ["pgrep", "-f", f"worktree bead-{re.escape(bead_id)}( |$)"],
                 capture_output=True,
                 text=True,
                 timeout=10,
             )
             if result.returncode == 0 and result.stdout.strip():
                 pids = [p.strip() for p in result.stdout.strip().splitlines() if p.strip()]
-        except Exception:
-            pass
+        except Exception as e:
+            print(f"Warning: check_already_running failed for {bead_id}: {e}", file=sys.stderr)
 
         # Check 2: git worktree exists for this bead
         try:
@@ -123,8 +123,8 @@ class WaveDispatcher:
                     if line.startswith("worktree ") and f"bead-{bead_id}" in line:
                         worktree_path = line.split(" ", 1)[1].strip()
                         break
-        except Exception:
-            pass
+        except Exception as e:
+            print(f"Warning: check_already_running failed for {bead_id}: {e}", file=sys.stderr)
 
         if pids or worktree_path:
             return {"pids": pids, "worktree_path": worktree_path}

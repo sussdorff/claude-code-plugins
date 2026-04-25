@@ -45,7 +45,7 @@ done
 # Environment
 # ---------------------------------------------------------------------------
 if ! command -v bd &>/dev/null; then
-  echo '{"error":"bd_not_found","closed":[],"close_failed":[],"missing_reason":[],"dolt_sync":{"status":"skipped","detail":"bd not found"},"metrics_ingest":{"status":"skipped","detail":"bd not found"}}' >&2
+  echo '{"error":"bd_not_found","closed":[],"close_failed":[],"missing_reason":[],"skipped_not_owned":[],"dolt_sync":{"status":"skipped","detail":"bd not found"},"metrics_ingest":{"status":"skipped","detail":"bd not found"}}' >&2
   exit 0
 fi
 
@@ -72,7 +72,7 @@ IN_PROGRESS_COUNT=$(echo "$IN_PROGRESS_JSON" | python3 -c \
 echo "    found $IN_PROGRESS_COUNT in-progress bead(s)" >&2
 
 if [[ "$IN_PROGRESS_COUNT" -eq 0 ]]; then
-  echo '{"closed":[],"close_failed":[],"missing_reason":[],"dolt_sync":{"status":"skipped","detail":"no in-progress beads"},"metrics_ingest":{"status":"skipped","detail":"no beads to close"}}'
+  echo '{"closed":[],"close_failed":[],"missing_reason":[],"skipped_not_owned":[],"dolt_sync":{"status":"skipped","detail":"no in-progress beads"},"metrics_ingest":{"status":"skipped","detail":"no beads to close"}}'
   exit 0
 fi
 
