@@ -840,7 +840,7 @@ def _inject_warning_block(content: str, unconfigured: list[str]) -> str:
         return content
 
     slugs_str = ", ".join(unconfigured)
-    warning = f"⚠️ Aktive Projekte nicht in Config: {slugs_str}\n\n"
+    warning = f"⚠️ Active projects not in config: {slugs_str}\n\n"
     return warning + content
 
 
