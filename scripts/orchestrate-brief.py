@@ -46,8 +46,6 @@ Usage:
     python3 scripts/orchestrate-brief.py --config ~/.claude/daily-brief.yml
 """
 
-from __future__ import annotations
-
 import argparse
 import asyncio
 import datetime
@@ -990,10 +988,21 @@ def _orchestrate_range(
 ) -> list[dict[str, Any]]:
     """Orchestrate range-mode briefs per project.
 
-    For range mode, checks open-brain first per-day (v1.5 SoR). Dates already
-    in OB are skipped. For dates not in OB, calls render-brief.py once per day
-    (single-day mode) to get per-day content, then persists each to OB.
-    Falls back to disk check when OB returns None (offline).
+    Behavior (Option A — single Executive Summary per project):
+      1. AK1 compliance: check open-brain per date to determine which dates
+         already have a per-day OB entry (no re-save needed).
+      2. Display output: ALWAYS call render-brief.py ONCE per project with
+         --since/--until to produce a single compressed rollup (at most one
+         Executive Summary heading per project). This matches the expected
+         range-mode contract regardless of OB state.
+      3. OB saves: for each date NOT already in OB, call render-brief.py --date
+         individually to get per-day content for the OB write. When
+         persist_disk=True that same call also writes the disk file.
+
+    Rationale: the display rollup is a synthetic view across dates, not a
+    stored per-day artifact. The OB cache is per-day. The two concerns are
+    independent — checking OB determines which days need saving; rendering
+    determines what the user sees.
 
     Args:
         project: Project name or None for all.
@@ -1017,33 +1026,51 @@ def _orchestrate_range(
     results: list[dict[str, Any]] = []
     start_date = dates[0]
     end_date = dates[-1]
+    render_script = Path(__file__).parent / "render-brief.py"
 
     for proj in projects:
-        all_contents: list[str] = []
-
+        # Step 1 (AK1): Check OB per date — identify which dates need a new
+        # per-day OB save. Dates already in OB are skipped for saving only;
+        # the display rollup is always regenerated (see Step 2).
+        new_dates: list[str] = []
         for date in dates:
-            # v1.5 SoR: check open-brain first
             ob_content = _read_from_open_brain(proj.slug, date)
-            if ob_content is not None:
-                all_contents.append(ob_content)
-                continue
+            if ob_content is None:
+                new_dates.append(date)
 
-            # Disk fallback (offline / OB-unavailable)
-            if _cfg.brief_exists(proj, date):
-                try:
-                    disk_content = _cfg.brief_path(proj, date).read_text()
-                except OSError:
-                    disk_content = None
-                if disk_content:
-                    all_contents.append(disk_content)
-                continue
+        # Step 2: Produce a SINGLE display rollup via --since/--until.
+        # This guarantees at most one Executive Summary heading per project,
+        # regardless of how many dates are in OB. Display output is always
+        # fresh — range rollups are synthetic views, not stored per-day artifacts.
+        cmd = [
+            sys.executable, str(render_script),
+            "--project", proj.name,
+            "--since", start_date,
+            "--until", end_date,
+            "--config", str(config_path),
+        ]
+        if detailed:
+            cmd.append("--detailed")
+        # The rollup call is for display only. Per-day disk writes (when
+        # persist_disk=True) are handled by the --date calls in Step 3.
+        cmd.append("--no-persist")
 
-            # Not in OB or disk — render for this single day
-            per_day_content = _run_render_brief(
-                proj.name, date, detailed, config_path, persist_disk=persist_disk
-            )
-            if per_day_content:
-                # Persist to OB (hard error on failure)
+        proc = subprocess.run(cmd, capture_output=True, text=True)  # noqa: S603
+        content = proc.stdout if proc.returncode == 0 else ""
+
+        # Step 3: For each date not yet in OB, render per-day and save to OB.
+        # When persist_disk=True the per-day call also writes the disk file.
+        if new_dates:
+            for date in new_dates:
+                per_day_content = _run_render_brief(
+                    proj.name,
+                    date,
+                    detailed,
+                    config_path,
+                    persist_disk=persist_disk,
+                )
+                if not per_day_content:
+                    continue
                 session_ref = make_session_ref(proj.slug, date)
                 _save_to_open_brain(
                     title=f"{proj.name} — {date}",
@@ -1051,11 +1078,11 @@ def _orchestrate_range(
                     ob_type="daily_brief",
                     project=proj.slug,
                     session_ref=session_ref,
-                    metadata={"source": "daily-brief"},
+                    metadata={
+                        "source": "daily-brief",
+                        "brief_kind": "single",
+                    },
                 )
-                all_contents.append(per_day_content)
-
-        content = "\n\n---\n\n".join(all_contents) if all_contents else ""
 
         results.append(
             {

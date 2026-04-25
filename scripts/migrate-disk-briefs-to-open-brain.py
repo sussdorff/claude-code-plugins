@@ -29,8 +29,6 @@ Output:
     Execution-result envelope (JSON) per core/contracts/execution-result.schema.json
 """
 
-from __future__ import annotations
-
 import argparse
 import asyncio
 import json
