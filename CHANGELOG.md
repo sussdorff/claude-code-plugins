@@ -24,6 +24,7 @@
 
 ### 🧪 Testing
 
+- *(CCP-i8g)* **Daily-brief integration test** — validates live data across all 4 configured projects with `--since=7d`, range behavior (compressed rollup output), and persistence. Reference docs: `data-sources.md` (canonical field→source map, dedup rules, fallback behavior), `config-schema.md` (full schema with examples), and sample output (`docs/examples/daily-brief-sample.md`) reviewed against Product Contract.
 - *(verification-provenance)* Update stale tests to match renumbered phases
 
 ### 🚜 Refactor
