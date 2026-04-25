@@ -256,17 +256,11 @@ def _resolve_ob_credentials() -> tuple[str | None, str]:
     token_file = ob_home / "token"
     config_file = ob_home / "config.json"
 
-    token: str | None = token_env
-    config_server_url: str | None = None
-
-    if not token and token_file.exists():
-        token = token_file.read_text().strip() or None
-
-    if not token and config_file.exists():
+    # Read config.json once unconditionally — used for both token and URL fallbacks
+    cfg: dict = {}
+    if config_file.exists():
         try:
             cfg = json.loads(config_file.read_text())
-            token = cfg.get("api_key") or None
-            config_server_url = cfg.get("server_url") or None
         except OSError:
             pass
         except json.JSONDecodeError as exc:
@@ -274,14 +268,19 @@ def _resolve_ob_credentials() -> tuple[str | None, str]:
                 f"warning: ~/.open-brain/config.json is malformed: {exc}",
                 file=sys.stderr,
             )
-        except KeyError:
-            pass
 
-    # Resolve URL: env var wins, then config.json server_url + path, then default
+    # Resolve token: env var > token file > config.json api_key
+    token: str | None = token_env
+    if not token and token_file.exists():
+        token = token_file.read_text().strip() or None
+    if not token:
+        token = cfg.get("api_key") or None
+
+    # Resolve URL: env var > config.json server_url > hardcoded default
     if os.environ.get("OB_URL"):
         ob_url = os.environ["OB_URL"]
-    elif config_server_url:
-        ob_url = config_server_url.rstrip("/") + "/mcp/mcp"
+    elif cfg.get("server_url"):
+        ob_url = cfg["server_url"].rstrip("/") + "/mcp/mcp"
     else:
         ob_url = "https://open-brain.sussdorff.org/mcp/mcp"
 

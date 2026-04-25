@@ -636,3 +636,45 @@ class TestSaveToOpenBrainConfigJson:
         assert calls[0]["token"] == "ob_env_key", (
             "OB_TOKEN env var should take precedence over config.json api_key"
         )
+
+    def test_url_from_config_json_used_even_when_env_token_set(self, tmp_path: Path) -> None:
+        """config.json server_url is used even when token comes from OB_TOKEN env var.
+
+        Regression test: previously config.json was only read when no token was found,
+        so OB_TOKEN set → config.json never read → URL fell through to hardcoded default.
+        """
+        import os
+        from unittest.mock import patch
+
+        config_json = tmp_path / ".open-brain" / "config.json"
+        config_json.parent.mkdir(parents=True, exist_ok=True)
+        config_json.write_text(
+            '{"server_url": "https://custom.example.org", "api_key": "ob_config_key"}'
+        )
+
+        calls: list[dict] = []
+
+        async def fake_async_save(**kwargs: object) -> None:
+            calls.append(dict(kwargs))
+
+        with patch("pathlib.Path.home", return_value=tmp_path):
+            with patch.dict(os.environ, {"OB_TOKEN": "ob_env_key"}, clear=False):
+                os.environ.pop("OB_URL", None)
+                with patch.object(ob, "_async_save_memory", side_effect=fake_async_save):
+                    ob._save_to_open_brain(
+                        title="test — 2026-04-23",
+                        text="# Test brief",
+                        ob_type="daily_brief",
+                        project="test",
+                        session_ref="daily-brief-2026-04-23",
+                        metadata={"source": "daily-brief"},
+                    )
+
+        assert calls, "_async_save_memory should have been called"
+        assert calls[0]["ob_url"] == "https://custom.example.org/mcp/mcp", (
+            f"Expected ob_url from config.json server_url even when OB_TOKEN is set, "
+            f"got '{calls[0].get('ob_url')}'"
+        )
+        assert calls[0]["token"] == "ob_env_key", (
+            "OB_TOKEN env var should still be used as the token"
+        )

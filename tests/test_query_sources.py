@@ -1301,6 +1301,32 @@ class TestBuildObClientConfigJson:
             "OB_TOKEN env var should take precedence over config.json api_key"
         )
 
+    def test_url_from_config_json_used_even_when_env_token_set(self, tmp_path: Path) -> None:
+        """config.json server_url is used even when token comes from OB_TOKEN env var.
+
+        Regression test: previously config.json was only read when no token was found,
+        so OB_TOKEN set → config.json never read → URL fell through to hardcoded default.
+        """
+        config_json = tmp_path / ".open-brain" / "config.json"
+        config_json.parent.mkdir(parents=True, exist_ok=True)
+        config_json.write_text(
+            '{"server_url": "https://custom.example.org", "api_key": "ob_config_key"}'
+        )
+
+        import os
+        with patch("pathlib.Path.home", return_value=tmp_path):
+            with patch.dict(os.environ, {"OB_TOKEN": "ob_env_key"}, clear=False):
+                os.environ.pop("OB_URL", None)
+                client = qs._build_ob_client()
+
+        assert client is not None
+        assert client._url == "https://custom.example.org/mcp/mcp", (
+            f"Expected URL from config.json server_url even when OB_TOKEN is set, got '{client._url}'"
+        )
+        assert client._token == "ob_env_key", (
+            "OB_TOKEN env var should still be used as the token"
+        )
+
     def test_query_sources_uses_config_json_when_available(
         self, tmp_path: Path, config_path: Path, empty_mock_runner: qs.MockCommandRunner
     ) -> None:
