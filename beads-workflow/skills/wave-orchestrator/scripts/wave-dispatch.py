@@ -120,9 +120,13 @@ class WaveDispatcher:
             )
             if result.returncode == 0:
                 for line in result.stdout.splitlines():
-                    if line.startswith("worktree ") and f"bead-{bead_id}" in line:
-                        worktree_path = line.split(" ", 1)[1].strip()
-                        break
+                    if line.startswith("worktree "):
+                        path = line.split(" ", 1)[1].strip()
+                        # Match exact directory name to prevent prefix false-positives
+                        # (e.g. "bead-CCP-x" must not match "bead-CCP-xtba")
+                        if Path(path).name == f"bead-{bead_id}":
+                            worktree_path = path
+                            break
         except Exception as e:
             print(f"Warning: check_already_running failed for {bead_id}: {e}", file=sys.stderr)
 

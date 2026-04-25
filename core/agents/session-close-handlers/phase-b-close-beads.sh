@@ -101,8 +101,8 @@ for bead_id in $BEAD_IDS; do
   BEAD_ASSIGNEE=$(echo "$BEAD_JSON" | python3 -c \
     "import sys,json; d=json.load(sys.stdin); print(d[0].get('assignee',''))" 2>/dev/null || echo "")
   CURRENT_SESSION="${CCP_SESSION_ID:-}"
-  if [[ -n "$CURRENT_SESSION" && -n "$BEAD_ASSIGNEE" && "$BEAD_ASSIGNEE" != "$CURRENT_SESSION" ]]; then
-    echo "    $bead_id: skipping — owned by '$BEAD_ASSIGNEE', not current session '$CURRENT_SESSION'" >&2
+  if [[ -n "$CURRENT_SESSION" && "$BEAD_ASSIGNEE" != "$CURRENT_SESSION" ]]; then
+    echo "    $bead_id: skipping — assignee='$BEAD_ASSIGNEE' does not match current session '$CURRENT_SESSION'" >&2
     SKIPPED_NOT_OWNED+=("$bead_id")
     continue
   fi
