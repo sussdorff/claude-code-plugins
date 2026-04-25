@@ -2,7 +2,7 @@
 # /// script
 # dependencies = [
 #   "pyyaml>=6.0",
-#   "httpx>=0.27",
+#   "mcp>=1.11",
 # ]
 # ///
 """
@@ -885,11 +885,16 @@ def _resolve_ob_credentials() -> tuple[str | None, str]:
 def _build_ob_client() -> Any | None:
     """Build an open-brain client from environment / token file / config.json.
 
+    Uses the official mcp Python SDK (mcp>=1.11) with streamable_http transport.
+    The SDK handles the MCP session lifecycle (initialize handshake, session-id
+    management, SSE parsing) transparently.
+
     Delegates credential resolution to _resolve_ob_credentials().
 
     Returns None when no token can be resolved.
     """
-    import httpx
+    from mcp import ClientSession
+    from mcp.client.streamable_http import streamablehttp_client  # headers= API
 
     token, ob_url = _resolve_ob_credentials()
 
@@ -897,6 +902,8 @@ def _build_ob_client() -> Any | None:
         return None
 
     class _OBClient:
+        """MCP client for open-brain search, backed by the official mcp SDK."""
+
         def __init__(self, url: str, token: str) -> None:
             self._url = url
             self._token = token
@@ -908,67 +915,58 @@ def _build_ob_client() -> Any | None:
             date_start: str,
             date_end: str,
         ) -> list[dict[str, Any]]:
-            # The open-brain HTTP MCP endpoint authenticates via x-api-key header.
-            # Sending Authorization: Bearer is rejected with 401 because the server
-            # verifies Bearer tokens as JWTs, but api_key values are opaque strings.
-            headers = {
-                "x-api-key": self._token,
-                "Content-Type": "application/json",
-                "Accept": "application/json, text/event-stream",
-            }
-            async with httpx.AsyncClient(timeout=30) as client:
-                # MCP JSON-RPC initialize
-                init_payload = {
-                    "jsonrpc": "2.0",
-                    "id": 1,
-                    "method": "initialize",
-                    "params": {
-                        "protocolVersion": "2024-11-05",
-                        "capabilities": {},
-                        "clientInfo": {"name": "query-sources", "version": "1"},
-                    },
-                }
-                await client.post(self._url, json=init_payload, headers=headers)
+            """Search open-brain observations via the MCP search tool.
 
-                # Call search tool
-                call_payload = {
-                    "jsonrpc": "2.0",
-                    "id": 2,
-                    "method": "tools/call",
-                    "params": {
-                        "name": "search",
-                        "arguments": {
-                            "type": type_filter,
-                            "project": project,
-                            "date_start": date_start,
-                            "date_end": date_end,
-                        },
-                    },
-                }
-                resp = await client.post(self._url, json=call_payload, headers=headers)
-                if resp.status_code == 401:
+            Uses the official mcp SDK streamable_http transport which handles:
+            - initialize handshake and session-id negotiation
+            - SSE response parsing
+            - capability negotiation
+
+            The open-brain server authenticates via x-api-key header; Authorization: Bearer
+            is rejected because api_key values are opaque strings, not JWTs.
+            """
+            # x-api-key is the correct authentication header for open-brain.
+            # SDK passes these headers in the Streamable HTTP transport.
+            headers = {"x-api-key": self._token}
+            try:
+                async with streamablehttp_client(self._url, headers=headers) as (
+                    read_stream,
+                    write_stream,
+                    _get_session_id,
+                ):
+                    async with ClientSession(read_stream, write_stream) as session:
+                        await session.initialize()
+                        result = await session.call_tool(
+                            "search",
+                            {
+                                "type": type_filter,
+                                "project": project,
+                                "date_start": date_start,
+                                "date_end": date_end,
+                            },
+                        )
+            except Exception as exc:
+                # Translate auth errors to actionable PermissionError.
+                # The SDK may wrap 401 in various exception types (httpx.HTTPStatusError,
+                # mcp exceptions, etc.). Check the string for 401/Unauthorized signals.
+                exc_str = str(exc)
+                if "401" in exc_str or "Unauthorized" in exc_str or "unauthorized" in exc_str:
                     raise PermissionError(
                         "open-brain auth failed (401 Unauthorized). "
                         "Check ~/.open-brain/config.json: verify 'api_key' is correct "
                         "and not expired. Regenerate the token at your open-brain instance "
                         "if needed."
-                    )
-                resp.raise_for_status()
-                body = resp.json()
-                # MCP / JSON-RPC error envelopes arrive with HTTP 200. Detect
-                # the ``error`` field and raise so ``_collect_open_brain`` can
-                # turn it into a warning instead of silently returning an
-                # empty success.
-                if isinstance(body, dict) and body.get("error") is not None:
-                    raise RuntimeError(f"MCP error: {body['error']}")
-                result = body.get("result", {}) if isinstance(body, dict) else {}
-                content = result.get("content", []) if isinstance(result, dict) else []
-                entries = []
-                for item in content:
-                    if item.get("type") == "text":
-                        # Let parse errors propagate — _collect_open_brain wraps in warning
-                        entries.extend(json.loads(item["text"]))
-                return entries
+                    ) from exc
+                raise
+
+            # Parse CallToolResult content — content is list[ContentBlock]
+            # TextContent items carry the JSON-encoded search results.
+            entries: list[dict[str, Any]] = []
+            for block in result.content:
+                if hasattr(block, "type") and block.type == "text":
+                    # Let parse errors propagate — _collect_open_brain wraps in warning
+                    entries.extend(json.loads(block.text))
+            return entries
 
     return _OBClient(ob_url, token)
 

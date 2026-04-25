@@ -2,7 +2,7 @@
 # /// script
 # dependencies = [
 #   "pyyaml>=6.0",
-#   "httpx>=0.27",
+#   "mcp>=1.11",
 # ]
 # ///
 """
@@ -338,10 +338,13 @@ def _save_to_open_brain(
     session_ref: str,
     metadata: dict[str, Any],
 ) -> None:
-    """Save a daily brief to open-brain via MCP JSON-RPC.
+    """Save a daily brief to open-brain via the official mcp SDK.
 
-    Uses the save_memory MCP tool with idempotent session_ref. If
-    open-brain is unavailable (no token / connection error), silently
+    Uses the save_memory MCP tool with idempotent session_ref. The mcp SDK
+    handles session lifecycle (initialize handshake, session-id management,
+    SSE parsing) transparently via the Streamable HTTP transport.
+
+    If open-brain is unavailable (no token / connection error), silently
     skips — persistence failure must never block the brief output.
 
     Args:
@@ -359,8 +362,6 @@ def _save_to_open_brain(
         return
 
     try:
-        import httpx
-
         asyncio.run(
             _async_save_memory(
                 ob_url=ob_url,
@@ -389,40 +390,35 @@ async def _async_save_memory(
     session_ref: str,
     metadata: dict[str, Any],
 ) -> None:
-    """Drive the MCP JSON-RPC save_memory call asynchronously."""
-    import httpx
+    """Drive the MCP save_memory tool call asynchronously via the official mcp SDK.
 
-    # The open-brain HTTP MCP endpoint authenticates via x-api-key header.
-    # Sending Authorization: Bearer is rejected with 401 because the server
-    # verifies Bearer tokens as JWTs, but api_key values are opaque strings.
-    headers = {
-        "x-api-key": token,
-        "Content-Type": "application/json",
-        "Accept": "application/json, text/event-stream",
-    }
+    Uses mcp.client.streamable_http.streamablehttp_client which handles the
+    MCP Streamable-HTTP session lifecycle:
+    - initialize handshake and session-id negotiation
+    - SSE response parsing
+    - capability negotiation
 
-    async with httpx.AsyncClient(timeout=30) as client:
-        # MCP JSON-RPC initialize
-        init_payload = {
-            "jsonrpc": "2.0",
-            "id": 1,
-            "method": "initialize",
-            "params": {
-                "protocolVersion": "2024-11-05",
-                "capabilities": {},
-                "clientInfo": {"name": "orchestrate-brief", "version": "1"},
-            },
-        }
-        await client.post(ob_url, json=init_payload, headers=headers)
+    The open-brain server authenticates via x-api-key header. Authorization: Bearer
+    is rejected because api_key values are opaque strings, not JWTs.
+    """
+    from mcp import ClientSession
+    from mcp.client.streamable_http import streamablehttp_client  # headers= API
 
-        # Call save_memory tool (idempotent via session_ref + dedup_mode=merge)
-        call_payload = {
-            "jsonrpc": "2.0",
-            "id": 2,
-            "method": "tools/call",
-            "params": {
-                "name": "save_memory",
-                "arguments": {
+    # x-api-key is the correct authentication header for open-brain.
+    # SDK passes these headers in the Streamable HTTP transport.
+    headers = {"x-api-key": token}
+
+    async with streamablehttp_client(ob_url, headers=headers) as (
+        read_stream,
+        write_stream,
+        _get_session_id,
+    ):
+        async with ClientSession(read_stream, write_stream) as session:
+            await session.initialize()
+            # Call save_memory tool (idempotent via session_ref + dedup_mode=merge)
+            await session.call_tool(
+                "save_memory",
+                {
                     "title": title,
                     "text": text,
                     "type": ob_type,
@@ -431,9 +427,7 @@ async def _async_save_memory(
                     "metadata": metadata,
                     "dedup_mode": "merge",
                 },
-            },
-        }
-        await client.post(ob_url, json=call_payload, headers=headers)
+            )
 
 
 # ---------------------------------------------------------------------------
