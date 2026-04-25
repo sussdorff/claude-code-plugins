@@ -6,37 +6,26 @@
 
 ### 🚀 Features
 
+- *(CCP-6n3)* **Daily-brief auto-discovery** — `scripts/discover-projects.py` detects active projects not in config by scanning ~/.claude/projects/ JSONL files and ~/code/ git repos modified within the time window. `orchestrate-brief.py --all-active` flag bypasses config and uses only discovery heuristics. Active-but-unconfigured projects surface as a warning block at the top of the brief. Does not auto-add to config. Robust against malformed JSONL and unreadable repos (logs warning, continues). 41 tests pass.
 - *(CCP-51k)* **Daily-brief orchestration CLI** — `scripts/orchestrate-brief.py` ties config + query + render into a usable `/daily-brief` skill. Supports all CLI args (`--since=Nd`, `--date=YYYY-MM-DD`, `--range=START..END`, `--detailed`, positional project name). Implements backfill no-op (brief_exists check prevents re-writing already-persisted days). Saves each new brief to open-brain as `type=daily_brief` with idempotent `session_ref`. Range rollup delegates to render-brief.py range mode. SKILL.md updated with triggers (daily brief, tagesbericht, was hatte ich gestern gemacht). 31 tests. Also fixes render-brief.py persist bug (brief_path was called with wrong signature).
 - *(CCP-lx2)* **Daily-brief capability extractor + diary-style renderer** — `capability-extractor.py` parses closed bead titles/descriptions and session summaries (New:/Fixed:/Internal: prefixes) for capability signals (both feature and task beads qualify); `render-brief.py` renders v1.0 Chief-of-Staff markdown in Voice B (German, journalistic narrator, past tense) with 6 sections: Executive Summary, Was sich verändert hat, Warum es zählt, Offene Fäden, Nächste sinnvolle Schritte (max 3 items with source citation), Belege; range mode with compressed rollup; 77 tests.
 - *(CCP-top)* **Daily-brief data aggregator** (query-sources.py) collects closed/open beads, git commits, session summaries, decisions, and rework signals from open-brain and bd; deterministic JSON output conforming to execution-result envelope
 - *(CCP-ijh)* Daily-brief config schema + per-project brief storage layout
+- *(CCP-h8h)* Eliminate in-repo Codex mirrors: enforce dev-repo principle (`rm -rf` invariant). Delete `.agents/` (72 skill mirrors) and `.codex/` (3 agent mirrors). Rewrite `sync-codex-skills` and `sync-codex-agents` to target user-scoped dirs only. Fix CI: skill-audit.yml now uses canonical `meta/skills/skill-auditor/` validator. Add `docs/architecture/dev-repo-principle.md` and `tests/test_dev_repo_principle.py`.
 
 ### 🐛 Bug Fixes
 
 - *(CCP-die)* **Codex diff resolution** now uses size-based budgeting instead of file-count cap, with bounded guidance for large-diff fallback
 - *(CCP-b9d)* Use ${CLAUDE_PLUGIN_ROOT} for plugin script paths + add lint gate
 - *(CCP-ijh)* Remove unused 'field' import from dataclasses
+- *(CCP-0ho)* Correct council-roles.yml default path from malte/ to business/ in bead-orchestrator Phase 3
+- *(CCP-ahs)* Code-layer claim gate: prevent double-launch via claim.py + cld/wave pre-flight
+- *(CCP-yosw)* **Daily-brief open-brain integration** — `query-sources.py` and `orchestrate-brief.py` now instantiate `ob_client` automatically from `~/.open-brain/config.json` when OB_TOKEN env var and token file are not present. Live briefs include session/learning/decision data from open-brain. Writing a brief creates idempotent `type=daily_brief` observation in open-brain per session_ref. URL resolution independent of token source. 89 tests passing.
 
 ### 🧪 Testing
 
 - *(CCP-i8g)* **Daily-brief integration test** — validates live data across all 4 configured projects with `--since=7d`, range behavior (compressed rollup output), and persistence. Reference docs: `data-sources.md` (canonical field→source map, dedup rules, fallback behavior), `config-schema.md` (full schema with examples), and sample output (`docs/examples/daily-brief-sample.md`) reviewed against Product Contract.
 - *(verification-provenance)* Update stale tests to match renumbered phases
-
-### ⚙️ Miscellaneous Tasks
-
-- Bump actions to Node 24 (checkout@v5, setup-python@v6)
-- Re-trigger workflow on its own YAML changes
-## [Unreleased]
-
-### 🚀 Features
-
-- *(CCP-ijh)* Daily-brief config schema + per-project brief storage layout: `config.py` with `load_config()`, `resolve_project()`, `brief_path()`, `brief_exists()`, `briefs_dir()` helpers; bootstrap creates `~/.claude/daily-brief.yml` with four projects (claude-code-plugins, mira, polaris, open-brain); `SKILL.md` for `core/skills/daily-brief`; 18 tests.
-- *(CCP-h8h)* Eliminate in-repo Codex mirrors: enforce dev-repo principle (`rm -rf` invariant). Delete `.agents/` (72 skill mirrors) and `.codex/` (3 agent mirrors). Rewrite `sync-codex-skills` and `sync-codex-agents` to target user-scoped dirs only. Fix CI: skill-audit.yml now uses canonical `meta/skills/skill-auditor/` validator. Add `docs/architecture/dev-repo-principle.md` and `tests/test_dev_repo_principle.py`.
-
-### 🐛 Bug Fixes
-
-- *(CCP-0ho)* Correct council-roles.yml default path from malte/ to business/ in bead-orchestrator Phase 3
-- *(CCP-ahs)* Code-layer claim gate: prevent double-launch via claim.py + cld/wave pre-flight
 
 ### 🚜 Refactor
 
@@ -46,6 +35,8 @@
 
 ### ⚙️ Miscellaneous Tasks
 
+- Bump actions to Node 24 (checkout@v5, setup-python@v6)
+- Re-trigger workflow on its own YAML changes
 - *(CCP-xib)* Remove unreliable screen-lock check from session-close; treat git push failure as notification
 
 ## [2026.04.100] - 2026-04-22
