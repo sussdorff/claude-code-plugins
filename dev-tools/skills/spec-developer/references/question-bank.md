@@ -149,3 +149,23 @@ Organized by category. Each question includes insight notes (why it matters) and
 **Q7.4**: What are the testing requirements? Unit, integration, E2E, manual QA?
 - *Why*: Testing strategy affects architecture (testability) and timeline. Define it in the spec.
 - *Follow-up if*: Complex logic -> "Are there property-based testing or fuzzing needs?"
+
+---
+
+## 8. Non-Behaviors
+
+**Q8.1**: What should this feature explicitly NOT do, even if it would seem "helpful"?
+- *Why*: Prevents scope creep baked into the spec. Implementing agents fill gaps with plausible-but-wrong behavior.
+- *Follow-up if*: No answer -> "If an agent implemented this and added [plausible nearby feature], would that be wrong?"
+
+**Q8.2**: What behavior from a similar feature or library should this NOT inherit?
+- *Why*: Systems often copy patterns from adjacent features. If that pattern is wrong here, the spec must say so.
+- *Follow-up if*: Related features exist -> "Is there anything the old version did that the new one must stop doing?"
+
+**Q8.3**: What would a "helpful" implementation add that would actually break existing workflows?
+- *Why*: AI implementers optimize for completeness. Silent additions that break existing integrations are the hardest bugs.
+- *Follow-up if*: Integration points exist -> "What would break if the system auto-formatted, auto-sorted, or auto-normalized this data?"
+
+**Q8.4**: Are there any states, inputs, or requests this feature must reject, even if technically possible?
+- *Why*: Explicit rejection rules prevent security by obscurity -- the system must refuse, not just not-do.
+- *Follow-up if*: Yes -> "Is the rejection silent (returns empty) or explicit (returns an error)?"
