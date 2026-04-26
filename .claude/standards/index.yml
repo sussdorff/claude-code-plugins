@@ -69,6 +69,26 @@ standards:
       - "python default"
     path: "dev-tools/python-default-bash-exception.md"
 
+  integrations/open-brain-http-client:
+    description: "open-brain HTTP client decision tree: use REST (urllib/stdlib) for documented /api/* endpoints (ingest, worktree-session-summary, session-end, memories); use MCP SDK (mcp>=1.11) for MCP-only tools (save_memory, search, materialize_memories, weekly_briefing, etc.). Never hand-roll a custom MCP transport. See ADR-0003."
+    triggers:
+      - "open-brain"
+      - "open_brain"
+      - "OPEN_BRAIN"
+      - "urllib"
+      - "mcp SDK"
+      - "mcp>=1.11"
+      - "streamablehttp_client"
+      - "worktree-session-summary"
+      - "/api/ingest"
+      - "/api/memories"
+      - "/api/session-end"
+      - "save_memory"
+      - "materialize_memories"
+      - "weekly_briefing"
+      - "ADR-0003"
+    path: "integrations/open-brain-http-client.md"
+
   workflow/adr-location:
     description: "ADR Location Standard: Architecture Decision Records live at /docs/adr/ (canonical). Legacy: /docs/adrs/, .claude/adrs/ accepted by verification but new projects use /docs/adr/. Bootstrapped by /project-setup with README.md + ADR-0001 self-referential bootstrap ADR."
     triggers:
