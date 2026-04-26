@@ -1,17 +1,19 @@
 #!/usr/bin/env python3
 """
-render-brief.py — Daily-brief markdown renderer (v1.0).
+render-brief.py — Daily-brief markdown renderer (v1.1).
 
 Renders a Chief-of-Staff report in Voice B (journalistic narrator, past tense,
 third-person observational, German) from query-sources.py data envelopes.
 
-Sections rendered (v1.0):
+Sections rendered (v1.1):
   1. Executive Summary (synthesized prose, German, ~150 words)
   2. Was sich verändert hat (What Changed) — deterministic from closed_beads + commits
   3. Warum es zählt (Why It Matters) — synthesized prose, only from cited facts
   4. Offene Fäden (Open Loops) — deterministic from open_beads + blocked_beads
-  5. Nächste sinnvolle Schritte (Next Best Moves) — max 3 items, sourced
-  6. Belege (Evidence) — bullet list of beads/commits/sessions/decisions/warnings
+  5. Entscheidungsbedarf (Decisions Needed) — NEW: explicit sources only
+  6. Drift- und Rework-Signale (Drift & Rework) — NEW: deterministic from rework_signals
+  7. Nächste sinnvolle Schritte (Next Best Moves) — max 3 items, sourced
+  8. Belege (Evidence) — bullet list of beads/commits/sessions/decisions/warnings
 
 Usage:
     # Single day
@@ -392,6 +394,117 @@ def _render_open_loops(
     return "\n".join(lines)
 
 
+def _render_decisions_needed(
+    data: dict[str, Any],
+    project: str,
+    date: str,
+) -> str:
+    """Render Entscheidungsbedarf (Decisions Needed) section — v1.1.
+
+    Explicit sources ONLY:
+    1. decision_requests — beads from bd human list (flagged for human decision)
+    2. decisions — open-brain entries with metadata.status == "pending"
+    3. followups — entries with type "Decide" or "Need input" ONLY
+
+    NEVER infers decisions from other sources.
+    Empty state: "Keine offenen Entscheidungen erfasst."
+    """
+    decision_requests = data.get("decision_requests", [])
+    decisions = data.get("decisions", [])
+    followups = data.get("followups", [])
+
+    lines: list[str] = [f"## Entscheidungsbedarf — {project} ({date})", ""]
+
+    items: list[str] = []
+
+    # Source 1: decision_requests (beads flagged for human decision via bd human list)
+    for req in decision_requests:
+        bead_id = req.get("id", "?")
+        title = req.get("title", "(kein Titel)")
+        items.append(f"- **{bead_id}**: {title} *(Quelle: decision-request)*")
+
+    # Source 2: open-brain decisions with status=pending
+    for decision in decisions:
+        metadata = decision.get("metadata", {})
+        if metadata.get("status") == "pending":
+            decision_id = decision.get("id", "?")
+            title = decision.get("title", "(kein Titel)")
+            items.append(f"- **{decision_id}**: {title} *(Quelle: ob-decision)*")
+
+    # Source 3: followups with type "Decide" or "Need input" ONLY
+    for fu in followups:
+        fu_type = fu.get("type", "")
+        if fu_type in ("Decide", "Need input"):
+            fu_text = fu.get("text", "")
+            if fu_text:
+                items.append(f"- **{fu_type}**: {fu_text} *(Quelle: followup-decide)*")
+
+    if not items:
+        lines.append("Keine offenen Entscheidungen erfasst.")
+        lines.append("")
+        return "\n".join(lines)
+
+    lines.extend(items)
+    lines.append("")
+    return "\n".join(lines)
+
+
+def _render_drift_rework(
+    data: dict[str, Any],
+    project: str,
+    date: str,
+) -> str:
+    """Render Drift- und Rework-Signale (Drift & Rework) section — v1.1.
+
+    Deterministic sources ONLY from rework_signals field:
+    1. type == "revert_commit" — git revert commits
+    2. type == "supersede_event" — beads superseded
+    3. type == "reopen_event" — beads that were closed and reopened
+
+    Semantically distinct from Open Loops:
+    - Open Loops = beads currently in-flight (not finished)
+    - Drift & Rework = work that REGRESSED (finished work reversed or scope changed)
+
+    Empty state: "Keine Drift- oder Rework-Signale erkannt."
+    """
+    rework_signals = data.get("rework_signals", [])
+
+    lines: list[str] = [f"## Drift- und Rework-Signale — {project} ({date})", ""]
+
+    _TYPE_LABEL: dict[str, str] = {
+        "revert_commit": "revert-commit",
+        "supersede_event": "supersede-event",
+        "reopen_event": "reopen-event",
+    }
+
+    items: list[str] = []
+    for signal in rework_signals:
+        signal_type = signal.get("type", "")
+        source_label = _TYPE_LABEL.get(signal_type, signal_type)
+
+        if signal_type == "revert_commit":
+            sha = (signal.get("sha") or "?")[:8]
+            subject = signal.get("subject", "(kein Subject)")
+            items.append(f"- `{sha}` {subject} *(Quelle: {source_label})*")
+        elif signal_type in ("supersede_event", "reopen_event"):
+            bead_id = signal.get("bead_id", "?")
+            title = signal.get("title", "(kein Titel)")
+            items.append(f"- **{bead_id}**: {title} *(Quelle: {source_label})*")
+        else:
+            # Unknown signal type — still render it with generic source tag
+            bead_id = signal.get("bead_id") or signal.get("sha", "?")
+            items.append(f"- {bead_id} *(Quelle: {source_label})*")
+
+    if not items:
+        lines.append("Keine Drift- oder Rework-Signale erkannt.")
+        lines.append("")
+        return "\n".join(lines)
+
+    lines.extend(items)
+    lines.append("")
+    return "\n".join(lines)
+
+
 def _render_next_best_moves(
     data: dict[str, Any],
     project: str,
@@ -549,6 +662,8 @@ def render_single_day(
     what_changed = _render_what_changed(data, capabilities, project, date)
     why_matters = _render_why_it_matters(data, capabilities, project, date)
     open_loops = _render_open_loops(data, project, date)
+    decisions_needed = _render_decisions_needed(data, project, date)
+    drift_rework = _render_drift_rework(data, project, date)
     next_moves = _render_next_best_moves(data, project, date)
     evidence = _render_evidence(data, project, date)
 
@@ -557,6 +672,8 @@ def render_single_day(
     if why_matters:
         sections.append(why_matters)
     sections.append(open_loops)
+    sections.append(decisions_needed)
+    sections.append(drift_rework)
     sections.append(next_moves)
     sections.append(evidence)
 
@@ -665,6 +782,7 @@ def render_range(
         all_followups: list[dict[str, Any]] = []
         all_sessions: list[dict[str, Any]] = []
         all_decisions: list[dict[str, Any]] = []
+        all_decision_requests: list[dict[str, Any]] = []
         all_warnings: list[dict[str, Any]] = []
         all_rework_signals: list[dict[str, Any]] = []
         all_capabilities: list[str] = []
@@ -675,6 +793,7 @@ def render_range(
             all_commits.extend(data.get("commits", []))
             all_sessions.extend(data.get("sessions", []))
             all_decisions.extend(data.get("decisions", []))
+            all_decision_requests.extend(data.get("decision_requests", []))
             all_warnings.extend(data.get("warnings", []))
             all_rework_signals.extend(data.get("rework_signals", []))
             all_followups.extend(data.get("followups", []))
@@ -699,6 +818,7 @@ def render_range(
             "followups": all_followups,
             "sessions": all_sessions,
             "decisions": all_decisions,
+            "decision_requests": all_decision_requests,
             "warnings": all_warnings,
             "rework_signals": all_rework_signals,
             "learnings": [],
@@ -746,6 +866,12 @@ def render_range(
 
         # Aggregated Open Loops
         lines.append(_render_open_loops(agg_data, project, date_label))
+
+        # Aggregated Decisions Needed (v1.1)
+        lines.append(_render_decisions_needed(agg_data, project, date_label))
+
+        # Aggregated Drift & Rework Signals (v1.1)
+        lines.append(_render_drift_rework(agg_data, project, date_label))
 
         # Aggregated Next Best Moves
         lines.append(_render_next_best_moves(agg_data, project, date_label))
