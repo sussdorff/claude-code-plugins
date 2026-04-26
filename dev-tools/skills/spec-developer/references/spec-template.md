@@ -1,6 +1,6 @@
 # Spec Template
 
-Use this structure for generated spec documents. Each section includes guidance on what to include and target length. Total output: 500-700 lines.
+Use this structure for generated spec documents. Each section includes guidance on what to include and target length. Total output: 550-800 lines.
 
 ---
 
@@ -88,6 +88,8 @@ Format:
 
 Group by feature area. Target 15-30 requirements.
 
+**Brownfield note**: When this spec modifies existing code, include a subsection "Preserved Behavior" that lists the requirements that already work and must continue to work after the change. Format: `FR-P-[NNN]: [Behavior that must be preserved]`. Missing preserved behavior = silent regressions in the spec.
+
 ## Section 6: Non-Functional Requirements (20-40 lines)
 
 Cover each applicable category:
@@ -167,6 +169,8 @@ Guidance:
 - One trigger maps to exactly one system response per statement.
 - Cover the happy path, primary error conditions, and boundary inputs.
 - MUST NOT statements belong here when they describe observable behavior; move them to Section 12 when they are design constraints rather than response rules.
+- Example of Section 11 (observable behavior): `When payment fails, the system MUST NOT silently succeed — the caller observes the error response`
+- Example of Section 12 (internal design constraint): `The system MUST NOT reformat user-supplied text even if it appears inconsistent — this constrains internal processing`
 - Example: "When a user submits a form with a missing required field, the system returns a validation error listing all missing fields without submitting the form."
 - Example: "When the external payment service is unreachable, the system MUST NOT silently succeed — it must return a retryable error to the caller."
 
@@ -209,7 +213,7 @@ Guidance:
 
 ## Section 14: Ambiguity Warnings (10-20 lines)
 
-Items that are NOT yet Open Questions (they may not require user decisions) but where a implementing agent would likely make a silent assumption that could be wrong. These are spec gaps that could produce plausible-but-incorrect implementations.
+Items that are NOT yet Open Questions (they may not require user decisions) but where an implementing agent would likely make a silent assumption that could be wrong. These are spec gaps that could produce plausible-but-incorrect implementations.
 
 Format each as:
 

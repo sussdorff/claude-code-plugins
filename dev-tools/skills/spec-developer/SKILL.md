@@ -10,7 +10,7 @@ disable-model-invocation: true
 
 # Spec Developer
 
-Produces comprehensive 500-700 line feature specifications through an extensive, adaptive Q&A dialog. Asks 20+ insightful, non-obvious clarifying questions that challenge assumptions and surface edge cases before any implementation planning begins.
+Produces comprehensive 550-800 line feature specifications through an extensive, adaptive Q&A dialog. Asks 20+ insightful, non-obvious clarifying questions that challenge assumptions and surface edge cases before any implementation planning begins.
 
 Complementary to task-breakdown or epic-planning tools: this skill comes *before* them. Flow: spec conversation -> spec document -> downstream planning uses the spec as input.
 
@@ -95,7 +95,7 @@ After all rounds complete, generate the spec document using `references/spec-tem
 
 **Output rules:**
 
-- Target 500-700 lines of Markdown
+- Target 550-800 lines of Markdown
 - Save to `docs/specs/spec-<feature-name>.md` (kebab-case; see your harness adapter for project-specific path)
 - Every functional requirement must be numbered and testable
 - Include all "I don't know" answers as Open Questions
