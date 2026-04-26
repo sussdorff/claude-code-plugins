@@ -273,42 +273,30 @@ class TestBriefPath:
 
 
 class TestBriefExists:
-    def test_returns_false_when_missing(self, tmp_path: Path) -> None:
-        """brief_exists() returns False when brief file does not exist.
-
-        Uses a unique slug so the brief is guaranteed not to exist under ~/.claude/projects/.
-        """
-        import uuid
-        unique_slug = f"test-nonexistent-{uuid.uuid4().hex}"
+    def test_returns_false_when_missing(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+        """brief_exists() returns False when brief file does not exist."""
         p = cfg.ProjectConfig(
-            name=unique_slug,
-            path=tmp_path / unique_slug,
-            slug=unique_slug,
+            name="foo",
+            path=tmp_path / "foo",
+            slug="foo",
             beads=True,
             docs_dir="docs",
         )
+        monkeypatch.setattr(cfg, "briefs_dir", lambda proj: tmp_path / "briefs" / proj.slug)
         assert cfg.brief_exists(p, "2026-04-24") is False
 
-    def test_returns_true_when_exists(self, tmp_path: Path) -> None:
-        """brief_exists() returns True when brief file exists on disk.
-
-        Creates the file at the path returned by brief_path() (under ~/.claude/projects/<slug>/).
-        """
-        import uuid
-        unique_slug = f"test-exists-{uuid.uuid4().hex}"
+    def test_returns_true_when_exists(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+        """brief_exists() returns True when brief file exists on disk."""
         p = cfg.ProjectConfig(
-            name=unique_slug,
-            path=tmp_path / unique_slug,
-            slug=unique_slug,
+            name="foo",
+            path=tmp_path / "foo",
+            slug="foo",
             beads=True,
             docs_dir="docs",
         )
-        path = cfg.brief_path(p, "2026-04-24")
-        path.parent.mkdir(parents=True, exist_ok=True)
+        monkeypatch.setattr(cfg, "briefs_dir", lambda proj: tmp_path / "briefs" / proj.slug)
+        controlled_dir = tmp_path / "briefs" / p.slug
+        controlled_dir.mkdir(parents=True, exist_ok=True)
+        path = controlled_dir / "2026-04-24.md"
         path.write_text("# Brief")
-        try:
-            assert cfg.brief_exists(p, "2026-04-24") is True
-        finally:
-            # Clean up the file we created under ~/.claude/projects/
-            path.unlink(missing_ok=True)
-            path.parent.rmdir()
+        assert cfg.brief_exists(p, "2026-04-24") is True
