@@ -10,7 +10,7 @@ config.py — daily-brief config loader and per-project path helpers.
 Loads ~/.claude/daily-brief.yml, bootstrapping it with default project list if
 missing. Provides path helpers for per-project brief storage layout.
 
-Storage layout: <project>/.claude/daily-briefs/YYYY-MM-DD.md
+Storage layout: ~/.claude/projects/<slug>/daily-briefs/YYYY-MM-DD.md
 
 Multi-field functions emit core/contracts/execution-result.schema.json envelopes.
 Single atomic values (Path, bool) are returned bare.
@@ -252,7 +252,21 @@ def briefs_dir(project: ProjectConfig) -> Path:
         project: Resolved ProjectConfig instance.
 
     Returns:
-        Path to <project.path>/.claude/daily-briefs/ (not guaranteed to exist).
+        Path to ~/.claude/projects/<slug>/daily-briefs/ (not guaranteed to exist).
+    """
+    return Path.home() / ".claude" / "projects" / project.slug / "daily-briefs"
+
+
+def legacy_briefs_dir(project: ProjectConfig) -> Path:
+    """Return the legacy daily-briefs directory for a project (pre-CCP-gtue).
+
+    Used by the migration script to find briefs created before the path change.
+
+    Args:
+        project: Resolved ProjectConfig instance.
+
+    Returns:
+        Path to <project.path>/.claude/daily-briefs/ (the old repo-internal path).
     """
     return project.path / ".claude" / "daily-briefs"
 
@@ -265,7 +279,7 @@ def brief_path(project: ProjectConfig, date: datetime.date | str) -> Path:
         date: Date as datetime.date or ISO string YYYY-MM-DD.
 
     Returns:
-        Path to <project>/.claude/daily-briefs/YYYY-MM-DD.md
+        Path to ~/.claude/projects/<slug>/daily-briefs/YYYY-MM-DD.md
     """
     if isinstance(date, str):
         date = datetime.date.fromisoformat(date)

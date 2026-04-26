@@ -92,20 +92,24 @@ def minimal_config(tmp_path: Path) -> Path:
 
 
 @pytest.fixture()
-def config_with_briefs(tmp_path: Path) -> tuple[Path, Path]:
+def config_with_briefs(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> tuple[Path, Path]:
     """Config + pre-created disk briefs for claude-code-plugins.
+
+    Briefs are created in the legacy location (project_path/.claude/daily-briefs/).
+    briefs_dir() is patched to return a non-existent new path; legacy_briefs_dir()
+    is patched to return the location where test briefs actually live.
 
     Returns:
         (config_path, project_path)
     """
     config_path = tmp_path / "daily-brief.yml"
     project_path = tmp_path / "claude-code-plugins"
-    briefs_dir = project_path / ".claude" / "daily-briefs"
-    briefs_dir.mkdir(parents=True)
+    legacy_dir = project_path / ".claude" / "daily-briefs"
+    legacy_dir.mkdir(parents=True)
 
-    # Create two brief files
-    (briefs_dir / "2026-04-23.md").write_text("# CCP — 2026-04-23\n\nContent A.")
-    (briefs_dir / "2026-04-24.md").write_text("# CCP — 2026-04-24\n\nContent B.")
+    # Create two brief files in the legacy location
+    (legacy_dir / "2026-04-23.md").write_text("# CCP — 2026-04-23\n\nContent A.")
+    (legacy_dir / "2026-04-24.md").write_text("# CCP — 2026-04-24\n\nContent B.")
 
     data = {
         "projects": [
@@ -121,6 +125,19 @@ def config_with_briefs(tmp_path: Path) -> tuple[Path, Path]:
     }
     with config_path.open("w") as fh:
         yaml.dump(data, fh)
+
+    # Patch briefs_dir to point to a non-existent new path (tests only legacy fallback)
+    new_briefs_root = tmp_path / "new-briefs"
+
+    def patched_briefs_dir(proj: object) -> Path:
+        return new_briefs_root / proj.slug / "daily-briefs"  # type: ignore[union-attr]
+
+    def patched_legacy_briefs_dir(proj: object) -> Path:
+        return Path(proj.path) / ".claude" / "daily-briefs"  # type: ignore[union-attr]
+
+    monkeypatch.setattr(mig._cfg, "briefs_dir", patched_briefs_dir)
+    monkeypatch.setattr(mig._cfg, "legacy_briefs_dir", patched_legacy_briefs_dir)
+
     return config_path, project_path
 
 
@@ -309,16 +326,16 @@ class TestApplyMode:
         assert data["status"] in ("warning", "error")
 
     def test_apply_skips_non_date_filenames(
-        self, tmp_path: Path, capsys: pytest.CaptureFixture
+        self, tmp_path: Path, capsys: pytest.CaptureFixture, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         """Non-date filenames like README.md are skipped during discovery."""
         config_path = tmp_path / "daily-brief.yml"
         project_path = tmp_path / "proj"
-        briefs_dir = project_path / ".claude" / "daily-briefs"
-        briefs_dir.mkdir(parents=True)
-        (briefs_dir / "2026-04-25.md").write_text("# Valid brief")
-        (briefs_dir / "README.md").write_text("# Not a brief")
-        (briefs_dir / "notes.txt").write_text("some notes")
+        legacy_dir = project_path / ".claude" / "daily-briefs"
+        legacy_dir.mkdir(parents=True)
+        (legacy_dir / "2026-04-25.md").write_text("# Valid brief")
+        (legacy_dir / "README.md").write_text("# Not a brief")
+        (legacy_dir / "notes.txt").write_text("some notes")
 
         data = {
             "projects": [
@@ -334,6 +351,18 @@ class TestApplyMode:
         }
         with config_path.open("w") as fh:
             yaml.dump(data, fh)
+
+        # Patch briefs_dir to return non-existent path; legacy_briefs_dir returns legacy_dir
+        new_briefs_root = tmp_path / "new-briefs"
+
+        def patched_briefs_dir(proj: object) -> Path:
+            return new_briefs_root / proj.slug / "daily-briefs"  # type: ignore[union-attr]
+
+        def patched_legacy_briefs_dir(proj: object) -> Path:
+            return Path(proj.path) / ".claude" / "daily-briefs"  # type: ignore[union-attr]
+
+        monkeypatch.setattr(mig._cfg, "briefs_dir", patched_briefs_dir)
+        monkeypatch.setattr(mig._cfg, "legacy_briefs_dir", patched_legacy_briefs_dir)
 
         with patch.object(mig._ob_mod, "_save_to_open_brain"):
             with patch.object(mig._ob_mod, "_read_from_open_brain", return_value=None):
@@ -356,13 +385,26 @@ class TestProjectFilter:
         minimal_config: Path,
         tmp_path: Path,
         capsys: pytest.CaptureFixture,
+        monkeypatch: pytest.MonkeyPatch,
     ) -> None:
         """--project filters discovery to the specified project only."""
-        # Create briefs for both projects
+        # Create briefs for both projects in the legacy location
         for proj in ["claude-code-plugins", "mira"]:
-            briefs_dir = tmp_path / proj / ".claude" / "daily-briefs"
-            briefs_dir.mkdir(parents=True)
-            (briefs_dir / "2026-04-25.md").write_text(f"# {proj} brief")
+            legacy_dir = tmp_path / proj / ".claude" / "daily-briefs"
+            legacy_dir.mkdir(parents=True)
+            (legacy_dir / "2026-04-25.md").write_text(f"# {proj} brief")
+
+        # Patch briefs_dir to non-existent; legacy_briefs_dir returns old location
+        new_briefs_root = tmp_path / "new-briefs"
+
+        def patched_briefs_dir(proj: object) -> Path:
+            return new_briefs_root / proj.slug / "daily-briefs"  # type: ignore[union-attr]
+
+        def patched_legacy_briefs_dir(proj: object) -> Path:
+            return Path(proj.path) / ".claude" / "daily-briefs"  # type: ignore[union-attr]
+
+        monkeypatch.setattr(mig._cfg, "briefs_dir", patched_briefs_dir)
+        monkeypatch.setattr(mig._cfg, "legacy_briefs_dir", patched_legacy_briefs_dir)
 
         with patch.object(mig._ob_mod, "_save_to_open_brain"):
             with patch.object(mig._ob_mod, "_read_from_open_brain", return_value=None):

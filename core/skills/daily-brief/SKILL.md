@@ -68,7 +68,7 @@ open-brain (primary):
   type=daily_brief, project=<slug>, session_ref=daily-brief-{slug}-{date}
   metadata: {do_not_compact: true, schema_version: "1.5"}
 
-<project>/.claude/daily-briefs/ (opt-in, --persist-disk only):
+~/.claude/projects/<slug>/daily-briefs/ (opt-in, --persist-disk only):
   2026-04-24.md
   2026-04-23.md
   ...
@@ -217,7 +217,7 @@ Prose paragraphs, not bullet lists (except Evidence). Empty day: `Ruhiger Tag �
 - `--since YYYY-MM-DD [--until YYYY-MM-DD]` — range mode
 - `--range START END` — explicit date range
 - `--detailed` — raises word cap to ~300 words/project; full per-day sections in range
-- `--no-persist` — skip writing brief to `<project>/.claude/daily-briefs/YYYY-MM-DD.md`
+- `--no-persist` — skip writing brief to `~/.claude/projects/<slug>/daily-briefs/YYYY-MM-DD.md`
 - `--config PATH` — optional config file override
 
 **Single day:**
