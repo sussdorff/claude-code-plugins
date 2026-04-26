@@ -2,6 +2,7 @@
 
 ### 📚 Documentation
 
+- *(CCP-db1)* **Daily-brief v1.1: Entscheidungsbedarf + Drift- und Rework-Signale** — two new sections: Entscheidungsbedarf (Decisions Needed) renders only explicit source signals (decision_requests, pending decisions, Decide/Need input followups), with clear empty state. Drift- und Rework-Signale (Drift & Rework) detects revert commits and supersede/reopen events, semantically distinct from Open Loops. Both sections documented in data-sources.md with source tagging rules and acceptance criteria. Sample output updated to v1.1.
 - *(CCP-pof)* UAT audit of 44 projects, cross-repo fixture design strategy, and per-project-type UAT standard (`docs/architecture/uat-audit-2026.md`, `standards/workflow/uat-fixtures.md`)
 
 ### 🚀 Features
