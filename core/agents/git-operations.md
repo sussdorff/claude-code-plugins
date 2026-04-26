@@ -3,6 +3,7 @@ name: git-operations
 description: Performs git operations - commit, push, force-push, merge, tag
 tools:
   - Bash
+permissionMode: ask
 ---
 
 # Git Operations Subagent

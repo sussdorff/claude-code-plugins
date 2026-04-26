@@ -9,6 +9,7 @@ tools: Read, Write, Edit, Bash, Grep, Glob, Agent
 model: sonnet
 system_prompt_file: malte/system-prompts/agents/bead-orchestrator.md
 cache_control: ephemeral
+permissionMode: ask
 ---
 
 # Quick-Fix Agent
