@@ -154,7 +154,76 @@ Cover: empty inputs, maximum scale, concurrent operations, partial failures, tim
 - Backward compatibility constraints
 - Feature flags or phased rollout needs
 
-## Section 11: Open Questions / Risks (10-25 lines)
+## Section 11: Behavioral Contract (20-40 lines)
+
+Declarative statements mapping triggers to system responses. Each statement must be verifiable in isolation. No implementation details — only observable inputs and outputs.
+
+Format each statement as one of:
+
+- `When [trigger/condition], the system [action/response].`
+- `When [condition], the system MUST NOT [action].`
+
+Guidance:
+- One trigger maps to exactly one system response per statement.
+- Cover the happy path, primary error conditions, and boundary inputs.
+- MUST NOT statements belong here when they describe observable behavior; move them to Section 12 when they are design constraints rather than response rules.
+- Example: "When a user submits a form with a missing required field, the system returns a validation error listing all missing fields without submitting the form."
+- Example: "When the external payment service is unreachable, the system MUST NOT silently succeed — it must return a retryable error to the caller."
+
+Target 8-15 contract statements.
+
+## Section 12: Explicit Non-Behaviors (15-25 lines)
+
+Constraints that an implementing agent might violate while trying to be "helpful." Each non-behavior states what the system must not do and why the constraint exists.
+
+Format each as:
+
+- `The system MUST NOT [action]. Reason: [why this constraint exists].`
+
+Guidance:
+- Focus on plausible-but-wrong behaviors: auto-formatting, auto-sorting, auto-normalizing, silent type coercion, adding unrequested features.
+- Cover non-behaviors at API boundaries (what the system must not return or accept), state transitions (what the system must not do mid-operation), and side effects (what the system must not trigger implicitly).
+- Example: "The system MUST NOT reformat user-supplied text. Reason: downstream consumers depend on the original whitespace and encoding."
+- Example: "The system MUST NOT auto-retry a failed external call without the caller's knowledge. Reason: retry storms during outages."
+
+Target 4-8 MUST NOT statements.
+
+## Section 13: Integration Boundaries (20-35 lines)
+
+One subsection per external system or service this feature integrates with. Document both what flows in/out and what happens when the integration fails.
+
+Format each as:
+
+```markdown
+### [External System Name]
+- **Data Flow In**: [what this feature sends to the system]
+- **Data Flow Out**: [what this feature receives from the system]
+- **Failure Mode**: [behavior when the system is unavailable or returns an error]
+- **Timeout Strategy**: [how long to wait; what happens on timeout]
+```
+
+Guidance:
+- If a system has no outbound flow (write-only), document that explicitly: "Data Flow Out: none."
+- Failure Mode must be concrete: "returns cached value", "returns 503 to caller", "enqueues for retry", not "handles gracefully."
+- If there are no external integrations, write: "This feature has no external integration boundaries. Internal couplings are documented in Section 10."
+
+## Section 14: Ambiguity Warnings (10-20 lines)
+
+Items that are NOT yet Open Questions (they may not require user decisions) but where a implementing agent would likely make a silent assumption that could be wrong. These are spec gaps that could produce plausible-but-incorrect implementations.
+
+Format each as:
+
+- `**AW-[N]**: [What is ambiguous] — [Likely agent assumption if unresolved] — [Question to resolve it]`
+
+Guidance:
+- Distinguish from Open Questions (OQ): OQs are known unknowns the user must decide. AW items are gaps where an agent would fill in a default that might be wrong.
+- Every unresolved AW item increases implementation risk. Aim to resolve AW items before handoff.
+- Example: "**AW-1**: The spec says 'notify the user' but does not specify channel — Likely agent assumption: send an in-app notification — Question: Should this be in-app, email, or both?"
+- Example: "**AW-2**: Pagination strategy is unspecified for the list endpoint — Likely agent assumption: offset-based pagination — Question: Is cursor-based pagination required for consistency with other endpoints?"
+
+Target 3-6 ambiguity warnings.
+
+## Section 15: Open Questions / Risks (10-25 lines)
 
 Items that surfaced during Q&A but remain unresolved:
 
@@ -164,7 +233,7 @@ Items that surfaced during Q&A but remain unresolved:
 
 Include risk level (High / Medium / Low) and suggested resolution timeline.
 
-## Section 12: Glossary (5-15 lines)
+## Section 16: Glossary (5-15 lines)
 
 Domain-specific terms used in this spec:
 
@@ -190,6 +259,10 @@ Domain-specific terms used in this spec:
 | Error Handling | 20-40 |
 | Edge Cases | 30-50 |
 | Dependencies | 15-30 |
+| Behavioral Contract | 20-40 |
+| Explicit Non-Behaviors | 15-25 |
+| Integration Boundaries | 20-35 |
+| Ambiguity Warnings | 10-20 |
 | Open Questions | 10-25 |
 | Glossary | 5-15 |
-| **Total** | **290-540 + header/spacing = 500-700** |
+| **Total** | **360-670 + header/spacing = 550-800** |
