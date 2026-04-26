@@ -59,6 +59,7 @@ def _make_data(
     commits: list[dict[str, Any]] | None = None,
     sessions: list[dict[str, Any]] | None = None,
     decisions: list[dict[str, Any]] | None = None,
+    decision_requests: list[dict[str, Any]] | None = None,
     followups: list[dict[str, Any]] | None = None,
     warnings: list[dict[str, Any]] | None = None,
     rework_signals: list[dict[str, Any]] | None = None,
@@ -74,7 +75,7 @@ def _make_data(
         "commits": commits or [],
         "sessions": sessions or [],
         "decisions": decisions or [],
-        "decision_requests": [],
+        "decision_requests": decision_requests or [],
         "followups": followups or [],
         "rework_signals": rework_signals or [],
         "warnings": warnings or [],
@@ -632,3 +633,289 @@ class TestCLIArgParsing:
                 ])
         assert rc == 0
         assert len(output_buf.getvalue()) > 0
+
+
+# ---------------------------------------------------------------------------
+# Section: Entscheidungsbedarf (Decisions Needed) — AK1, AK3
+# ---------------------------------------------------------------------------
+
+
+class TestDecisionsNeeded:
+    """_render_decisions_needed produces correct output."""
+
+    def test_empty_state_returns_keine_offenen_entscheidungen(self) -> None:
+        """AK1: empty state message when no decision signals present."""
+        data = _make_data()
+        output = rb._render_decisions_needed(data, "proj", "2026-04-23")
+        assert "Keine offenen Entscheidungen erfasst." in output
+
+    def test_decision_request_bead_renders_with_source_tag(self) -> None:
+        """AK1: bd human bead appears with decision-request source tag."""
+        data = _make_data(
+            decision_requests=[{"id": "CCP-xyz", "title": "Decide: which deployment target"}]
+        )
+        output = rb._render_decisions_needed(data, "proj", "2026-04-23")
+        assert "CCP-xyz" in output
+        assert "decision-request" in output
+
+    def test_pending_ob_decision_renders(self) -> None:
+        """AK1: open-brain decision with status=pending appears."""
+        decisions = [
+            {
+                "id": "dec-001",
+                "title": "Should we migrate to Gas City?",
+                "metadata": {"status": "pending"},
+            }
+        ]
+        data = _make_data(decisions=decisions)
+        output = rb._render_decisions_needed(data, "proj", "2026-04-23")
+        assert "dec-001" in output or "Gas City" in output
+        assert "ob-decision" in output
+
+    def test_decide_followup_renders(self) -> None:
+        """AK1: followup with type Decide appears in decisions."""
+        followups = [{"type": "Decide", "text": "which approach to use for routing"}]
+        data = _make_data(followups=followups)
+        output = rb._render_decisions_needed(data, "proj", "2026-04-23")
+        assert "routing" in output
+        assert "followup-decide" in output
+
+    def test_need_input_followup_renders(self) -> None:
+        """AK1: followup with type 'Need input' also appears in decisions."""
+        followups = [{"type": "Need input", "text": "confirm API rate limits"}]
+        data = _make_data(followups=followups)
+        output = rb._render_decisions_needed(data, "proj", "2026-04-23")
+        assert "API rate limits" in output
+        assert "followup-decide" in output
+
+    def test_non_pending_decision_not_rendered(self) -> None:
+        """AK3: decisions without status=pending must NOT appear."""
+        decisions = [
+            {
+                "id": "dec-closed",
+                "title": "Already resolved decision",
+                "metadata": {"status": "closed"},
+            }
+        ]
+        data = _make_data(decisions=decisions)
+        output = rb._render_decisions_needed(data, "proj", "2026-04-23")
+        assert "dec-closed" not in output
+        assert "Keine offenen Entscheidungen erfasst." in output
+
+    def test_follow_up_prefix_not_in_decisions_needed(self) -> None:
+        """AK3: Follow-up (not Decide/Need input) must NOT appear in decisions."""
+        followups = [{"type": "Follow-up", "text": "check deployment status"}]
+        data = _make_data(followups=followups)
+        output = rb._render_decisions_needed(data, "proj", "2026-04-23")
+        # Follow-up type should not make it into decisions needed
+        assert "deployment status" not in output
+        assert "Keine offenen Entscheidungen erfasst." in output
+
+    def test_source_category_cited(self) -> None:
+        """AK1: source tag present for each item."""
+        data = _make_data(
+            decision_requests=[{"id": "CCP-req", "title": "Approve infra change"}]
+        )
+        output = rb._render_decisions_needed(data, "proj", "2026-04-23")
+        assert "Quelle:" in output
+
+    def test_heading_is_entscheidungsbedarf(self) -> None:
+        """Section heading must be Entscheidungsbedarf."""
+        data = _make_data()
+        output = rb._render_decisions_needed(data, "proj", "2026-04-23")
+        assert "## Entscheidungsbedarf" in output
+
+
+# ---------------------------------------------------------------------------
+# Section: Drift- und Rework-Signale (Drift & Rework) — AK2
+# ---------------------------------------------------------------------------
+
+
+class TestDriftReworkSignals:
+    """_render_drift_rework produces correct output."""
+
+    def test_empty_state_returns_keine_drift_signale(self) -> None:
+        """AK2: empty state message when no rework signals present."""
+        data = _make_data()
+        output = rb._render_drift_rework(data, "proj", "2026-04-23")
+        assert "Keine Drift- oder Rework-Signale erkannt." in output
+
+    def test_revert_commit_detected(self) -> None:
+        """AK2: revert commit signal appears with correct source tag."""
+        rework_signals = [
+            {"type": "revert_commit", "sha": "abc12345", "subject": "Revert feat: add feature X"}
+        ]
+        data = _make_data(rework_signals=rework_signals)
+        output = rb._render_drift_rework(data, "proj", "2026-04-23")
+        assert "abc12345" in output
+        assert "revert-commit" in output
+
+    def test_supersede_event_detected(self) -> None:
+        """AK2: supersede event appears with correct source tag."""
+        rework_signals = [
+            {"type": "supersede_event", "bead_id": "CCP-old", "title": "Old feature"}
+        ]
+        data = _make_data(rework_signals=rework_signals)
+        output = rb._render_drift_rework(data, "proj", "2026-04-23")
+        assert "CCP-old" in output
+        assert "supersede-event" in output
+
+    def test_reopen_event_detected(self) -> None:
+        """AK2: reopen event appears with correct source tag."""
+        rework_signals = [
+            {"type": "reopen_event", "bead_id": "CCP-reopen", "title": "Reopened bead"}
+        ]
+        data = _make_data(rework_signals=rework_signals)
+        output = rb._render_drift_rework(data, "proj", "2026-04-23")
+        assert "CCP-reopen" in output
+        assert "reopen-event" in output
+
+    def test_source_id_cited(self) -> None:
+        """Source ID must be cited in output."""
+        rework_signals = [
+            {"type": "supersede_event", "bead_id": "CCP-sup", "title": "Superseded bead"}
+        ]
+        data = _make_data(rework_signals=rework_signals)
+        output = rb._render_drift_rework(data, "proj", "2026-04-23")
+        assert "CCP-sup" in output
+        assert "Quelle:" in output
+
+    def test_heading_is_drift_und_rework_signale(self) -> None:
+        """Section heading must be Drift- und Rework-Signale."""
+        data = _make_data()
+        output = rb._render_drift_rework(data, "proj", "2026-04-23")
+        assert "## Drift- und Rework-Signale" in output
+
+
+# ---------------------------------------------------------------------------
+# Semantic distinction: Open Loops vs Drift & Rework — AK4
+# ---------------------------------------------------------------------------
+
+
+class TestSemanticDistinction:
+    """Open Loops and Drift & Rework remain semantically distinct."""
+
+    def test_open_loops_and_drift_rework_do_not_overlap(self) -> None:
+        """AK4: An open bead must not appear in the Drift & Rework section."""
+        open_bead = _make_open_bead("CCP-in-flight", "currently in flight")
+        rework_signal = {"type": "revert_commit", "sha": "dead1234", "subject": "Revert something"}
+        data = _make_data(open_beads=[open_bead], rework_signals=[rework_signal])
+
+        open_loops_out = rb._render_open_loops(data, "proj", "2026-04-23")
+        drift_out = rb._render_drift_rework(data, "proj", "2026-04-23")
+
+        # open bead should be in open loops
+        assert "CCP-in-flight" in open_loops_out
+        # open bead must NOT be in drift section
+        assert "CCP-in-flight" not in drift_out
+
+    def test_open_loops_bead_not_in_drift_section(self) -> None:
+        """AK4: drift section only contains rework_signals, not open_beads."""
+        open_bead = _make_open_bead("CCP-open-only", "only in open loops")
+        data = _make_data(open_beads=[open_bead])
+
+        drift_out = rb._render_drift_rework(data, "proj", "2026-04-23")
+        assert "CCP-open-only" not in drift_out
+        assert "Keine Drift- oder Rework-Signale erkannt." in drift_out
+
+    def test_revert_commit_not_in_open_loops(self) -> None:
+        """AK4: revert commits must not bleed into Open Loops."""
+        rework_signals = [
+            {"type": "revert_commit", "sha": "cafe5678", "subject": "Revert: remove X"}
+        ]
+        data = _make_data(rework_signals=rework_signals)
+
+        open_loops_out = rb._render_open_loops(data, "proj", "2026-04-23")
+        assert "cafe5678" not in open_loops_out
+        assert "revert_commit" not in open_loops_out
+
+
+# ---------------------------------------------------------------------------
+# render_single_day v1.1 — AK5: sample output updated
+# ---------------------------------------------------------------------------
+
+
+class TestRenderSingleDayV11:
+    """render_single_day includes v1.1 sections."""
+
+    def _mock_fetch(self, data: dict[str, Any]) -> MagicMock:
+        envelope = {
+            "status": "ok",
+            "summary": "test",
+            "data": data,
+            "errors": [],
+            "next_steps": [],
+            "open_items": [],
+            "meta": {"contract_version": "1", "producer": "test"},
+        }
+        return MagicMock(return_value=envelope)
+
+    def test_decisions_needed_section_present(self, tmp_path: Path) -> None:
+        """v1.1 Entscheidungsbedarf section appears in single-day output."""
+        data = _make_data(
+            decision_requests=[{"id": "CCP-req1", "title": "Approve the plan"}]
+        )
+        config_path = tmp_path / "daily-brief.yml"
+
+        with patch.object(rb, "_fetch_envelope", self._mock_fetch(data)), \
+             patch.object(rb, "_fetch_capabilities", return_value=[]):
+            brief = rb.render_single_day(
+                "proj", "2026-04-23", config_path, persist=False
+            )
+
+        assert "## Entscheidungsbedarf" in brief
+
+    def test_drift_rework_section_present(self, tmp_path: Path) -> None:
+        """v1.1 Drift- und Rework-Signale section appears in single-day output."""
+        data = _make_data(
+            rework_signals=[{"type": "revert_commit", "sha": "abcd1234", "subject": "Revert X"}]
+        )
+        config_path = tmp_path / "daily-brief.yml"
+
+        with patch.object(rb, "_fetch_envelope", self._mock_fetch(data)), \
+             patch.object(rb, "_fetch_capabilities", return_value=[]):
+            brief = rb.render_single_day(
+                "proj", "2026-04-23", config_path, persist=False
+            )
+
+        assert "## Drift- und Rework-Signale" in brief
+
+    def test_v11_section_ordering_after_open_loops(self, tmp_path: Path) -> None:
+        """AK5: Entscheidungsbedarf and Drift sections appear after Offene Fäden."""
+        data = _make_data(
+            open_beads=[_make_open_bead("CCP-fl", "in-flight")],
+            decision_requests=[{"id": "CCP-d1", "title": "Pick a strategy"}],
+            rework_signals=[{"type": "supersede_event", "bead_id": "CCP-sup", "title": "old"}],
+        )
+        config_path = tmp_path / "daily-brief.yml"
+
+        with patch.object(rb, "_fetch_envelope", self._mock_fetch(data)), \
+             patch.object(rb, "_fetch_capabilities", return_value=[]):
+            brief = rb.render_single_day(
+                "proj", "2026-04-23", config_path, persist=False
+            )
+
+        lines = brief.splitlines()
+        headings = [l for l in lines if l.startswith("## ")]
+        open_loops_idx = next(
+            (i for i, h in enumerate(headings) if "Offene Fäden" in h), -1
+        )
+        decisions_idx = next(
+            (i for i, h in enumerate(headings) if "Entscheidungsbedarf" in h), -1
+        )
+        drift_idx = next(
+            (i for i, h in enumerate(headings) if "Drift" in h), -1
+        )
+        next_moves_idx = next(
+            (i for i, h in enumerate(headings) if "Nächste" in h), -1
+        )
+
+        assert open_loops_idx != -1, "Offene Fäden heading missing"
+        assert decisions_idx != -1, "Entscheidungsbedarf heading missing"
+        assert drift_idx != -1, "Drift heading missing"
+        assert next_moves_idx != -1, "Nächste sinnvolle Schritte heading missing"
+
+        # Ordering: open_loops < decisions < drift < next_moves
+        assert open_loops_idx < decisions_idx
+        assert decisions_idx < drift_idx
+        assert drift_idx < next_moves_idx
