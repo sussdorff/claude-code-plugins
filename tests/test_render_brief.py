@@ -289,8 +289,8 @@ class TestNextBestMoves:
         assert len(item_lines) <= 1
 
     def test_session_followup_cited(self) -> None:
-        """Session followup items cite their source."""
-        followups = [{"type": "Decide", "text": "which approach to take"}]
+        """Session followup items (type Follow-up) cite their source."""
+        followups = [{"type": "Follow-up", "text": "which approach to take"}]
         data = _make_data(followups=followups)
         output = rb._render_next_best_moves(data, "proj", "2026-04-23")
         assert "session-followup" in output
@@ -339,6 +339,14 @@ class TestEvidence:
         data = _make_data()
         output = rb._render_evidence(data, "myproject", "2026-04-23")
         assert "Belege" in output
+
+    def test_evidence_includes_decision_requests(self) -> None:
+        """Regression: decision_requests must appear in Evidence section."""
+        dr = {"id": "CCP-req99", "title": "Approve migration plan"}
+        data = _make_data(decision_requests=[dr])
+        output = rb._render_evidence(data, "proj", "2026-04-23")
+        assert "CCP-req99" in output
+        assert "decision-request/" in output
 
 
 # ---------------------------------------------------------------------------
@@ -725,6 +733,15 @@ class TestDecisionsNeeded:
         output = rb._render_decisions_needed(data, "proj", "2026-04-23")
         assert "## Entscheidungsbedarf" in output
 
+    def test_decide_followup_not_in_next_best_moves(self) -> None:
+        """Regression: followup with type Decide must NOT appear in Next Best Moves."""
+        followups = [{"type": "Decide", "text": "which deployment strategy to use"}]
+        data = _make_data(followups=followups)
+        next_moves_out = rb._render_next_best_moves(data, "proj", "2026-04-23")
+        # Decide type must not bleed into Next Best Moves
+        assert "deployment strategy" not in next_moves_out
+        assert "Decide" not in next_moves_out or "Keine" in next_moves_out
+
 
 # ---------------------------------------------------------------------------
 # Section: Drift- und Rework-Signale (Drift & Rework) — AK2
@@ -785,6 +802,18 @@ class TestDriftReworkSignals:
         data = _make_data()
         output = rb._render_drift_rework(data, "proj", "2026-04-23")
         assert "## Drift- und Rework-Signale" in output
+
+    def test_unknown_signal_type_rendered_as_fallback(self) -> None:
+        """Unknown rework signal types fall through to the generic fallback branch."""
+        rework_signals = [
+            {"type": "scope_change", "bead_id": "CCP-sc1", "title": "Scope changed"}
+        ]
+        data = _make_data(rework_signals=rework_signals)
+        output = rb._render_drift_rework(data, "proj", "2026-04-23")
+        # Should render (not empty) and include the bead_id with the unknown type as label
+        assert "CCP-sc1" in output
+        assert "scope_change" in output
+        assert "Keine Drift- oder Rework-Signale erkannt." not in output
 
 
 # ---------------------------------------------------------------------------

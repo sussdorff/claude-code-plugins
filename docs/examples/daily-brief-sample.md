@@ -200,18 +200,6 @@ Open Loops / Next Best Moves / Evidence.
 
 39 Feature-Beads (wurden geschlossen: CCP-vwg, CCP-2hd u.a.) erweitern den Funktionsumfang direkt. Die erkannten Capability-Signale zeigen, was durch die abgeschlossene Arbeit jetzt möglich geworden ist.
 
-## Entscheidungsbedarf — claude-code-plugins (2026-04-18 bis 2026-04-24)
-
-- **CCP-db2**: [FEAT] daily-brief v1.2: Conversation Starters *(Quelle: decision-request)*
-- **Decide**: Soll der wave-orchestrator auf Gas City migriert werden, oder wird der bestehende Scheduler weitergenutzt bis zum Spike-Abschluss? *(Quelle: followup-decide)*
-
-## Drift- und Rework-Signale — claude-code-plugins (2026-04-18 bis 2026-04-24)
-
-- `abc1234f` Revert "feat(wave): auto-recovery on stall detected" *(Quelle: revert-commit)*
-- **CCP-k1u**: conformance-reviewer agent: Phase 0 gate reading Critical Invariants from project-context *(Quelle: supersede-event)*
-- **CCP-660**: Layer tagging on beads: optional schema field + /create enforcement when layers declared *(Quelle: supersede-event)*
-- **CCP-u87**: Reading Corpus section in /project-context template + bead-orchestrator surfacing *(Quelle: supersede-event)*
-
 ## Offene Fäden — claude-code-plugins (2026-04-18 bis 2026-04-24)
 
 **In Bearbeitung / Bereit (33):**
@@ -234,6 +222,18 @@ Open Loops / Next Best Moves / Evidence.
 - **CCP-db2**: [FEAT] daily-brief v1.2: Conversation Starters
 - **CCP-8wm**: PermissionDenied v2 — interactive-deny learning via PreToolUse-block parsing
 - **CCP-beu**: [security] Add PreToolUse Skill gate for high-value skills
+
+## Entscheidungsbedarf — claude-code-plugins (2026-04-18 bis 2026-04-24)
+
+- **CCP-db2**: [FEAT] daily-brief v1.2: Conversation Starters *(Quelle: decision-request)*
+- **Decide**: Soll der wave-orchestrator auf Gas City migriert werden, oder wird der bestehende Scheduler weitergenutzt bis zum Spike-Abschluss? *(Quelle: followup-decide)*
+
+## Drift- und Rework-Signale — claude-code-plugins (2026-04-18 bis 2026-04-24)
+
+- `abc1234f` Revert "feat(wave): auto-recovery on stall detected" *(Quelle: revert-commit)*
+- **CCP-k1u**: conformance-reviewer agent: Phase 0 gate reading Critical Invariants from project-context *(Quelle: supersede-event)*
+- **CCP-660**: Layer tagging on beads: optional schema field + /create enforcement when layers declared *(Quelle: supersede-event)*
+- **CCP-u87**: Reading Corpus section in /project-context template + bead-orchestrator surfacing *(Quelle: supersede-event)*
 
 ## Nächste sinnvolle Schritte — claude-code-plugins (2026-04-18 bis 2026-04-24)
 

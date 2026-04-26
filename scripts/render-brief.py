@@ -56,6 +56,11 @@ import config as _cfg  # noqa: E402  (after sys.path manipulation)
 _EMPTY_DAY_MSG = "Ruhiger Tag — keine Aktivität verzeichnet."
 _WORD_SOFT_CAP = 150
 _WORD_SOFT_CAP_DETAILED = 300
+_TYPE_LABEL: dict[str, str] = {
+    "revert_commit": "revert-commit",
+    "supersede_event": "supersede-event",
+    "reopen_event": "reopen-event",
+}
 
 
 # ---------------------------------------------------------------------------
@@ -471,12 +476,6 @@ def _render_drift_rework(
 
     lines: list[str] = [f"## Drift- und Rework-Signale — {project} ({date})", ""]
 
-    _TYPE_LABEL: dict[str, str] = {
-        "revert_commit": "revert-commit",
-        "supersede_event": "supersede-event",
-        "reopen_event": "reopen-event",
-    }
-
     items: list[str] = []
     for signal in rework_signals:
         signal_type = signal.get("type", "")
@@ -530,8 +529,10 @@ def _render_next_best_moves(
         title = bead.get("title", "(kein Titel)")
         moves.append(("ready-bead", f"**{bead_id}**: {title}"))
 
-    # Up to 1 from followups (explicit session follow-up)
-    for fu in followups[:1]:
+    # Up to 1 from followups (explicit session follow-up — type "Follow-up" only)
+    # "Decide" and "Need input" types go to Entscheidungsbedarf, not here.
+    plain_followups = [fu for fu in followups if fu.get("type") == "Follow-up"]
+    for fu in plain_followups[:1]:
         fu_type = fu.get("type", "Follow-up")
         fu_text = fu.get("text", "")
         if fu_text:
@@ -565,12 +566,13 @@ def _render_evidence(
     commits = data.get("commits", [])
     sessions = data.get("sessions", [])
     decisions = data.get("decisions", [])
+    decision_requests = data.get("decision_requests", [])
     warnings = data.get("warnings", [])
     rework_signals = data.get("rework_signals", [])
 
     lines: list[str] = [f"## Belege — {project} ({date})", ""]
 
-    if not any([closed_beads, commits, sessions, decisions, warnings, rework_signals]):
+    if not any([closed_beads, commits, sessions, decisions, decision_requests, warnings, rework_signals]):
         lines.append("*(keine Belege für diesen Tag)*")
         lines.append("")
         return "\n".join(lines)
@@ -603,6 +605,12 @@ def _render_evidence(
         decision_id = decision.get("id", "?")
         title = decision.get("title", "?")
         lines.append(f"- decision/{decision_id}: {title}")
+
+    # Decision requests
+    for dr in decision_requests[:3]:
+        dr_id = dr.get("id", "?")
+        title = dr.get("title", "?")
+        lines.append(f"- decision-request/{dr_id}: {title}")
 
     # Rework signals
     for signal in rework_signals[:3]:
