@@ -91,11 +91,22 @@ synthesis or paraphrasing. The content is a factual enumeration.
 |----------------|---------------|-----------------|
 | `## Was sich verändert hat` | `closed_beads` | `commits`, capability signals |
 | `## Offene Fäden` | `open_beads`, `blocked_beads` | — |
-| `## Nächste sinnvolle Schritte` | `ready_beads` (≤2 items) | `followups` (≤1 item) |
-| `## Belege` | all sources | warnings |
+| `## Entscheidungsbedarf` | `decision_requests`, `decisions` (status=pending), `followups` (Decide:/Need input: prefix) | — |
+| `## Drift- und Rework-Signale` | `rework_signals` (revert_commit, supersede_event, reopen_event) | — |
+| `## Nächste sinnvolle Schritte` | `ready_beads` (≤2 items) | `followups` (Follow-up: prefix only, ≤1 item) |
+| `## Belege` | all sources | warnings, decision_requests |
 
 Deterministic sections are reproducible: running the same query twice for the
 same project+date produces identical output (assuming source data is stable).
+
+**Explicit-source contract (v1.1):** `## Entscheidungsbedarf` renders **only** items with an
+explicit source signal. It never infers decisions from prose in sessions, commits, or closed beads.
+If no explicit signal exists, it renders the empty-state string `Keine offenen Entscheidungen erfasst.`
+
+**Semantic boundary (v1.1):** `## Offene Fäden` and `## Drift- und Rework-Signale` are
+semantically distinct. Open Loops lists beads currently in-flight (open/blocked — not yet finished).
+Drift & Rework lists work that **regressed** (finished work reversed, scope replaced, or work
+reopened after being closed). These sections read from disjoint source fields and must not overlap.
 
 ### Synthesized Sections
 
@@ -119,6 +130,8 @@ For `--since=Nd` or `--range=START..END`, the brief is a **compressed rollup**:
 - **Executive Summary**: one summary spanning the entire date range (aggregated counts)
 - **Was sich verändert hat**: grouped by day (`### YYYY-MM-DD` sub-headings)
 - **Offene Fäden**: snapshot at the end of the range (not per-day)
+- **Entscheidungsbedarf**: snapshot at the end of the range — `decision_requests` is always taken from last day (point-in-time bd human list, not accumulated)
+- **Drift- und Rework-Signale**: union of all rework_signals across the range (each revert/supersede/reopen event is time-stamped)
 - **Nächste sinnvolle Schritte**: snapshot at the end of the range (not per-day)
 - **Belege**: union of all evidence across the range
 
