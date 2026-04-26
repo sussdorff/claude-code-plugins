@@ -194,10 +194,10 @@ python3 scripts/capability-extractor.py --project claude-code-plugins --date 202
 
 ## Rendering (scripts/render-brief.py)
 
-The `render-brief.py` script renders a v1.0 Chief-of-Staff markdown report in Voice B
+The `render-brief.py` script renders a v1.1 Chief-of-Staff markdown report in Voice B
 (journalistic narrator, past tense, third-person observational, German).
 
-**v1.0 sections rendered:**
+**v1.1 sections rendered:**
 
 | Section | German heading | Content type |
 |---------|---------------|--------------|
@@ -205,11 +205,46 @@ The `render-brief.py` script renders a v1.0 Chief-of-Staff markdown report in Vo
 | What Changed | `## Was sich verändert hat` | Deterministic from closed_beads + commits |
 | Why It Matters | `## Warum es zählt` | Synthesized prose, only from cited facts |
 | Open Loops | `## Offene Fäden` | Deterministic from open_beads + blocked_beads |
+| Decisions Needed | `## Entscheidungsbedarf` | **v1.1** Explicit sources only — see below |
+| Drift & Rework | `## Drift- und Rework-Signale` | **v1.1** Deterministic from rework_signals |
 | Next Best Moves | `## Nächste sinnvolle Schritte` | Max 3 items: ≤2 from ready_beads, ≤1 from followups |
 | Evidence | `## Belege` | Bullet list: beads/commits/sessions/decisions/warnings |
 
 **Voice B rules:** German, past tense, third-person observational. No first-person pronouns.
 Prose paragraphs, not bullet lists (except Evidence). Empty day: `Ruhiger Tag — keine Aktivität verzeichnet.`
+
+### Entscheidungsbedarf (Decisions Needed) — v1.1
+
+Renders only when explicit source signals are present. NEVER infers decisions from commits,
+closed beads, session prose, or any other implicit source.
+
+**Explicit sources:**
+1. `decision_requests` — beads returned by `bd human list --json` (flagged for human decision)
+2. `decisions` — open-brain entries where `entry["metadata"]["status"] == "pending"`
+3. `followups` — entries with `type == "Decide"` or `type == "Need input"` ONLY
+   (entries with `type == "Follow-up"` are excluded — they belong in Next Best Moves)
+
+**Source tags:** Each item cites `*(Quelle: decision-request)*`, `*(Quelle: ob-decision)*`,
+or `*(Quelle: followup-decide)*`.
+
+**Empty state:** `"Keine offenen Entscheidungen erfasst."`
+
+### Drift- und Rework-Signale (Drift & Rework) — v1.1
+
+Renders only when `rework_signals` are present. Sources are deterministic from the
+`rework_signals` field of the query-sources.py envelope — no other sources are used.
+
+**Signal types:**
+1. `revert_commit` — a git revert commit was detected; renders as `\`sha\` subject *(Quelle: revert-commit)*`
+2. `supersede_event` — a bead was superseded; renders as `**bead_id**: title *(Quelle: supersede-event)*`
+3. `reopen_event` — a bead was closed and then reopened; renders as `**bead_id**: title *(Quelle: reopen-event)*`
+
+**Semantic distinction from Open Loops:**
+- `## Offene Fäden` = beads currently in-flight (open or blocked but not finished)
+- `## Drift- und Rework-Signale` = work that REGRESSED (finished work reversed, or scope changed)
+- These are mutually exclusive: a bead from Open Loops never appears in Drift, and vice versa.
+
+**Empty state:** `"Keine Drift- oder Rework-Signale erkannt."`
 
 **CLI options:**
 - `--project NAME` — project name from daily-brief.yml (required)

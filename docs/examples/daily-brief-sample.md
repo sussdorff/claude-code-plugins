@@ -200,6 +200,18 @@ Open Loops / Next Best Moves / Evidence.
 
 39 Feature-Beads (wurden geschlossen: CCP-vwg, CCP-2hd u.a.) erweitern den Funktionsumfang direkt. Die erkannten Capability-Signale zeigen, was durch die abgeschlossene Arbeit jetzt möglich geworden ist.
 
+## Entscheidungsbedarf — claude-code-plugins (2026-04-18 bis 2026-04-24)
+
+- **CCP-db2**: [FEAT] daily-brief v1.2: Conversation Starters *(Quelle: decision-request)*
+- **Decide**: Soll der wave-orchestrator auf Gas City migriert werden, oder wird der bestehende Scheduler weitergenutzt bis zum Spike-Abschluss? *(Quelle: followup-decide)*
+
+## Drift- und Rework-Signale — claude-code-plugins (2026-04-18 bis 2026-04-24)
+
+- `abc1234f` Revert "feat(wave): auto-recovery on stall detected" *(Quelle: revert-commit)*
+- **CCP-k1u**: conformance-reviewer agent: Phase 0 gate reading Critical Invariants from project-context *(Quelle: supersede-event)*
+- **CCP-660**: Layer tagging on beads: optional schema field + /create enforcement when layers declared *(Quelle: supersede-event)*
+- **CCP-u87**: Reading Corpus section in /project-context template + bead-orchestrator surfacing *(Quelle: supersede-event)*
+
 ## Offene Fäden — claude-code-plugins (2026-04-18 bis 2026-04-24)
 
 **In Bearbeitung / Bereit (33):**
@@ -373,6 +385,37 @@ Verified:
 
 This confirms the compressed rollup behavior specified in the Product Contract.
 
+### Entscheidungsbedarf (Decisions Needed) — v1.1
+
+**Contract:** Explicit sources only: decision_requests (bd human list), open-brain decisions with status=pending, followups with type Decide or Need input. No LLM inference.
+
+**Sample assessment:** PASS
+
+The sample contains:
+- A decision_request bead (CCP-db2) with `*(Quelle: decision-request)*` tag
+- A `Decide:` followup from open-brain with `*(Quelle: followup-decide)*` tag
+
+No LLM-inferred strategic decision is present. Each item has an explicit source tag.
+
+**Empty state:** `"Keine offenen Entscheidungen erfasst."` — emitted when no signals present.
+
+### Drift- und Rework-Signale (Drift & Rework) — v1.1
+
+**Contract:** Deterministic from rework_signals field only: revert_commit, supersede_event, reopen_event. Semantically distinct from Open Loops.
+
+**Sample assessment:** PASS
+
+The sample contains:
+- One `revert_commit` entry with commit SHA and `*(Quelle: revert-commit)*` tag
+- Three `supersede_event` entries (CCP-k1u, CCP-660, CCP-u87) matching the Belege rework signals, each with `*(Quelle: supersede-event)*` tag
+
+**Semantic distinction confirmed:**
+- `## Offene Fäden` lists beads currently in-flight (not finished work)
+- `## Drift- und Rework-Signale` lists work that regressed (reversed or scope changed)
+- No bead from Open Loops appears in the Drift section; no rework signal bleeds into Open Loops
+
+**Empty state:** `"Keine Drift- oder Rework-Signale erkannt."` — emitted when rework_signals is empty.
+
 ### Overall Assessment
 
 | Section | Status | Notes |
@@ -381,6 +424,8 @@ This confirms the compressed rollup behavior specified in the Product Contract.
 | Was sich verändert hat | PASS | Deterministic, grouped by day, all 7 days present |
 | Warum es zählt | PASS | Cites Feature bead count and capability signals |
 | Offene Fäden | PASS | Deterministic snapshot, includes blocked count |
+| Entscheidungsbedarf | PASS (v1.1) | Explicit sources only; source tags present; no LLM inference |
+| Drift- und Rework-Signale | PASS (v1.1) | Deterministic from rework_signals; semantically distinct from Open Loops |
 | Nächste sinnvolle Schritte | PASS | 2 items (≤3 cap), source annotated |
 | Belege | PASS | Full audit trail with bead IDs, commit SHAs, rework signals, warnings |
 | Range rollup | PASS | ONE executive summary, per-day What Changed, aggregated rest |
