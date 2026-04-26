@@ -42,16 +42,21 @@ Analysiere die Beschreibung und klassifiziere den Typ anhand dieser Definitionen
 
 ### Entscheidungsbaum
 
+**Default ist `task`** — Feature nur bei expliziten user-sichtbaren Signalen.
+
 ```
 Ist etwas KAPUTT oder FEHLERHAFT?
   → JA: bug
 
-Kann der ENDNUTZER danach etwas NEUES tun/sehen?
-  → JA: feature
+Gibt es explizite user-sichtbare Signale (neues UI, neue User-Action, neuer API-Endpoint)?
+  → JA: feature  ← Hohe Huerde! "User kann danach X tun" muss klar formulierbar sein
   → NEIN: Ist es Routine/Wartung ohne Verhaltensaenderung?
     → JA: chore
-    → NEIN: task
+    → NEIN (default): task
 ```
+
+> Faustregel: Im Zweifel → **task**. Feature nur wenn der Endnutzer danach explizit
+> etwas Neues tun oder sehen kann. Interne APIs, Adapter, Konfiguration, Tooling → task.
 
 ### Groessen-Check
 

@@ -1,6 +1,5 @@
 ---
 name: wave-orchestrator
-model: sonnet
 description: >-
   Orchestrate parallel implementation of multiple beads across cmux panes in dependency-aware
   waves. Use when implementing a whole feature area, dispatching multiple beads at once, or

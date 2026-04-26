@@ -112,6 +112,10 @@ VERSION_STATUS="not_attempted"
 VERSION_TAG=""
 VERSION_VER=""
 
+PUSH_GATE_STATUS="skipped"
+PUSH_GATE_DETAIL=""
+PUSH_GATE_WAITED=0
+
 PUSH_STATUS="not_attempted"
 PUSH_DETAIL=""
 
@@ -181,6 +185,7 @@ case "$MERGE2_RAW" in
           second_merge: {status:$sms, detail:$smd},
           merge_feature: {status:"not_attempted", detail:""},
           version: {status:"not_attempted", tag:"", version:""},
+          push_gate: {status:"not_attempted", detail:"", waited_seconds:0},
           push: {status:"not_attempted", detail:""},
           pipeline: {status:"not_attempted", run_url:""},
           plugin_cache: {status:"not_attempted", detail:""}
@@ -229,6 +234,7 @@ if [[ "$IN_WORKTREE" == "true" && "$BRANCH" != "main" && -n "$MAIN_REPO" ]]; the
           second_merge: {status:$sms, detail:$smd},
           merge_feature: {status:$mfs, detail:$mfd},
           version: {status:"not_attempted", tag:"", version:""},
+          push_gate: {status:"not_attempted", detail:"", waited_seconds:0},
           push: {status:"not_attempted", detail:""},
           pipeline: {status:"not_attempted", run_url:""},
           plugin_cache: {status:"not_attempted", detail:""}
@@ -249,6 +255,7 @@ if [[ "$IN_WORKTREE" == "true" && "$BRANCH" != "main" && -n "$MAIN_REPO" ]]; the
           second_merge: {status:$sms, detail:$smd},
           merge_feature: {status:$mfs, detail:$mfd},
           version: {status:"not_attempted", tag:"", version:""},
+          push_gate: {status:"not_attempted", detail:"", waited_seconds:0},
           push: {status:"not_attempted", detail:""},
           pipeline: {status:"not_attempted", run_url:""},
           plugin_cache: {status:"not_attempted", detail:""}
@@ -323,6 +330,46 @@ else
   fi
 fi
 echo "    version status: $VERSION_STATUS (tag: ${VERSION_TAG:-none})" >&2
+
+# ---------------------------------------------------------------------------
+# Step 15c: Push Gate — wait for in-progress CI pipelines before pushing
+# ---------------------------------------------------------------------------
+echo "==> Step 15c: Push gate" >&2
+
+PUSH_GATE_TIMEOUT="${PUSH_GATE_TIMEOUT:-600}"   # 10 min max wait, override via env
+PUSH_GATE_INTERVAL=30                            # poll every 30s
+
+if [[ "$SKIP_PUSH" == "true" || "$DRY_RUN" == "true" ]]; then
+  PUSH_GATE_STATUS="skipped"
+  PUSH_GATE_DETAIL="${DRY_RUN:+dry-run}${SKIP_PUSH:+skip-push}"
+  echo "    skipped (${PUSH_GATE_DETAIL})" >&2
+elif ! command -v gh &>/dev/null; then
+  PUSH_GATE_STATUS="skipped"
+  PUSH_GATE_DETAIL="gh not available"
+  echo "    skipped (gh not available)" >&2
+else
+  GATE_START=$(date +%s)
+  while true; do
+    RUNNING=$(gh run list --status in_progress --limit 5 --json databaseId \
+      2>/dev/null | jq 'length' 2>/dev/null || echo "0")
+    if [[ "$RUNNING" -eq 0 ]]; then
+      PUSH_GATE_STATUS="ok"
+      PUSH_GATE_DETAIL="no in-progress pipelines"
+      echo "    push gate: clear" >&2
+      break
+    fi
+    NOW=$(date +%s)
+    PUSH_GATE_WAITED=$(( NOW - GATE_START ))
+    if [[ "$PUSH_GATE_WAITED" -ge "$PUSH_GATE_TIMEOUT" ]]; then
+      PUSH_GATE_STATUS="timeout"
+      PUSH_GATE_DETAIL="waited ${PUSH_GATE_WAITED}s, $RUNNING pipeline(s) still running — proceeding anyway"
+      echo "    push gate timeout after ${PUSH_GATE_WAITED}s — proceeding" >&2
+      break
+    fi
+    echo "    push gate: $RUNNING pipeline(s) running, waiting ${PUSH_GATE_INTERVAL}s (elapsed: ${PUSH_GATE_WAITED}s)" >&2
+    sleep "$PUSH_GATE_INTERVAL"
+  done
+fi
 
 # ---------------------------------------------------------------------------
 # Step 16: Push
@@ -400,6 +447,7 @@ else
       --arg sms "$SECOND_MERGE_STATUS" --arg smd "$SECOND_MERGE_DETAIL" \
       --arg mfs "$MERGE_FEATURE_STATUS" --arg mfd "$MERGE_FEATURE_DETAIL" \
       --arg vs "$VERSION_STATUS" --arg vt "$VERSION_TAG" --arg vv "$VERSION_VER" \
+      --arg pgs "$PUSH_GATE_STATUS" --arg pgd "$PUSH_GATE_DETAIL" --argjson pgw "$PUSH_GATE_WAITED" \
       --arg ps "$PUSH_STATUS" --arg pd "$PUSH_DETAIL" \
       --arg pls "$PIPELINE_STATUS" --arg plu "$PIPELINE_RUN_URL" --arg ple "$PIPELINE_ERROR" \
       '{
@@ -407,6 +455,7 @@ else
         second_merge: {status:$sms, detail:$smd},
         merge_feature: {status:$mfs, detail:$mfd},
         version: {status:$vs, tag:$vt, version:$vv},
+        push_gate: {status:$pgs, detail:$pgd, waited_seconds:$pgw},
         push: {status:$ps, detail:$pd},
         pipeline: {status:$pls, run_url:$plu, error:$ple},
         plugin_cache: {status:"not_attempted", detail:"pipeline failed — beads NOT closed"}
@@ -469,6 +518,7 @@ jq -cn \
   --arg sms "$SECOND_MERGE_STATUS" --arg smd "$SECOND_MERGE_DETAIL" \
   --arg mfs "$MERGE_FEATURE_STATUS" --arg mfd "$MERGE_FEATURE_DETAIL" \
   --arg vs "$VERSION_STATUS" --arg vt "$VERSION_TAG" --arg vv "$VERSION_VER" \
+  --arg pgs "$PUSH_GATE_STATUS" --arg pgd "$PUSH_GATE_DETAIL" --argjson pgw "$PUSH_GATE_WAITED" \
   --arg ps "$PUSH_STATUS" --arg pd "$PUSH_DETAIL" \
   --argjson tp "$TAG_PUSHED" \
   --arg pls "$PIPELINE_STATUS" --arg plu "$PIPELINE_RUN_URL" \
@@ -478,6 +528,7 @@ jq -cn \
     second_merge: {status: $sms, detail: $smd},
     merge_feature: {status: $mfs, detail: $mfd},
     version: {status: $vs, tag: $vt, version: $vv},
+    push_gate: {status: $pgs, detail: $pgd, waited_seconds: $pgw},
     push: {status: $ps, detail: $pd, tag_pushed: $tp},
     pipeline: {status: $pls, run_url: $plu},
     plugin_cache: {status: $pcs, detail: $pcd}

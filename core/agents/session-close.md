@@ -560,6 +560,7 @@ Check ALL repos modified during the session (e.g. `~/code/claude/` for skills/st
 - Do NOT use `git push --force`
 - Do NOT use `git add -A` or `git add .` — always stage specific files
 - ALWAYS use `bd dolt pull && bd dolt push --force` (Dolt bug dolthub/dolt#10807)
+- **Do NOT run `git stash` or `git stash pop`** — stashing before `phase-b-prepare.sh` causes conflicts when multiple session-closes run in parallel. If uncommitted changes exist, commit them explicitly or surface the conflict to the user. The handler scripts handle merge conflicts cleanly without stashing.
 
 ## Flags Reference
 

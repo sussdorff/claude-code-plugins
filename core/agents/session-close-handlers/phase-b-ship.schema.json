@@ -3,7 +3,7 @@
   "title": "phase-b-ship output",
   "description": "JSON emitted by phase-b-ship.sh. Covers Steps 13, 14, 15, 15b, 16, 16a, 16c of session-close Phase B. Partial completion is first-class: any sub-step can report status=not_attempted if a prior step failed. Exit 2 = merge conflict (partial JSON still emitted). Exit 0 = caller can reason about all sub-step outcomes including pipeline failures.",
   "type": "object",
-  "required": ["kill_procs", "second_merge", "merge_feature", "version", "push", "pipeline", "plugin_cache"],
+  "required": ["kill_procs", "second_merge", "merge_feature", "version", "push_gate", "push", "pipeline", "plugin_cache"],
   "properties": {
     "kill_procs": {
       "type": "object",
@@ -64,6 +64,23 @@
         "version": {
           "type": "string",
           "description": "Version string written to VERSION file (e.g. 2026.04.77) or empty string"
+        }
+      }
+    },
+    "push_gate": {
+      "type": "object",
+      "description": "Step 15c: Wait for in-progress CI pipelines before pushing",
+      "required": ["status", "detail"],
+      "properties": {
+        "status": {
+          "type": "string",
+          "enum": ["ok", "timeout", "skipped"],
+          "description": "ok=no running pipelines (or cleared), timeout=waited PUSH_GATE_TIMEOUT and gave up, skipped=gh not available / dry-run / skip-push"
+        },
+        "detail": {"type": "string"},
+        "waited_seconds": {
+          "type": "integer",
+          "description": "Seconds waited in the push gate (0 if skipped or immediately clear)"
         }
       }
     },

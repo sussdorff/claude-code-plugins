@@ -37,6 +37,7 @@ issues.jsonl
 .worktree-handoff.json
 .worktree-turns.jsonl
 .wave-orchestrator.lock
+.session-close.lock
 
 # Embedded Dolt runtime state
 embeddeddolt/
