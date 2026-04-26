@@ -13,6 +13,7 @@ model: sonnet
 system_prompt_file: malte/system-prompts/agents/session-close.md
 cache_control: ephemeral
 color: purple
+permissionMode: ask
 ---
 
 <!-- Codex port: dev-tools/codex-agents/session-close.toml -> .codex/agents/session-close.toml (bead CCP-9yd / CCP-olf)
