@@ -801,7 +801,8 @@ def render_range(
             all_commits.extend(data.get("commits", []))
             all_sessions.extend(data.get("sessions", []))
             all_decisions.extend(data.get("decisions", []))
-            all_decision_requests.extend(data.get("decision_requests", []))
+            # decision_requests is a point-in-time snapshot (bd human list),
+            # NOT accumulated — same pattern as open/ready/blocked below.
             all_warnings.extend(data.get("warnings", []))
             all_rework_signals.extend(data.get("rework_signals", []))
             all_followups.extend(data.get("followups", []))
@@ -809,12 +810,13 @@ def render_range(
             caps = _fetch_capabilities(envelope, config_path)
             all_capabilities.extend(caps)
 
-        # Use last day's snapshot for open/ready/blocked
+        # Use last day's snapshot for open/ready/blocked and decision_requests
         if all_envelopes:
             last_data = all_envelopes[-1][1].get("data", {})
             all_open_beads = last_data.get("open_beads", [])
             all_ready_beads = last_data.get("ready_beads", [])
             all_blocked_beads = last_data.get("blocked_beads", [])
+            all_decision_requests = last_data.get("decision_requests", [])
 
         # Aggregate data dict for section renderers
         agg_data = {

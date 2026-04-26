@@ -539,6 +539,77 @@ class TestRangeMode:
         assert "2026-04-20" in brief
         assert "2026-04-21" in brief
 
+    def test_range_mode_decision_requests_uses_last_day_snapshot(
+        self, tmp_path: Path
+    ) -> None:
+        """Regression: decision_requests is a point-in-time snapshot (bd human list).
+        The same unresolved request appearing in multiple daily envelopes must NOT
+        be accumulated — each day extending the list produces N times as many
+        occurrences. The range brief must use only the last day's snapshot.
+
+        Baseline: a single-day range with just the last day has the DR title
+        appear in 2 sections (Entscheidungsbedarf + Belege). With the bug,
+        a two-day range with the same DR on both days doubles this to 4.
+        The fix keeps it at 2 regardless of how many days the DR was present.
+        """
+        dr = {"id": "CCP-dr1", "title": "Approve the deployment plan"}
+
+        def _make_env(date: str, bead_id: str) -> dict[str, Any]:
+            return {
+                "status": "ok",
+                "summary": "test",
+                "data": _make_data(
+                    date=date,
+                    closed_beads=[_make_closed_bead(bead_id, f"work on {date}")],
+                    decision_requests=[dr],
+                ),
+                "errors": [],
+                "next_steps": [],
+                "open_items": [],
+                "meta": {"contract_version": "1", "producer": "test"},
+            }
+
+        envelopes_two_days = {
+            "2026-04-20": _make_env("2026-04-20", "CCP-001"),
+            "2026-04-21": _make_env("2026-04-21", "CCP-002"),
+        }
+        envelopes_one_day = {
+            "2026-04-21": _make_env("2026-04-21", "CCP-002"),
+        }
+
+        def fake_fetch_two(project: str, date: str, config_path: Any) -> dict[str, Any]:
+            return envelopes_two_days.get(date, {})
+
+        def fake_fetch_one(project: str, date: str, config_path: Any) -> dict[str, Any]:
+            return envelopes_one_day.get(date, {})
+
+        with patch.object(rb, "_fetch_envelope", side_effect=fake_fetch_two), \
+             patch.object(rb, "_fetch_capabilities", return_value=[]), \
+             patch.object(rb, "render_single_day", return_value=""):
+            brief_two_days = rb.render_range(
+                "claude-code-plugins", "2026-04-20", "2026-04-21", tmp_path / "cfg.yml"
+            )
+
+        with patch.object(rb, "_fetch_envelope", side_effect=fake_fetch_one), \
+             patch.object(rb, "_fetch_capabilities", return_value=[]), \
+             patch.object(rb, "render_single_day", return_value=""):
+            brief_one_day = rb.render_range(
+                "claude-code-plugins", "2026-04-21", "2026-04-21", tmp_path / "cfg.yml"
+            )
+
+        count_two = brief_two_days.count(dr["title"])
+        count_one = brief_one_day.count(dr["title"])
+
+        # With the fix, the two-day range must match the one-day range count because
+        # decision_requests is taken from the last day's snapshot only.
+        # Without the fix, count_two == count_one * 2 (accumulated across days).
+        assert count_two == count_one, (
+            f"Expected the same number of decision request occurrences regardless of "
+            f"range length (both use last-day snapshot), but got {count_two} for "
+            f"two-day range vs {count_one} for one-day range. decision_requests must "
+            f"not be accumulated across all days."
+        )
+
 
 # ---------------------------------------------------------------------------
 # Detailed mode
