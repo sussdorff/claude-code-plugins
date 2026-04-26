@@ -206,7 +206,7 @@ class TestResolveProject:
 
 class TestBriefsDir:
     def test_returns_correct_path(self, tmp_path: Path) -> None:
-        """briefs_dir() returns <project.path>/.claude/daily-briefs/"""
+        """briefs_dir() returns ~/.claude/projects/<slug>/daily-briefs/ (user-local, not in project)."""
         p = cfg.ProjectConfig(
             name="foo",
             path=tmp_path / "foo",
@@ -214,8 +214,11 @@ class TestBriefsDir:
             beads=True,
             docs_dir="docs",
         )
-        expected = tmp_path / "foo" / ".claude" / "daily-briefs"
-        assert cfg.briefs_dir(p) == expected
+        result = cfg.briefs_dir(p)
+        # New path: ~/.claude/projects/foo/daily-briefs
+        assert result == Path.home() / ".claude" / "projects" / "foo" / "daily-briefs"
+        # Must NOT be inside the project path
+        assert str(tmp_path) not in str(result)
 
 
 # ---------------------------------------------------------------------------
@@ -225,7 +228,7 @@ class TestBriefsDir:
 
 class TestBriefPath:
     def test_string_date(self, tmp_path: Path) -> None:
-        """brief_path() accepts a string date."""
+        """brief_path() accepts a string date and uses the new user-local path."""
         p = cfg.ProjectConfig(
             name="foo",
             path=tmp_path / "foo",
@@ -234,10 +237,10 @@ class TestBriefPath:
             docs_dir="docs",
         )
         result = cfg.brief_path(p, "2026-04-24")
-        assert result == tmp_path / "foo" / ".claude" / "daily-briefs" / "2026-04-24.md"
+        assert result == Path.home() / ".claude" / "projects" / "foo" / "daily-briefs" / "2026-04-24.md"
 
     def test_date_object(self, tmp_path: Path) -> None:
-        """brief_path() accepts a datetime.date object."""
+        """brief_path() accepts a datetime.date object and places it under ~/.claude/projects/<slug>/."""
         p = cfg.ProjectConfig(
             name="foo",
             path=tmp_path / "foo",
@@ -248,6 +251,7 @@ class TestBriefPath:
         d = datetime.date(2026, 4, 24)
         result = cfg.brief_path(p, d)
         assert result.name == "2026-04-24.md"
+        assert result.parent == Path.home() / ".claude" / "projects" / "foo" / "daily-briefs"
 
     def test_no_year_subfolder(self, tmp_path: Path) -> None:
         """brief_path() uses flat layout — no year subfolder."""
@@ -270,26 +274,41 @@ class TestBriefPath:
 
 class TestBriefExists:
     def test_returns_false_when_missing(self, tmp_path: Path) -> None:
-        """brief_exists() returns False when brief file does not exist."""
+        """brief_exists() returns False when brief file does not exist.
+
+        Uses a unique slug so the brief is guaranteed not to exist under ~/.claude/projects/.
+        """
+        import uuid
+        unique_slug = f"test-nonexistent-{uuid.uuid4().hex}"
         p = cfg.ProjectConfig(
-            name="foo",
-            path=tmp_path / "foo",
-            slug="foo",
+            name=unique_slug,
+            path=tmp_path / unique_slug,
+            slug=unique_slug,
             beads=True,
             docs_dir="docs",
         )
         assert cfg.brief_exists(p, "2026-04-24") is False
 
     def test_returns_true_when_exists(self, tmp_path: Path) -> None:
-        """brief_exists() returns True when brief file exists on disk."""
+        """brief_exists() returns True when brief file exists on disk.
+
+        Creates the file at the path returned by brief_path() (under ~/.claude/projects/<slug>/).
+        """
+        import uuid
+        unique_slug = f"test-exists-{uuid.uuid4().hex}"
         p = cfg.ProjectConfig(
-            name="foo",
-            path=tmp_path / "foo",
-            slug="foo",
+            name=unique_slug,
+            path=tmp_path / unique_slug,
+            slug=unique_slug,
             beads=True,
             docs_dir="docs",
         )
         path = cfg.brief_path(p, "2026-04-24")
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text("# Brief")
-        assert cfg.brief_exists(p, "2026-04-24") is True
+        try:
+            assert cfg.brief_exists(p, "2026-04-24") is True
+        finally:
+            # Clean up the file we created under ~/.claude/projects/
+            path.unlink(missing_ok=True)
+            path.parent.rmdir()

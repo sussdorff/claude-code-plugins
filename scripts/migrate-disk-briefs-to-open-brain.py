@@ -15,6 +15,11 @@ actual writes.
 
 Part of the daily-brief v1.5 migration: open-brain becomes the SoR.
 
+Disk paths searched (per project):
+  - New path (CCP-gtue+): ~/.claude/projects/<slug>/daily-briefs/
+  - Legacy path (pre-CCP-gtue): <project.path>/.claude/daily-briefs/
+Briefs found in the new path take precedence; duplicates by date are skipped.
+
 Usage:
     # Preview what would be migrated
     python3 scripts/migrate-disk-briefs-to-open-brain.py
@@ -125,35 +130,44 @@ def _discover_disk_briefs(
     briefs: list[dict[str, Any]] = []
     for p_dict in resolve_result["data"]["projects"]:
         project = _cfg.ProjectConfig.from_dict(p_dict)
-        briefs_dir = _cfg.briefs_dir(project)
-        if not briefs_dir.exists():
-            continue
-        for brief_file in sorted(briefs_dir.glob("*.md")):
-            # Extract date from filename (YYYY-MM-DD.md)
-            stem = brief_file.stem
-            if len(stem) != 10 or stem.count("-") != 2:
-                continue  # Skip non-date filenames
-            try:
-                year, month, day = stem.split("-")
-                if not (year.isdigit() and month.isdigit() and day.isdigit()):
+        # Check new path (primary) first, then legacy path (backward compat)
+        new_path = _cfg.briefs_dir(project)
+        legacy_path = _cfg.legacy_briefs_dir(project)
+
+        seen_dates: set[str] = set()
+        for search_dir in [new_path, legacy_path]:
+            if not search_dir.exists():
+                continue
+            for brief_file in sorted(search_dir.glob("*.md")):
+                # Extract date from filename (YYYY-MM-DD.md)
+                stem = brief_file.stem
+                if len(stem) != 10 or stem.count("-") != 2:
+                    continue  # Skip non-date filenames
+                try:
+                    year, month, day = stem.split("-")
+                    if not (year.isdigit() and month.isdigit() and day.isdigit()):
+                        continue
+                except ValueError:
                     continue
-            except ValueError:
-                continue
 
-            try:
-                text = brief_file.read_text()
-            except OSError:
-                continue
+                if stem in seen_dates:
+                    continue  # Prefer new path (checked first)
+                seen_dates.add(stem)
 
-            briefs.append(
-                {
-                    "project_name": project.name,
-                    "slug": project.slug,
-                    "date": stem,
-                    "path": str(brief_file),
-                    "text": text,
-                }
-            )
+                try:
+                    text = brief_file.read_text()
+                except OSError:
+                    continue
+
+                briefs.append(
+                    {
+                        "project_name": project.name,
+                        "slug": project.slug,
+                        "date": stem,
+                        "path": str(brief_file),
+                        "text": text,
+                    }
+                )
 
     return briefs
 

@@ -133,8 +133,13 @@ The migration script (`scripts/migrate-disk-briefs-to-open-brain.py`):
   `_read_from_open_brain` (new), `_async_search_memory` (new),
   `_run_render_brief` (persist_disk param), `run_for_project` (OB read path),
   `make_session_ref` (project slug), `parse_args` (--persist-disk)
-- `scripts/migrate-disk-briefs-to-open-brain.py` — NEW migration script
-- `core/skills/daily-brief/SKILL.md` — Updated to reflect v1.5 SoR
+- `scripts/migrate-disk-briefs-to-open-brain.py` — NEW migration script; checks both
+  new path (`~/.claude/projects/<slug>/daily-briefs/`) and legacy path
+  (`<project.path>/.claude/daily-briefs/`) for backward compatibility (CCP-gtue)
+- `core/skills/daily-brief/scripts/config.py` — `briefs_dir()` now returns
+  `~/.claude/projects/<slug>/daily-briefs/` (user-local state, not repo-internal);
+  `legacy_briefs_dir()` added for migration backward-compat (CCP-gtue)
+- `core/skills/daily-brief/SKILL.md` — Updated to reflect v1.5 SoR and CCP-gtue path
 
 ## References
 
