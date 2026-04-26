@@ -332,43 +332,73 @@ fi
 echo "    version status: $VERSION_STATUS (tag: ${VERSION_TAG:-none})" >&2
 
 # ---------------------------------------------------------------------------
-# Step 15c: Push Gate — wait for in-progress CI pipelines before pushing
+# Step 15c: Push Gate — defer push if a CI pipeline is already running
+# ---------------------------------------------------------------------------
+# Modes:
+#   skip (default): if CI busy → defer push, work stays merged locally,
+#                   next session-close pushes accumulated work in one go.
+#                   Avoids the "10 parallel beads = 10 CI runs" pattern.
+#   wait:           block until CI free (timeout PUSH_GATE_TIMEOUT, default 600s)
+#   force:          ignore CI state, push immediately
+#
+# Override via env: PUSH_GATE_MODE=skip|wait|force
 # ---------------------------------------------------------------------------
 echo "==> Step 15c: Push gate" >&2
 
-PUSH_GATE_TIMEOUT="${PUSH_GATE_TIMEOUT:-600}"   # 10 min max wait, override via env
-PUSH_GATE_INTERVAL=30                            # poll every 30s
+PUSH_GATE_MODE="${PUSH_GATE_MODE:-skip}"        # default: skip (defer push)
+PUSH_GATE_TIMEOUT="${PUSH_GATE_TIMEOUT:-600}"   # only used in wait mode
+PUSH_GATE_INTERVAL=30
+DEFER_PUSH=false
 
 if [[ "$SKIP_PUSH" == "true" || "$DRY_RUN" == "true" ]]; then
   PUSH_GATE_STATUS="skipped"
   PUSH_GATE_DETAIL="${DRY_RUN:+dry-run}${SKIP_PUSH:+skip-push}"
   echo "    skipped (${PUSH_GATE_DETAIL})" >&2
+elif [[ "$PUSH_GATE_MODE" == "force" ]]; then
+  PUSH_GATE_STATUS="ok"
+  PUSH_GATE_DETAIL="forced (ignored CI state)"
+  echo "    forced — ignoring CI state" >&2
 elif ! command -v gh &>/dev/null; then
   PUSH_GATE_STATUS="skipped"
   PUSH_GATE_DETAIL="gh not available"
   echo "    skipped (gh not available)" >&2
 else
-  GATE_START=$(date +%s)
-  while true; do
-    RUNNING=$(gh run list --status in_progress --limit 5 --json databaseId \
-      2>/dev/null | jq 'length' 2>/dev/null || echo "0")
-    if [[ "$RUNNING" -eq 0 ]]; then
+  RUNNING=$(gh run list --status in_progress --limit 5 --json databaseId \
+    2>/dev/null | jq 'length' 2>/dev/null || echo "0")
+
+  if [[ "$RUNNING" -eq 0 ]]; then
+    PUSH_GATE_STATUS="ok"
+    PUSH_GATE_DETAIL="no in-progress pipelines"
+    echo "    push gate: clear" >&2
+  elif [[ "$PUSH_GATE_MODE" == "skip" ]]; then
+    # Default behaviour: defer push to next session-close
+    PUSH_GATE_STATUS="deferred"
+    PUSH_GATE_DETAIL="$RUNNING pipeline(s) running — push deferred, work stays in local main"
+    DEFER_PUSH=true
+    echo "    push deferred — $RUNNING CI run(s) active; next session-close pushes accumulated work" >&2
+  else
+    # wait mode: block until clear or timeout
+    GATE_START=$(date +%s)
+    while [[ "$RUNNING" -gt 0 ]]; do
+      NOW=$(date +%s)
+      PUSH_GATE_WAITED=$(( NOW - GATE_START ))
+      if [[ "$PUSH_GATE_WAITED" -ge "$PUSH_GATE_TIMEOUT" ]]; then
+        PUSH_GATE_STATUS="timeout"
+        PUSH_GATE_DETAIL="waited ${PUSH_GATE_WAITED}s, $RUNNING pipeline(s) still running — proceeding anyway"
+        echo "    push gate timeout after ${PUSH_GATE_WAITED}s — proceeding" >&2
+        break
+      fi
+      echo "    push gate (wait mode): $RUNNING pipeline(s) running, polling ${PUSH_GATE_INTERVAL}s (elapsed: ${PUSH_GATE_WAITED}s)" >&2
+      sleep "$PUSH_GATE_INTERVAL"
+      RUNNING=$(gh run list --status in_progress --limit 5 --json databaseId \
+        2>/dev/null | jq 'length' 2>/dev/null || echo "0")
+    done
+    if [[ "$RUNNING" -eq 0 && "$PUSH_GATE_STATUS" != "timeout" ]]; then
       PUSH_GATE_STATUS="ok"
-      PUSH_GATE_DETAIL="no in-progress pipelines"
-      echo "    push gate: clear" >&2
-      break
+      PUSH_GATE_DETAIL="cleared after ${PUSH_GATE_WAITED}s wait"
+      echo "    push gate: cleared after ${PUSH_GATE_WAITED}s" >&2
     fi
-    NOW=$(date +%s)
-    PUSH_GATE_WAITED=$(( NOW - GATE_START ))
-    if [[ "$PUSH_GATE_WAITED" -ge "$PUSH_GATE_TIMEOUT" ]]; then
-      PUSH_GATE_STATUS="timeout"
-      PUSH_GATE_DETAIL="waited ${PUSH_GATE_WAITED}s, $RUNNING pipeline(s) still running — proceeding anyway"
-      echo "    push gate timeout after ${PUSH_GATE_WAITED}s — proceeding" >&2
-      break
-    fi
-    echo "    push gate: $RUNNING pipeline(s) running, waiting ${PUSH_GATE_INTERVAL}s (elapsed: ${PUSH_GATE_WAITED}s)" >&2
-    sleep "$PUSH_GATE_INTERVAL"
-  done
+  fi
 fi
 
 # ---------------------------------------------------------------------------
@@ -384,6 +414,10 @@ elif [[ "$DRY_RUN" == "true" ]]; then
   PUSH_STATUS="skipped"
   PUSH_DETAIL="dry-run"
   echo "    skipped (dry-run)" >&2
+elif [[ "$DEFER_PUSH" == "true" ]]; then
+  PUSH_STATUS="deferred"
+  PUSH_DETAIL="CI busy — push deferred to next session-close"
+  echo "    deferred (CI busy, work stays in local main)" >&2
 else
   # Push main branch
   PUSH_OUT=$(git -C "$GIT_WORK_DIR" push origin main 2>&1) || PUSH_EXIT=$?
@@ -419,6 +453,9 @@ echo "==> Step 16a: Pipeline watch" >&2
 if [[ "$SKIP_PIPELINE" == "true" ]]; then
   PIPELINE_STATUS="skipped_flag"
   echo "    skipped (--skip-pipeline)" >&2
+elif [[ "$PUSH_STATUS" == "deferred" ]]; then
+  PIPELINE_STATUS="skipped_push_deferred"
+  echo "    skipped (push deferred to next session-close)" >&2
 elif [[ "$PUSH_STATUS" != "ok" ]]; then
   PIPELINE_STATUS="skipped_push_failed"
   echo "    skipped (push was not ok: $PUSH_STATUS)" >&2
@@ -469,7 +506,11 @@ fi
 # ---------------------------------------------------------------------------
 echo "==> Step 16c: Sync plugin cache" >&2
 
-if [[ "$PUSH_STATUS" != "ok" ]]; then
+if [[ "$PUSH_STATUS" == "deferred" ]]; then
+  PLUGIN_CACHE_STATUS="skipped"
+  PLUGIN_CACHE_DETAIL="push deferred (cache will sync after next push)"
+  echo "    skipped (push deferred)" >&2
+elif [[ "$PUSH_STATUS" != "ok" ]]; then
   PLUGIN_CACHE_STATUS="skipped"
   PLUGIN_CACHE_DETAIL="push was not ok"
   echo "    skipped (push not ok)" >&2

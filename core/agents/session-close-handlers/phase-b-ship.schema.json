@@ -69,18 +69,18 @@
     },
     "push_gate": {
       "type": "object",
-      "description": "Step 15c: Wait for in-progress CI pipelines before pushing",
+      "description": "Step 15c: CI pipeline gate before push. Modes: skip (default, defer if busy), wait (block until clear), force (push regardless)",
       "required": ["status", "detail"],
       "properties": {
         "status": {
           "type": "string",
-          "enum": ["ok", "timeout", "skipped"],
-          "description": "ok=no running pipelines (or cleared), timeout=waited PUSH_GATE_TIMEOUT and gave up, skipped=gh not available / dry-run / skip-push"
+          "enum": ["ok", "deferred", "timeout", "skipped", "not_attempted"],
+          "description": "ok=no running pipelines (or forced/cleared), deferred=CI busy and mode=skip (default), timeout=mode=wait timed out, skipped=gh not available / dry-run / skip-push"
         },
         "detail": {"type": "string"},
         "waited_seconds": {
           "type": "integer",
-          "description": "Seconds waited in the push gate (0 if skipped or immediately clear)"
+          "description": "Seconds waited in the push gate (only relevant in wait mode; 0 in skip/force modes)"
         }
       }
     },
@@ -91,8 +91,8 @@
       "properties": {
         "status": {
           "type": "string",
-          "enum": ["ok", "failed", "skipped", "not_attempted"],
-          "description": "ok=pushed, failed=push error (non-blocking, session continues), skipped=--skip-push or dry-run, not_attempted=prior step failed"
+          "enum": ["ok", "failed", "deferred", "skipped", "not_attempted"],
+          "description": "ok=pushed, failed=push error (non-blocking), deferred=push gate set DEFER_PUSH (CI busy, work stays local), skipped=--skip-push or dry-run, not_attempted=prior step failed"
         },
         "detail": {
           "type": "string",
@@ -115,9 +115,10 @@
             "passed", "failed", "skipped", "skipped_flag",
             "skipped_no_gh", "skipped_not_authed", "skipped_no_workflow",
             "skipped_dry_run", "skipped_no_handler", "skipped_push_failed",
+            "skipped_push_deferred",
             "not_attempted", "unknown"
           ],
-          "description": "passed=CI green, failed=CI red (beads must NOT be closed), skipped_*=non-blocking skip (including skipped_push_failed when prior push did not succeed)"
+          "description": "passed=CI green, failed=CI red (beads must NOT be closed), skipped_push_deferred=push was deferred by gate (next session-close will push), skipped_*=other non-blocking skips"
         },
         "run_url": {
           "type": "string",

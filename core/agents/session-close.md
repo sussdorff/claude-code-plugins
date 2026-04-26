@@ -392,7 +392,8 @@ Parse `SHIP_JSON` (see `phase-b-ship.schema.json` for the full schema):
 .merge_feature.status - ok|conflict|skipped|not_attempted
 .version.status       - ok|failed|not_attempted
 .version.tag          - e.g. v2026.04.77
-.push.status          - ok|failed|skipped|not_attempted
+.push_gate.status     - ok|deferred|timeout|skipped|not_attempted
+.push.status          - ok|failed|deferred|skipped|not_attempted
 .pipeline.status      - passed|failed|skipped_*|not_attempted
 .pipeline.run_url     - GitHub Actions run URL (on passed/failed)
 .plugin_cache.status  - ok|skipped|not_attempted
@@ -401,6 +402,15 @@ Parse `SHIP_JSON` (see `phase-b-ship.schema.json` for the full schema):
 **Exit 2 = merge conflict** (step 14 or 15): Stop, surface conflict to user. Previous work
 (commit, changelog, version) is preserved on the branch. User resolves and re-runs `--ship-only`.
 
+**Push gate decision tree** (default mode = skip):
+
+| `.push_gate.status` + `.push.status` | Meaning | Action |
+|--------------------------------------|---------|--------|
+| `push_gate=ok` + `push=ok` | CI free, pushed normally | Proceed to pipeline watch. |
+| `push_gate=deferred` + `push=deferred` | CI was busy — push deferred, work stays in local main | Skip pipeline watch. Close beads anyway (work IS committed locally). Next session-close will push the accumulated work. Surface this in summary. |
+| `push_gate=timeout` (wait mode only) | Waited too long, pushed anyway | Proceed to pipeline watch. |
+| `push=failed` | Push attempted but failed | Continue, beads still close. Show push.detail with retry instruction. |
+
 **Pipeline decision tree:**
 
 | `.pipeline.status` | Action |
@@ -408,9 +418,12 @@ Parse `SHIP_JSON` (see `phase-b-ship.schema.json` for the full schema):
 | `passed` | Proceed to Step 16b. |
 | `failed` | Abort. Report `.pipeline.run_url`. Beads stay `in_progress`. |
 | `failed` + `.pipeline.error == no_run_registered` | Abort. Workflow exists but no run registered. |
+| `skipped_push_deferred` | Push was deferred — beads close normally, no pipeline ran. |
 | `skipped_*` | Log reason, proceed to Step 16b. |
 
 **Push failed:** If `.push.status == failed`: continue — beads are still closed and summary is generated. Show push.status prominently in final summary with instruction to retry manually.
+
+**Push deferred:** If `.push.status == deferred`: continue — work IS committed in local main, beads close normally, next session-close will push the accumulated work. Show "push deferred (CI was busy)" in summary so the user knows there's pending local work.
 
 ### Step 16b: Close Beads (phase-b-close-beads.sh)
 
