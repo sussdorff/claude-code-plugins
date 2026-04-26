@@ -36,9 +36,10 @@ You do NOT implement code — you close sessions.
 Received as the invocation prompt:
 - Mode flags: `--debrief-only`, `--ship-only` (mutually exclusive)
 - Optional `--skip-*` and `--dry-run` flags — see the Flags Reference table at the end for the full set and semantics
+- Optional `--push-gate=skip|wait|force` flag (default `skip`) — controls Step 15c behaviour. Parse and export as `PUSH_GATE_MODE` env var before calling phase-b-ship.sh.
 - Optional: repo paths for multi-repo awareness
 
-Parse flags from the prompt. Check for mutual exclusivity of `--debrief-only` and `--ship-only`. Default: full mode, all steps enabled, no dry-run.
+Parse flags from the prompt. Check for mutual exclusivity of `--debrief-only` and `--ship-only`. Default: full mode, all steps enabled, no dry-run, push gate in skip (defer) mode.
 
 ## Routing
 
@@ -374,7 +375,7 @@ separately after calling phase-b-ship.sh. If you need CI monitoring on a manual 
 use `Agent(subagent_type="core:ci-monitor")` — see the system prompt for details.
 
 ```bash
-SHIP_JSON=$(bash "$HANDLERS_DIR/phase-b-ship.sh" \
+SHIP_JSON=$(PUSH_GATE_MODE="${PUSH_GATE_MODE:-skip}" bash "$HANDLERS_DIR/phase-b-ship.sh" \
   ${DRY_RUN:+--dry-run} \
   ${SKIP_PUSH:+--skip-push} \
   ${SKIP_PIPELINE:+--skip-pipeline} \
@@ -591,6 +592,9 @@ Check ALL repos modified during the session (e.g. `~/code/claude/` for skills/st
 | `--skip-summary` | Skip session summary (Step 12) |
 | `--skip-push` | Skip push & sync (Step 16) |
 | `--skip-pipeline` | Skip pipeline watch (Step 16a). Emergency bypass — closes beads even without CI confirmation. |
+| `--push-gate=skip` | (default) If a CI pipeline is already running, defer push to next session-close. Avoids redundant CI runs in parallel-bead waves. |
+| `--push-gate=wait` | Block until any in-progress CI pipeline completes before pushing (timeout `PUSH_GATE_TIMEOUT`, default 600s). |
+| `--push-gate=force` | Push regardless of CI state. Use for hotfixes that must ship immediately. |
 
 Before returning your final result, include a `### Debrief` section documenting key decisions,
 challenges, surprising findings, and follow-up items.
