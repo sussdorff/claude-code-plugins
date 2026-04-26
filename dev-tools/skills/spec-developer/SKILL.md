@@ -64,7 +64,7 @@ Spin up 3-5 explore subagents in parallel to scan relevant areas:
 
 Collect findings into a context summary. Use this to inform smarter, more targeted questions in Phase 2.
 
-### Phase 2: Progressive Q&A (7 Themed Rounds)
+### Phase 2: Progressive Q&A (8 Themed Rounds)
 
 Load `references/question-bank.md` for the full question catalog.
 
@@ -79,6 +79,7 @@ Ask questions interactively, waiting for the user's response between each round.
 5. **Error Handling & Recovery** -- How do errors surface? Can users recover?
 6. **Integration & Dependencies** -- What systems are touched? APIs?
 7. **Constraints & Non-Functionals** -- Performance, security, accessibility?
+8. **Non-Behaviors** -- What should this NOT do, even if it would seem helpful?
 
 **Questioning rules:**
 
@@ -87,7 +88,7 @@ Ask questions interactively, waiting for the user's response between each round.
 - When an answer reveals unexpected complexity, add a follow-up in the same round
 - When an answer is "I don't know yet", note it as an Open Question for the spec
 - Summarize key insights after each round before moving to the next
-- Total: minimum 21 questions across all rounds
+- Total: minimum 24 questions across all rounds
 
 ### Phase 3: Spec Generation
 
