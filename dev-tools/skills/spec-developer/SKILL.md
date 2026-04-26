@@ -10,7 +10,7 @@ disable-model-invocation: true
 
 # Spec Developer
 
-Produces comprehensive 500-700 line feature specifications through an extensive, adaptive Q&A dialog. Asks 20+ insightful, non-obvious clarifying questions that challenge assumptions and surface edge cases before any implementation planning begins.
+Produces comprehensive 550-800 line feature specifications through an extensive, adaptive Q&A dialog. Asks 20+ insightful, non-obvious clarifying questions that challenge assumptions and surface edge cases before any implementation planning begins.
 
 Complementary to task-breakdown or epic-planning tools: this skill comes *before* them. Flow: spec conversation -> spec document -> downstream planning uses the spec as input.
 
@@ -64,7 +64,7 @@ Spin up 3-5 explore subagents in parallel to scan relevant areas:
 
 Collect findings into a context summary. Use this to inform smarter, more targeted questions in Phase 2.
 
-### Phase 2: Progressive Q&A (7 Themed Rounds)
+### Phase 2: Progressive Q&A (8 Themed Rounds)
 
 Load `references/question-bank.md` for the full question catalog.
 
@@ -79,6 +79,7 @@ Ask questions interactively, waiting for the user's response between each round.
 5. **Error Handling & Recovery** -- How do errors surface? Can users recover?
 6. **Integration & Dependencies** -- What systems are touched? APIs?
 7. **Constraints & Non-Functionals** -- Performance, security, accessibility?
+8. **Non-Behaviors** -- What should this NOT do, even if it would seem helpful?
 
 **Questioning rules:**
 
@@ -87,7 +88,7 @@ Ask questions interactively, waiting for the user's response between each round.
 - When an answer reveals unexpected complexity, add a follow-up in the same round
 - When an answer is "I don't know yet", note it as an Open Question for the spec
 - Summarize key insights after each round before moving to the next
-- Total: minimum 21 questions across all rounds
+- Total: minimum 24 questions across all rounds
 
 ### Phase 3: Spec Generation
 
@@ -95,7 +96,7 @@ After all rounds complete, generate the spec document using `references/spec-tem
 
 **Output rules:**
 
-- Target 500-700 lines of Markdown
+- Target 550-800 lines of Markdown
 - Save to `docs/specs/spec-<feature-name>.md` (kebab-case; see your harness adapter for project-specific path)
 - Every functional requirement must be numbered and testable
 - Include all "I don't know" answers as Open Questions
@@ -106,12 +107,20 @@ Present the generated spec to the user for review.
 
 ### Phase 4: Refinement Loop
 
-After presenting the spec:
+After presenting the spec, conduct a self-review pass before asking the user for feedback.
 
-1. Ask: "What's missing? What needs more detail? What did I get wrong?"
-2. Iterate on feedback -- update the spec in place
-3. Repeat until user confirms: "Looks good" / "Done" / "Ship it"
-4. Final save and summary: "Spec saved to **[path]** ([N] lines, [M] requirements)."
+**Self-Review Pass (internal, before asking the user):**
+
+1. Scan each section of the generated spec for elements that are underspecified, assumed, or where two reasonable implementations could differ.
+2. For each remaining ambiguity found, produce one entry using this structure: what is ambiguous, what an AI implementer would likely assume if not told, and what specific question would resolve it.
+3. Present this list to the user first with the framing: "Before you review, I noticed these remaining ambiguities:" followed by the numbered list. This list feeds directly into Section 14 (Ambiguity Warnings) of the spec.
+
+**Then ask the standard refinement questions:**
+
+4. Ask: "What's missing? What needs more detail? What did I get wrong?"
+5. Iterate on feedback -- update the spec in place
+6. Repeat until user confirms: "Looks good" / "Done" / "Ship it"
+7. Final save and summary: "Spec saved to **[path]** ([N] lines, [M] requirements)."
 
 ---
 
@@ -126,6 +135,10 @@ When invoked with `--review <path>`:
    - **Covered**: Sections that are thorough
    - **Gaps**: Questions the spec doesn't answer
    - **Weak**: Sections present but lacking depth
+   - Additionally, check explicitly for the following missing sections and flag each as a gap if absent:
+     - **Missing Behavioral Contract**: spec has no "When X, system Y" contract statements (Section 11 of spec-template.md)
+     - **Missing Non-Behaviors**: spec has no explicit "MUST NOT" statements with reasons (Section 12 of spec-template.md)
+     - **Missing Ambiguity Warnings**: spec has no AW-[N] items -- even a single unresolved ambiguity warrants this gap flag (Section 14 of spec-template.md)
 5. Offer to fill gaps interactively via follow-up Q&A
 
 ---
@@ -137,6 +150,7 @@ When invoked with `--review <path>`:
 - Do NOT produce task breakdowns or work estimates (use a task-breakdown tool for that)
 - Do NOT skip the refinement loop (Phase 4) -- always ask what's missing
 - Do NOT generate specs shorter than 400 lines -- if the feature is too small for a spec, tell the user to use a lighter planning tool instead
+- Do NOT omit preserved behavior when modifying existing code. In brownfield specs (modifying existing code), Section 5 (Functional Requirements) MUST capture behavior that already works and must continue to work, not only new requirements. Missing preserved behavior equals silent regressions in the spec.
 
 ## Resources
 
