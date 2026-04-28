@@ -45,6 +45,7 @@ find . -path "*/wave-orchestrator/scripts/wave-dispatch.py" 2>/dev/null | head -
 | `--skip-scenarios` | Don't check/generate scenarios for feature beads |
 | `--skip-review` | Skip architecture review (Phase 1.5b) for all beads. Logged to audit. |
 | `--skip-wave-review` | Skip wave-level structural review (Phase 1.25). Logged per-bead to notes. |
+| `--skip-scope-check` | Skip compound-scope analysis (Phase 1.5). Logged to bead notes. |
 | `--skip-integration-check` | Skip Phase 6.5 integration-verification (cross-bead invariant check after final wave) |
 
 Examples:
@@ -54,6 +55,16 @@ Examples:
 /wave-orchestrator eArztbrief --max-parallel=3
 /wave-orchestrator --dry-run Mahnung
 ```
+
+**Two-step dry-run pattern** (when you want to review the plan before dispatching):
+```
+# Step 1: review only
+/wave-orchestrator --dry-run eUeberweisung
+
+# Step 2: dispatch with the specific bead IDs shown in the plan
+/wave-orchestrator mira-adapters-0al mira-adapters-n4r mira-adapters-0r0
+```
+This is the correct substitute for a mid-agent Y/N confirmation gate.
 
 ---
 
@@ -271,7 +282,9 @@ This is visible in monitoring — quick-fix surfaces show `<id>-qf` labels.
 review inline (single-pane model). Factor this into `max-parallel` calculations:
 a wave of 2 full + 2 quick needs 4 panes.
 
-Wait for user confirmation before proceeding. If `--dry-run`, stop here.
+If `--dry-run`, stop here and return the plan. Otherwise proceed immediately to Phase 1.25.
+
+**Note on confirmation gates**: `Agent()` is stateless — there is no mechanism to resume a paused agent after a Y/N response. The `--dry-run` flag is the correct tool for "show me the plan before committing." Without `--dry-run`, the orchestrator proceeds after showing the Wave Table.
 
 ### Parallel Limit
 
@@ -393,9 +406,10 @@ bd update <id> --append-notes="Wave review: codex_fallback=sonnet, codex_exit=<N
 
 **Process findings in this order: HIGH-fundamental → HIGH-lokal → MEDIUM → LOW**
 
-#### HIGH-fundamental (stop + user dialog)
+#### HIGH-fundamental (terminal stop)
 
-For each HIGH-fundamental finding — halt immediately and present to the user:
+For each HIGH-fundamental finding — halt immediately and output a terminal stop message.
+Do NOT ask Y/N — the agent cannot resume after returning. The user must act and re-invoke.
 
 ```
 ## Wave Review — BLOCKED: Structural Issue
@@ -404,53 +418,39 @@ Finding: <finding text>
 Bead(s): <bead_ids>
 Recommendation: <recommendation>
 
-Options:
-  A) Accept recommendation (split bead / restructure wave)
-  B) Override and continue (logged to bead notes)
+Action required: Resolve this issue before dispatching.
+  - To split a bead: bd create sub-beads, bd dep add, bd supersede <original>
+  - Then re-invoke wave-orchestrator with the new bead IDs
+  - To override: re-invoke with --skip-wave-review (logged automatically)
 ```
 
-**In `--dry-run` mode:** Show the finding and options but do NOT create beads or make any
-bd updates — this applies to BOTH path A (bd create + bd supersede) AND path B
-(bd update --append-notes). No writes of any kind are performed in dry-run.
+**In `--dry-run` mode:** Show the finding but do NOT create beads or make any bd updates.
+No writes of any kind are performed in dry-run.
 
-If user chooses A (accept):
-- For bead-split: create sub-beads and supersede original:
-  ```bash
-  bd create --title="<sub-bead-A>" --type=<type> --priority=<priority>
-  bd create --title="<sub-bead-B>" --type=<type> --priority=<priority>
-  bd dep add <sub-bead-B> <sub-bead-A>  # if B depends on A
-  bd supersede <original-id> --with=<sub-bead-A>
-  ```
-- Re-run Phase 1 with the new bead set
-- Return to Phase 1.25 with updated wave
+After outputting the terminal stop message, **stop processing immediately**. Do not
+continue to Phase 1.5 or beyond. The orchestrator cannot dispatch with HIGH-fundamental
+findings unresolved.
 
-If user chooses B (override):
-```bash
-bd update <id> --append-notes="Wave review HIGH-fundamental override by user: <finding summary>. $(date -u +%Y-%m-%dT%H:%M:%SZ)"
-```
-Proceed to next finding. (In `--dry-run` mode: do NOT apply the `bd update --append-notes`
-override log either — dry-run suppresses all writes.)
+#### HIGH-lokal (auto-apply + log)
 
-#### HIGH-lokal (user confirmation + apply)
+For each HIGH-lokal finding — apply the recommended fix automatically, log it, and
+show a summary. No Y/N confirmation: the fix is logged and visible in bead notes.
+`Agent()` is stateless; mid-agent Y/N gates cannot be resumed.
 
-For each HIGH-lokal finding — present the proposed fix and await confirmation:
-
-```
-## Wave Review — HIGH Finding (locally fixable)
-
-Finding: <finding text>
-Bead(s): <bead_ids>
-Proposed fix: <recommendation (e.g. `bd dep add demo-epic-b demo-epic-c`)>
-
-Apply this fix? [Y/N]
-```
-
-If confirmed:
 ```bash
 # Apply the recommended fix (e.g. add dependency edge)
 bd dep add <id1> <id2>
 # or
 bd update <id> --append-notes="<fix applied>"
+
+# Always log the auto-apply:
+bd update <id> --append-notes="Wave review HIGH-lokal auto-applied: <finding summary> → <fix applied>. $(date -u +%Y-%m-%dT%H:%M:%SZ)"
+```
+
+Show a summary after all HIGH-lokal fixes:
+```
+## Wave Review — AUTO-APPLIED HIGH Fixes
+- <bead-id>: <finding> → <fix applied>
 ```
 
 In `--dry-run` mode: Show the finding and proposed fix, do NOT apply.
@@ -497,12 +497,13 @@ If the second-pass verdict is still `Not ready for dispatch`:
 The following issues remain unresolved after applying fixes:
 <second-pass findings>
 
-Options:
-  A) Continue anyway (logged to notes)
-  B) Abort dispatch
+Action required:
+  - Address the remaining issues and re-invoke wave-orchestrator
+  - To override: re-invoke with --skip-wave-review (auto-logged to all bead notes)
 ```
 
-Do NOT trigger a third review. The orchestrator does not loop indefinitely.
+**STOP — terminal state.** Do not continue to Phase 1.5. Do NOT trigger a third review.
+The orchestrator cannot resume after returning; the user must re-invoke.
 
 ### Phase 1.5b Context Handoff
 
@@ -601,21 +602,32 @@ Run these subagents in parallel (one per bead in the wave).
 ### Acting on Results
 
 **If split recommended:**
-1. Present the split suggestion to the user with the sub-bead breakdown
-2. If user approves:
-   ```bash
-   bd create --title="<sub-bead-A title>" --description="<ACs for A>" --type=<type> --priority=<same>
-   bd create --title="<sub-bead-B title>" --description="<ACs for B>" --type=<type> --priority=<same>
-   bd dep add <sub-bead-B> <sub-bead-A>  # if B depends on A
-   bd supersede <original-id> --with=<sub-bead-A>  # mark original as superseded
-   ```
-3. Re-run wave planning (Phase 1) with the new sub-beads replacing the original
-4. If user rejects: proceed with the original bead but add an annotation:
-   ```bash
-   bd update <id> --append-notes="Compound scope detected — risk of review oscillation. Consider SCOPE-EXPAND after iteration 2 if review ping-pongs."
-   ```
+1. Present the split suggestion with the sub-bead breakdown
+2. **STOP — terminal state.** The agent cannot create sub-beads and re-run planning in
+   the same invocation without user confirmation. `Agent()` is stateless; Y/N gates
+   cannot be resumed.
 
-**If SCOPE OK:** proceed to Phase 2 without changes.
+Output a terminal stop message:
+```
+## Scope Analysis — Split Recommended
+
+Bead: <bead_id> — <title>
+Sub-bead A: <title> (ACs: <list>)
+Sub-bead B: <title> (ACs: <list>)
+Dependency: <B depends on A / independent>
+
+Action required:
+  - To split: create sub-beads manually, then re-invoke wave-orchestrator with new IDs
+    bd create --title="<sub-bead-A>" --type=<type> --priority=<same>
+    bd create --title="<sub-bead-B>" --type=<type> --priority=<same>
+    bd dep add <sub-bead-B> <sub-bead-A>
+    bd supersede <original-id> --with=<sub-bead-A>
+  - To proceed as-is: re-invoke with --skip-scope-check (risk of review oscillation logged)
+```
+
+Do not continue to Phase 1.5b. The orchestrator stops here when any split is recommended.
+
+**If SCOPE OK:** proceed to Phase 1.5b without changes.
 
 ### Skip Conditions
 
@@ -623,6 +635,10 @@ Skip scope analysis for:
 - Beads with only 1-2 acceptance criteria (too small to be compound)
 - Type `bug` with a clear single root cause in the title
 - Type `chore` (typically mechanical, low oscillation risk)
+- `--skip-scope-check` flag is set → log per bead and proceed to Phase 1.5b:
+  ```bash
+  bd update <id> --append-notes="Scope check skipped (--skip-scope-check flag). User: $(whoami), $(date -u +%Y-%m-%dT%H:%M:%SZ)"
+  ```
 
 ---
 
@@ -802,12 +818,20 @@ Design docs: /tmp/arch-design-mira-0al.md, /tmp/arch-design-mira-n4r.md
 ```
 
 **If any bead is COUNCIL_BLOCKED:**
-1. Show the CRITICAL findings to the user
-2. Ask: "Trotzdem dispatchen? (Escape Hatch)" or "Findings zuerst adressieren?"
-3. If user chooses escape hatch, log:
-   ```bash
-   bd update <id> --append-notes="Architecture Council BLOCKED but user overrode. Findings: <summary>. $(date -u +%Y-%m-%dT%H:%M:%SZ)"
+1. Show the CRITICAL findings
+2. **STOP — terminal state.** Output:
    ```
+   ## Architecture Review — BLOCKED
+
+   Bead: <bead_id>
+   Critical findings: <summary>
+
+   Action required:
+     - Address the findings and re-invoke wave-orchestrator
+     - To override: re-invoke with --skip-review (auto-logged to bead notes)
+   ```
+3. Do not continue to Phase 2. The orchestrator cannot dispatch COUNCIL_BLOCKED beads
+   without explicit user override via `--skip-review`.
 
 **If no beads are blocked:** proceed to Phase 2 automatically.
 
@@ -1603,6 +1627,9 @@ For all error scenarios, read `references/error-recovery.md`. It covers:
 - **Output language**: Respond in the user's language. The agent instructions are English but output should match the user.
 - **Use the scripts**: Prefer `wave-dispatch.py`, `wave-status.py`, and `wave-completion.py` over manual cmux calls. They're faster, produce structured output, and reduce context usage.
 - **NEVER session close**: The wave orchestrator must never trigger or send `session close`. The bead-orchestrator (or quick-fix) handles this autonomously.
+- **No mid-agent Y/N gates**: `Agent()` is stateless — there is no `SendMessage` to resume a paused agent. All gates are either automatic (safe to apply) or terminal stops (user must re-invoke). Never pause and wait for a Y/N in the middle of a run.
+- **Two-step dry-run pattern**: When the caller wants to review before committing, they first invoke with `--dry-run` (shows the plan, stops before dispatch), then re-invoke with explicit bead IDs (skips re-discovery, proceeds to dispatch). This is the correct substitute for a mid-agent confirmation gate.
+- **Terminal stops are not errors**: A terminal stop for HIGH-fundamental, scope split, or COUNCIL_BLOCKED is the correct behavior — it surfaces a decision that requires human judgment and instructs the user how to re-invoke.
 - **`--skip-wave-review` skips Phase 1.25**: Always log the skip per bead with timestamp and `$(whoami)`.
 - **`--dry-run` runs Phase 1.25 read-only**: Findings are shown but NO bd update edits are applied.
 - **Phase 1.25 max 1 re-review**: Never loop more than once. After second-pass still-not-ready, escalate to user with Continue/Abort.
