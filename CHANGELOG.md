@@ -2,11 +2,18 @@
 
 All notable changes to the claude-code-plugins marketplace are documented here.
 
-## [Unreleased]
+## [2026.04.141] - 2026-04-30
+
+### Bug Fixes
+
+- **wave-orchestrator**: Use cmux send \n instead of send-key enter for dispatch([3f5f89e](https://github.com/sussdorff/claude-code-plugins/commit/3f5f89e5aa308be0d1e2808a550fb9edb9a9b5a6))
+- **wave-dispatch**: Use literal \\n escape not raw LF for cmux send([fc12f62](https://github.com/sussdorff/claude-code-plugins/commit/fc12f62c0a91039db0c8f30290c6b1b5044cb880))
 
 ### Features
 
+- **polaris-g8b**: Scan main repo for uncommitted generated files before merge([12cad68](https://github.com/sussdorff/claude-code-plugins/commit/12cad68))
 - **session-close**: Add cliff.toml and --push-gate flag([8d8e374](https://github.com/sussdorff/claude-code-plugins/commit/8d8e3745597476c402700cfa274c3d07a8549029))
+
 ## [2026.04.138] - 2026-04-26
 
 ### Bug Fixes
