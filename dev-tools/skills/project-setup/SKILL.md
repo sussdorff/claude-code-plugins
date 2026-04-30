@@ -8,6 +8,7 @@ description: >
   auditing setup drift across the fleet, or when user says "neues Projekt", "Projekt aufsetzen",
   "project setup", "setup upgraden", "fleet audit". Replaces the old project-init skill.
   Also triggers on: project init, setup CLAUDE.md, project setup, create CLAUDE.md.
+requires_standards: [tool-standards, english-only, no-emoji]
 ---
 
 # project-setup

@@ -3,6 +3,7 @@ name: amazon
 model: sonnet
 description: Amazon.de automation via playwright-cli with local purchases database. Use for downloading invoices, searching order history, or querying past purchases. Triggers on amazon rechnung, amazon bestellung, amazon order, was habe ich gekauft.
 disableModelInvocation: true
+requires_standards: [english-only]
 ---
 
 # Amazon Skill

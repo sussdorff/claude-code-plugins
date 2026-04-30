@@ -5,6 +5,7 @@ description: >-
   Query per-bead token cost metrics from the local agent metrics database.
   Shows cost table, impl:review ratios, most expensive beads, cost trend over time.
   Triggers on: bead metrics, token cost report, bead costs, /bead-metrics.
+requires_standards: [english-only]
 ---
 
 # Bead Metrics Report

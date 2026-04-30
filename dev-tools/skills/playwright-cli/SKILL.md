@@ -3,6 +3,7 @@ name: playwright-cli
 disableModelInvocation: true
 description: Browser automation via playwright-cli. ALWAYS use instead of Chrome MCP tools. Use when opening websites, scraping pages, filling forms, or interacting with web UIs. Triggers on any URL, website name, open page, browse, navigate, scrape, fill form.
 allowed-tools: Bash(playwright-cli:*)
+requires_standards: [tool-standards, english-only, no-emoji]
 ---
 
 # Browser Automation with playwright-cli

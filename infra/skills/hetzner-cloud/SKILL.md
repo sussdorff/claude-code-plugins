@@ -2,6 +2,7 @@
 name: hetzner-cloud
 model: haiku
 description: Manage Hetzner Cloud infrastructure via hcloud CLI and Robot. Use when creating/modifying DNS records, managing servers, switching projects, or transferring domains. Triggers on hetzner, hcloud, dns zone, domain transfer, nameserver.
+requires_standards: [english-only]
 ---
 
 # Hetzner Cloud

@@ -1,6 +1,7 @@
 ---
 name: intake
 description: intake — Transkript zu Beads Pipeline
+requires_standards: [english-only]
 ---
 # intake — Transkript zu Beads Pipeline
 

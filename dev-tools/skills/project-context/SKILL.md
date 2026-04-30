@@ -7,6 +7,7 @@ description: >-
   Module Map, Established Patterns, and Critical Invariants. Triggers on: project context, generate project context,
   project-context, create project-context, constitution document, codebase context.
 tags: project, documentation, architecture
+requires_standards: [tool-standards, english-only, no-emoji]
 ---
 
 # Project Context

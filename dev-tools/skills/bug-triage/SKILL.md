@@ -4,6 +4,7 @@ description: >-
   Structured 4-phase bug investigation: Reproduce → Root Cause → Fix → Regression Test.
   Use when a bug is reported, something is broken, "geht nicht", Fehler, regression detected,
   or kaputt. Guides through systematic investigation instead of guessing.
+requires_standards: [tool-standards, english-only, no-emoji]
 ---
 
 # Bug Triage

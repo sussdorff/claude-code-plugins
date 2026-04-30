@@ -4,6 +4,7 @@ description: >-
   Smart bead creation with type guidance, size routing, and auto-scenario generation for features.
   Use when creating beads, adding work items, or when user describes something to build/fix/improve.
   Triggers on bead erstellen, create bead, neues bead, new bead, bd create.
+requires_standards: [english-only]
 ---
 
 # Smart Bead Create

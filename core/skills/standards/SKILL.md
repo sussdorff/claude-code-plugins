@@ -7,6 +7,7 @@ description: >-
   load standards, check compliance, create standard, sync standards,
   review conventions, check patterns, apply patterns.
 model: haiku
+requires_standards: [english-only]
 ---
 
 # Standards

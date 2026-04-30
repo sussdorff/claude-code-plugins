@@ -8,6 +8,7 @@ description: >
   issues", "no common ancestor", "not supported in embedded mode", or "lost local
   database". Read the beads changelog first. Do not use for normal beads tracking (`bd
   create/ready/close`), standalone Dolt databases, or regular git push/pull.
+requires_standards: [english-only]
 ---
 
 # dolt

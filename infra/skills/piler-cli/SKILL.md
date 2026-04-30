@@ -3,6 +3,7 @@ disable-model-invocation: true
 name: piler-cli
 model: haiku
 description: CLI for searching and reading emails from Mailpiler archive on Proxmox. Use when querying archived emails, searching mail history, or reading past messages. Triggers on mailpiler, mail archive, piler search, alte mails, mail suchen, email archiv.
+requires_standards: [english-only]
 ---
 
 # piler-cli

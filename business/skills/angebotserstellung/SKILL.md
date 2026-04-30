@@ -3,6 +3,7 @@ name: angebotserstellung
 model: sonnet
 description: Professionelle Angebote fuer IT-Projekte und Beratungsleistungen erstellen. Use when writing proposals, revising offers, or calculating project pricing. Triggers on Angebot, proposal, Preiskalkulation, Angebotserstellung, offer, Beratungsangebot.
 disableModelInvocation: true
+requires_standards: [english-only]
 ---
 
 # Angebotserstellung

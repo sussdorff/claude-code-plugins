@@ -3,6 +3,7 @@ name: google-invoice
 model: sonnet
 description: Download Google One AI Pro invoice from payments.google.com, generate ZUGFeRD XML, and send to accounting. Triggers on google rechnung, google invoice, google one beleg, google one rechnung.
 disableModelInvocation: true
+requires_standards: [english-only]
 ---
 
 # Google Invoice Skill

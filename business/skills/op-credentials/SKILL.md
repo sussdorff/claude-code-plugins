@@ -2,6 +2,7 @@
 name: op-credentials
 model: haiku
 description: Read, list, and create service credentials in 1Password. Use when needing API keys, service passwords, or creating credentials. Triggers on 1password, 1Password, op credentials, api key, service credentials, op read, op://, op item, vault, password speichern. Not for personal logins or SSH keys.
+requires_standards: [english-only]
 ---
 
 # op-credentials

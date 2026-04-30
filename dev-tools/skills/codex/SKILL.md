@@ -6,6 +6,7 @@ description: |
   your code. Consult: ask codex anything with session continuity for follow-ups.
   The "200 IQ autistic developer" second opinion. Use when asked to "codex review",
   "codex challenge", "ask codex", "second opinion", or "consult codex".
+requires_standards: [tool-standards, english-only, no-emoji]
 ---
 
 # /codex — Multi-AI Second Opinion

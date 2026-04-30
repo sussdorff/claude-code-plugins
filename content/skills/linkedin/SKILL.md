@@ -3,6 +3,7 @@ name: linkedin
 model: sonnet
 description: LinkedIn automation and data analysis via playwright-cli. Use when extracting profiles, reading feeds, writing recommendations, or searching people. Triggers on LinkedIn, profile extraction, connections, feed, LinkedIn search, recommendation.
 disableModelInvocation: true
+requires_standards: [english-only]
 ---
 
 # LinkedIn Skill

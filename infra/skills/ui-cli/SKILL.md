@@ -3,6 +3,7 @@ name: ui-cli
 model: haiku
 description: CLI for querying UniFi network infrastructure. Use when finding devices, looking up client MAC/IP, checking network config, or listing WLANs. Triggers on UniFi, network clients, WiFi, AP, switch, gateway, device IP, device MAC.
 disableModelInvocation: true
+requires_standards: [english-only]
 ---
 
 # UI-CLI - UniFi Network CLI

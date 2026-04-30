@@ -5,6 +5,7 @@ description: >-
   Measure static context token overhead for agent sessions. Use when auditing
   context window usage, checking skill/agent/conventions token costs, or generating
   a ranked report of heaviest context contributors.
+requires_standards: [english-only]
 ---
 
 # Token Cost Measurement

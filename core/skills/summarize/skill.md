@@ -3,6 +3,7 @@ name: summarize
 model: haiku
 description: "Content extraction and summarization via summarize CLI and Crawl4AI. Use for extracting web content, YouTube transcripts, podcasts, and generating AI summaries."
 triggers: summarize, summary, extract content, web scraping, youtube transcript, podcast, crawl
+requires_standards: [english-only]
 ---
 
 # summarize

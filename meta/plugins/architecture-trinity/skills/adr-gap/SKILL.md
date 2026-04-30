@@ -5,6 +5,7 @@ description: >-
   adr audit, pre-trinity packages, architecture drift.
 argument-hint: "[repo_root] [--create-beads] [--ci] [--allow-unknown]"
 tags: architecture, adr, audit
+requires_standards: [english-only]
 ---
 
 # /adr-gap

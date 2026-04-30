@@ -1,6 +1,7 @@
 ---
 name: workplan
 description: workplan — Beads-Backlog analysieren, priorisieren und verbessern
+requires_standards: [english-only]
 ---
 # workplan — Beads-Backlog analysieren, priorisieren und verbessern
 

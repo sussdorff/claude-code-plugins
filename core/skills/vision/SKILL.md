@@ -5,6 +5,7 @@ description: >
   Unconstrained creative brainstorming and lateral thinking mode. No quality gates, no feasibility
   checks, no task tracking — pure idea generation. Use when the user says "vision", "brainstorm",
   "Kreativmodus", "was wäre wenn", "what if", or wants to explore possibilities without constraints.
+requires_standards: [english-only]
 ---
 
 # Vision — Creative Mode

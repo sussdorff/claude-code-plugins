@@ -3,6 +3,7 @@ description: Generate implementation plan with context, review, decisions, and t
 argument-hint: [TICKET-ID | issue description]
 tags: project
 timeout: 600000
+requires_standards: [english-only]
 ---
 
 # /plan - Interactive Planning Before Implementation

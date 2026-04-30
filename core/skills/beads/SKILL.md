@@ -6,6 +6,7 @@ description: >-
   including final closeout) or a quick-fix agent (lightweight, Phase 0–5 end-to-end including
   final closeout). Use when implementing a bead by ID, or to list ready beads.
   Triggers on implementiere bead, arbeite an bead, slice bead, bead zu gross.
+requires_standards: [english-only]
 ---
 
 # Beads Dispatcher

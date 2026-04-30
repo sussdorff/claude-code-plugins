@@ -5,6 +5,7 @@ description: >-
   Audit Anthropic system prompt changes against the local baseline and review
   custom prompts for compatibility. Use when checking for new Claude versions,
   "run system prompt audit", "audit system prompts", or "check for prompt updates".
+requires_standards: [english-only]
 ---
 
 # System Prompt Audit

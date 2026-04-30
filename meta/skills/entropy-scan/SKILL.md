@@ -4,6 +4,7 @@ description: >-
   Scan the agent harness (skills, hooks, agents, standards) for invariant violations
   and entropy. Produces a violation report with actionable fix instructions. Triggers on:
   entropy scan, harness check, harness validate, invariants check.
+requires_standards: [english-only]
 ---
 
 # Entropy Scan

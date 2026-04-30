@@ -5,6 +5,7 @@ description: >-
   Audit a codebase against Nate's 12 NBJ agent primitives and produce a scored
   scorecard with risk levels and delta tracking. Triggers on: nbj audit, agent
   primitives audit, harness audit, 12 primitives check, plumbing audit.
+requires_standards: [english-only]
 ---
 
 # NBJ Audit

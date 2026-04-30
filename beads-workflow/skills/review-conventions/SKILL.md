@@ -1,6 +1,7 @@
 ---
 name: review-conventions
 description: Review Conventions
+requires_standards: [english-only]
 ---
 # Review Conventions
 

@@ -2,6 +2,7 @@
 description: Evaluate factory-ready spec quality for a bead before autonomous execution
 argument-hint: [bead-id]
 tags: workflow
+requires_standards: [english-only]
 ---
 
 # Factory-Check — Bead Spec Quality Evaluation

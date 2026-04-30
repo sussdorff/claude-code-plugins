@@ -6,6 +6,7 @@ description: >-
   running parallel cld -b sessions. MUST USE when user says "wave", "parallel beads",
   "implement all beads for X", "start the beads", or references implementing more than 2 beads
   at once. Also triggers on "cmux dispatch", "multi-bead", "wave orchestrator".
+requires_standards: [english-only]
 ---
 
 # Wave Orchestrator

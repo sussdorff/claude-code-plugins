@@ -6,6 +6,7 @@ description: >
   vague task descriptions, or says "expand prompt", "refine prompt", "use heypresto",
   "prompt verbessern". Also triggers on "Expand Prompt." at the start of a message followed
   by stream-of-consciousness text. Do NOT use for simple direct questions or already-clear prompts.
+requires_standards: [english-only]
 ---
 
 # Prompt Refiner

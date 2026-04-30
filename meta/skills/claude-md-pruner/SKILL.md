@@ -3,6 +3,7 @@ name: claude-md-pruner
 model: sonnet
 description: Review CLAUDE.md files for instructions that newer models handle natively and suggest removals. Use after model updates to prune outdated instructions. Triggers on "prune claude-md", "post-update review", "prune instructions", "model update cleanup".
 disableModelInvocation: true
+requires_standards: [english-only]
 ---
 
 # CLAUDE.md Post-Model-Update Pruner

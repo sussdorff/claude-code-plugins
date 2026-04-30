@@ -2,6 +2,7 @@
 name: epic-init
 model: sonnet
 description: Guided planning dialog for larger initiatives producing Beads epics with sub-tasks. Use when planning features or multi-task initiatives needing structured breakdown. Triggers on epic init, plan epic, create epic, plan feature, break down feature.
+requires_standards: [english-only]
 ---
 
 # Epic Init

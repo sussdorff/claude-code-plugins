@@ -8,6 +8,7 @@ description: >-
   Enforces the three-tier exit code convention (0=info/pass, 1=hook-error, 2=block)
   — see malte/standards/dev-tools/hook-exit-codes.md for the full standard.
 disableModelInvocation: true
+requires_standards: [english-only]
 ---
 
 # Hook Creator

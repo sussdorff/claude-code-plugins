@@ -4,6 +4,7 @@ model: sonnet
 description: >-
   Structured 4-stage retrospective for completed beads: Requirements vs Strategy, Strategy vs Execution, Iteration Review, Workflow Audit. Creates Trap/Pattern/Decision artifacts. Use when debriefing a bead, capturing session learnings, or running a compound retrospective.
 disableModelInvocation: true
+requires_standards: [english-only]
 ---
 
 # Compound Retrospective

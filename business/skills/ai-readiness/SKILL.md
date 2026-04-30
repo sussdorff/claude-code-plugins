@@ -3,6 +3,7 @@ disable-model-invocation: true
 name: ai-readiness
 model: haiku
 description: Structured AI-Readiness Self-Assessment across 6 dimensions. Use for career planning or evaluating AI capability readiness. Triggers on AI readiness, self assessment, AI capability check, career readiness, AI skills assessment.
+requires_standards: [english-only]
 ---
 
 # AI-Readiness Self-Assessment

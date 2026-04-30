@@ -2,6 +2,7 @@
 name: pencil
 model: sonnet
 description: Design UI screens and components in Pencil .pen files via MCP tools. Use when creating designs, editing .pen files, or working with design systems. Triggers on pencil, pen file, design system, design screen, components.pen.
+requires_standards: [english-only]
 ---
 
 # Pencil Design Tool

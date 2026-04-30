@@ -3,6 +3,7 @@ disable-model-invocation: true
 name: career-check
 model: sonnet
 description: Modulare Karriere-Analyse fuer die AI-Aera mit Collapse Position Audit und Role Assessment. Use when evaluating career positioning or assessing AI impact. Triggers on career check, career analysis, career collapse, AI career, role assessment.
+requires_standards: [english-only]
 ---
 
 # Career Check

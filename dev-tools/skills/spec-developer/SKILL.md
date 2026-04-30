@@ -6,6 +6,7 @@ description: >
   Triggers on "spec developer", "feature spec", "deep spec", "requirements spec".
 model: opus
 disable-model-invocation: true
+requires_standards: [tool-standards, english-only, no-emoji]
 ---
 
 # Spec Developer

@@ -6,6 +6,7 @@ description: >
   a vision. Triggers on "vision author", "author vision", "create vision", "vision document".
 model: opus
 disable-model-invocation: true
+requires_standards: [tool-standards, english-only, no-emoji]
 ---
 
 # Vision Author

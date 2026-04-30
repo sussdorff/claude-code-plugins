@@ -3,6 +3,7 @@ name: mail-send
 model: haiku
 description: Send emails with attachments via Apple Mail AppleScript automation. Prepares a visible draft for user review before sending. Use when sending emails with file attachments. Triggers on send email, mail send, email with attachment, mail schicken.
 disableModelInvocation: true
+requires_standards: [english-only]
 ---
 
 # mail-send

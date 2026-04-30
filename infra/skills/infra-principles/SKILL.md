@@ -5,6 +5,7 @@ description: >-
   Infrastructure engineering principles for server work, deployments, and multi-agent collaboration.
   Use when working on servers, deploying services, writing deployment scripts, or coordinating
   parallel agent edits. Triggers on infrastructure, deploy, server, IaC, multi-agent, parallel edits.
+requires_standards: [english-only]
 ---
 
 # Infrastructure Principles

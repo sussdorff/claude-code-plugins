@@ -3,6 +3,7 @@ disable-model-invocation: true
 name: paperless-cli
 model: haiku
 description: Interact with Paperless-ngx document management via REST API. Use when searching documents, downloading PDFs, uploading scans, or querying tags. Triggers on paperless, scanned document, document archive. Not for email archiving (use piler-cli).
+requires_standards: [english-only]
 ---
 
 # paperless-cli

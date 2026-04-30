@@ -3,6 +3,7 @@ name: plugin-management
 model: sonnet
 description: Create, test, and distribute Claude Code plugins. Use when building plugins, converting skills to packages, or managing marketplace distribution. Triggers on create plugin, plugin, marketplace, distribute plugin, test plugin, plugin.json.
 disableModelInvocation: true
+requires_standards: [english-only]
 ---
 
 # Plugin Management

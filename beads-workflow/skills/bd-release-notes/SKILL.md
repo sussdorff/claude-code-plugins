@@ -1,5 +1,6 @@
 ---
 description: Show beads (bd) release notes and changelog
+requires_standards: [english-only]
 ---
 
 ```bash

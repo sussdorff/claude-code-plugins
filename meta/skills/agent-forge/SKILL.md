@@ -7,6 +7,7 @@ description: >-
   MUST BE USED when the user says "create agent", "new subagent", "review agent",
   "audit agent", "agent vs skill", or asks about multi-agent architecture.
 disableModelInvocation: true
+requires_standards: [english-only]
 ---
 
 # Agent Forge

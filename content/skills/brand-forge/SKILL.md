@@ -3,6 +3,7 @@ disable-model-invocation: true
 name: brand-forge
 model: sonnet
 description: Create, review, and manage voice/brand profiles for Claude Code skills. Use when creating brands, reviewing quality, or applying voice profiles. Triggers on create brand, voice profile, review brand, change tone. Not for skill creation.
+requires_standards: [english-only]
 ---
 
 # Brand Forge

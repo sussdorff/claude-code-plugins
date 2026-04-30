@@ -5,6 +5,7 @@ description: >-
   Run a quick quality assessment on a project and produce a traffic-light
   scorecard. Triggers on: project health, projekt check, health check, project
   quality, wie gesund ist das projekt, code health check.
+requires_standards: [tool-standards, english-only, no-emoji]
 ---
 
 # Project Health

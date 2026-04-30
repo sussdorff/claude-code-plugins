@@ -1,6 +1,7 @@
 ---
 name: event-log
 description: Query the structured event log for any project. Shows tool use history, session starts, permission decisions, and errors from the centralized harness events database. Use when investigating session activity, debugging tool usage patterns, reviewing what happened in a session, or querying across projects.
+requires_standards: [english-only]
 ---
 
 # Event Log Query

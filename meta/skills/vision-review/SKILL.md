@@ -6,6 +6,7 @@ description: >-
   Vision health check: review each principle Y/N with evidence, compute a health score,
   generate draft ADRs for contested principles. Triggers on: vision review, review vision,
   vision health, vision health check, re-evaluate vision.
+requires_standards: [english-only]
 ---
 
 # Vision Review

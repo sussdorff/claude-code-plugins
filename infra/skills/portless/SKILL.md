@@ -4,6 +4,7 @@ name: portless
 model: haiku
 description: Set up named local dev server URLs (e.g. myapp.localhost) via portless proxy. Use when configuring dev server names, resolving port conflicts, or setting up .localhost domains. Triggers on portless, EADDRINUSE, dev server URL, localhost, dev proxy.
 allowed-tools: Bash(portless:*)
+requires_standards: [english-only]
 ---
 
 # Portless

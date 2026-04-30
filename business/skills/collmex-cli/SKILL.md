@@ -3,6 +3,7 @@ disable-model-invocation: true
 name: collmex-cli
 model: haiku
 description: CLI wrapper for Collmex Buchhaltung Pro API. Use when managing vendors, invoices, open items, bookings, or generating ZUGFeRD XML. Triggers on Collmex, accounting, invoices, payables, vendors, Buchhaltung, Lieferanten, offene Posten.
+requires_standards: [english-only]
 ---
 
 # collmex-cli - Collmex Accounting CLI

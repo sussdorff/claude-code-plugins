@@ -2,6 +2,7 @@
 name: transcribe
 description: "Transcribe audio files with speaker diarization via AssemblyAI. Supports local files and Plaud AI cloud recordings."
 triggers: transcribe, transkribiere, transcription, transkription, plaud, diarization, speaker recognition
+requires_standards: [english-only]
 ---
 
 # /transcribe

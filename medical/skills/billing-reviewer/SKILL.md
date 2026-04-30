@@ -3,6 +3,7 @@ disable-model-invocation: true
 name: billing-reviewer
 model: sonnet
 description: Billing reviewer agent for evaluating MIRA billing UI as Abrechnungsspezialistin. Use when reviewing billing features or running scenario-based evaluations. Triggers on billing review, Abrechnungsprueferin, billing UI review.
+requires_standards: [healthcare-control-areas, english-only]
 ---
 
 # Billing Reviewer Agent (Abrechnungsspezialistin)

@@ -3,6 +3,7 @@ disable-model-invocation: true
 name: local-vm
 model: haiku
 description: Manage local and remote VMs across Parallels, Hyper-V, QEMU, and Proxmox. Use when SSH fails due to stopped VMs, or to start/stop/check VM status. Triggers on VM not running, SSH failed, start vm, parallels, hyper-v, qemu, proxmox.
+requires_standards: [english-only]
 ---
 
 # Local VM Manager

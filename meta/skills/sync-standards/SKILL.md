@@ -3,6 +3,7 @@ disable-model-invocation: true
 name: sync-standards
 model: haiku
 description: Synchronize global standards and commands into the current project for team sharing. Use when sharing standards with a team or copying conventions to a project. Triggers on sync standards, share standards, team standards, sync conventions.
+requires_standards: [english-only]
 ---
 
 # Sync Standards

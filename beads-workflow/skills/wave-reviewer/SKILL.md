@@ -5,6 +5,7 @@ description: >-
   review misses: dependency ordering, ownership collisions, lifecycle
   contradictions, validation gaps. Triggers on wave review, review wave,
   pre-wave review, bead tree review.
+requires_standards: [english-only]
 ---
 
 # Wave Reviewer

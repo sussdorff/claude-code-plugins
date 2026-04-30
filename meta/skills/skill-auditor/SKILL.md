@@ -2,6 +2,7 @@
 name: skill-auditor
 model: sonnet
 description: Audit and score agent skills fleet-wide; validate or check a single skill for EXTRACTABLE_CODE; improve weak skills surgically. Triggers on audit skills, skill health check, fleet quality, improve skill, fix skill, rewrite skill, validate skill, check skill, skill creation.
+requires_standards: [english-only]
 ---
 
 # Skill Auditor

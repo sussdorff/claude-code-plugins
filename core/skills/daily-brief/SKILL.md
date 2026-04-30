@@ -13,6 +13,7 @@ triggers:
   - daily-brief
   - brief generieren
   - /daily-brief
+requires_standards: [english-only]
 ---
 
 # daily-brief

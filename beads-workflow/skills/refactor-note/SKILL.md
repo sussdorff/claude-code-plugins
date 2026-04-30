@@ -1,6 +1,7 @@
 ---
 name: refactor-note
 description: Refactor Note
+requires_standards: [english-only]
 ---
 # Refactor Note
 

@@ -4,6 +4,7 @@ model: opus
 description: >-
   Run a data-driven bi-weekly retrospective using open-brain timeline, bead metrics, and git history. Detects signals, selects a matching retro method, and guides 4 reflection rounds. Use when running a retro, sprint review, or bi-weekly reflection.
 disableModelInvocation: true
+requires_standards: [english-only]
 ---
 
 # Bi-Weekly Retrospective

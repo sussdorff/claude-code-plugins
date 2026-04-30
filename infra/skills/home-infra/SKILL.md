@@ -5,6 +5,7 @@ description: >-
   Home infrastructure overview - hardware, network, services, and CLI tools.
   Use when finding what runs where, choosing CLI tools, or planning infra changes.
   Triggers on home infra, home network, what devices, home server, infrastructure.
+requires_standards: [english-only]
 ---
 
 # Home Infrastructure Overview

@@ -6,6 +6,7 @@ description: >-
   that critique a document from different angles (End-User, Developer, Security, Product Owner
   for requirements; configurable per type). Produces a consolidated findings table sorted by
   severity. Use when reviewing specs, requirements, deliverables, or training materials.
+requires_standards: [english-only]
 ---
 
 # /council — Multi-Agent Document Review

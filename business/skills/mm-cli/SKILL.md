@@ -3,6 +3,7 @@ name: mm-cli
 model: haiku
 description: CLI for MoneyMoney macOS finance app via AppleScript. Use when querying accounts, balances, transactions, cashflow, or spending. Triggers on MoneyMoney, bank accounts, transactions, cashflow, spending, balance, portfolio, financial analysis.
 disableModelInvocation: true
+requires_standards: [english-only]
 ---
 
 # mm-cli - MoneyMoney CLI

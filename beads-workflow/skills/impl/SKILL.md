@@ -3,6 +3,7 @@ description: Implement plan autonomously with DoD verification
 argument-hint: [plan-file]
 tags: project
 timeout: 1800000
+requires_standards: [english-only]
 ---
 
 # /impl - Autonomous Implementation with DoD Verification
