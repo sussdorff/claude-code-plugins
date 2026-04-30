@@ -8,6 +8,8 @@ description: >-
   NEVER writes API endpoints manually — those come from OpenAPI (auto-generated).
 tools: Read, Write, Edit, Bash, Grep, Glob
 model: haiku
+golden_prompt_extends: cognovis-base
+model_standards: []
 color: cyan
 ---
 

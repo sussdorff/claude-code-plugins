@@ -4,6 +4,8 @@ description: Performs git operations - commit, push, force-push, merge, tag
 tools:
   - Bash
 permissionMode: ask
+golden_prompt_extends: cognovis-base
+model_standards: []
 ---
 
 # Git Operations Subagent

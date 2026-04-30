@@ -6,6 +6,8 @@ description: >-
   and speed matter more than token cost. Returns structured research summaries.
 disallowedTools: Write, Edit, Agent
 model: sonnet
+golden_prompt_extends: cognovis-base
+model_standards: [claude-sonnet-4-6]
 system_prompt_file: malte/system-prompts/agents/researcher.md
 color: cyan
 mcpServers:

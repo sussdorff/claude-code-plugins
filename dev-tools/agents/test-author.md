@@ -2,6 +2,8 @@
 name: test-author
 description: "Writes TDD tests from spec intent and acceptance criteria. Use proactively when a bead's acceptance criteria must be translated into failing unit tests BEFORE implementation begins (Red phase). Information barrier: must NOT access tests/holdout/ or implementation source."
 model: sonnet
+golden_prompt_extends: cognovis-base
+model_standards: [claude-sonnet-4-6]
 tools: Read, Bash, Grep, Glob, Agent
 ---
 

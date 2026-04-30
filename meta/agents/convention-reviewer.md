@@ -7,6 +7,8 @@ tools:
   - Grep
   - Glob
   - Write
+golden_prompt_extends: cognovis-base
+model_standards: []
 ---
 
 # Convention Reviewer Agent

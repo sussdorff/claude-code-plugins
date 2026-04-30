@@ -10,6 +10,8 @@ tools: Read, Write, Edit, Bash, Grep, Glob, Agent, mcp__open-brain__save_memory,
 mcpServers:
   - open-brain
 model: sonnet
+golden_prompt_extends: cognovis-base
+model_standards: [claude-sonnet-4-6]
 system_prompt_file: malte/system-prompts/agents/bead-orchestrator.md
 cache_control: ephemeral
 permissionMode: ask

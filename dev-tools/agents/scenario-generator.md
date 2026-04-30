@@ -2,6 +2,8 @@
 name: scenario-generator
 description: >-
 model: sonnet
+golden_prompt_extends: cognovis-base
+model_standards: [claude-sonnet-4-6]
 tools:
   - Bash
   - Read

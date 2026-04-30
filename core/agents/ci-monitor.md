@@ -8,6 +8,8 @@ description: >-
 tools:
   - Bash
 model: haiku
+golden_prompt_extends: cognovis-base
+model_standards: []
 color: blue
 ---
 

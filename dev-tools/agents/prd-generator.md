@@ -5,6 +5,8 @@ when_to_use: After ticket-data-scout has completed analysis
 tools:
   - Read
   - Write
+golden_prompt_extends: cognovis-base
+model_standards: []
 ---
 
 # PRD Generator Agent

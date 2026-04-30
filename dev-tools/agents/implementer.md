@@ -2,6 +2,8 @@
 name: implementer
 description: "Develops production code to make existing failing unit tests pass (Green phase of TDD). Use proactively after test-author completes the Red phase. Reads test files only; information barrier: must NOT access tests/holdout/ or bead description."
 model: sonnet
+golden_prompt_extends: cognovis-base
+model_standards: [claude-sonnet-4-6]
 tools: Read, Bash, Grep, Glob, Agent
 ---
 

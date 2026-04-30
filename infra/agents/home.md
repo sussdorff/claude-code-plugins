@@ -2,6 +2,8 @@
 name: home
 description: Home infrastructure and smart home agent. Manages Proxmox VMs/LXCs, UniFi network, Home Assistant, Homematic CCU3, and local VMs. Baked-in topology knowledge eliminates repeated skill loading.
 model: sonnet
+golden_prompt_extends: cognovis-base
+model_standards: [claude-sonnet-4-6]
 tools:
   - Bash
   - Read

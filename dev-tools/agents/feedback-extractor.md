@@ -7,6 +7,8 @@ description: |
   for systematic improvement of skills and agents.
 tools: Read, Write, Bash, Grep, Glob
 model: sonnet
+golden_prompt_extends: cognovis-base
+model_standards: [claude-sonnet-4-6]
 color: blue
 ---
 

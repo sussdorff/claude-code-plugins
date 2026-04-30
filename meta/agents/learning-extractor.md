@@ -2,6 +2,8 @@
 name: learning-extractor
 description: |
 model: sonnet
+golden_prompt_extends: cognovis-base
+model_standards: [claude-sonnet-4-6]
 tools: Read, Bash, Grep, Glob, mcp__open-brain__save_memory, mcp__open-brain__search
 ---
 

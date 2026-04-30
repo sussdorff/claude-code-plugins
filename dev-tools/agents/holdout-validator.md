@@ -2,6 +2,8 @@
 name: holdout-validator
 description: "Runs holdout scenarios from tests/holdout/ against a built artifact. Use proactively after implementer completes the Green phase. Read-only and execute-only: never modifies code. Information barrier: must NOT access tests/unit/ source or implementation chat history."
 model: sonnet
+golden_prompt_extends: cognovis-base
+model_standards: [claude-sonnet-4-6]
 tools: Read, Bash, Grep, Glob
 ---
 

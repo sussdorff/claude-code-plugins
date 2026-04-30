@@ -7,6 +7,8 @@ tools: Bash, Read, Grep, Glob, mcp__open-brain__save_memory, mcp__open-brain__se
 mcpServers:
   - open-brain
 model: sonnet
+golden_prompt_extends: cognovis-base
+model_standards: [claude-sonnet-4-6]
 ---
 
 # Integration Test Runner Agent

@@ -11,6 +11,8 @@ tools:
   - Grep
   - Glob
 model: haiku
+golden_prompt_extends: cognovis-base
+model_standards: []
 ---
 
 # Architecture Scout Agent

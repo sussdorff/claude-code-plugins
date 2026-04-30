@@ -8,6 +8,8 @@ description: |
   or needs guidance on spellcheck ignore patterns. MUST BE USED for all spellchecking tasks on this project.
 tools: Read, Write, Edit, Bash, Grep, Glob
 model: sonnet
+golden_prompt_extends: cognovis-base
+model_standards: [claude-sonnet-4-6]
 color: purple
 ---
 

@@ -9,6 +9,8 @@ description: >-
   "multi-bead", "wave orchestrator".
 tools: Bash, Read, Agent
 model: sonnet
+golden_prompt_extends: cognovis-base
+model_standards: [claude-sonnet-4-6]
 ---
 
 # Wave Orchestrator

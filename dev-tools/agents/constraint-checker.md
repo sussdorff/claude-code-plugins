@@ -2,6 +2,8 @@
 name: constraint-checker
 description: "Verifies SLOs, security defaults, and performance constraints against a built artifact. Use proactively after holdout validation to check non-functional requirements. Read-only and execute-only: never modifies code. Information barrier: sees only artifact and constraint definitions."
 model: haiku
+golden_prompt_extends: cognovis-base
+model_standards: []
 tools: Read, Bash, Grep, Glob
 ---
 

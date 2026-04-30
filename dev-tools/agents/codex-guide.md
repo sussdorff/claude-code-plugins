@@ -9,6 +9,8 @@ description: >-
   (3) Codex skills and MCP integration. Do NOT use this agent to RUN Codex —
   use codex-rescue for that. This agent only answers documentation questions.
 model: haiku
+golden_prompt_extends: cognovis-base
+model_standards: []
 tools: Glob, Grep, Read, WebFetch, WebSearch
 ---
 

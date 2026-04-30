@@ -6,6 +6,8 @@ description: >-
   improve skill, fix skill, rewrite skill.
 tools: Read, Bash, Grep, Glob
 model: opus
+golden_prompt_extends: cognovis-base
+model_standards: [claude-opus-4-7]
 ---
 
 # Skill Auditor Agent

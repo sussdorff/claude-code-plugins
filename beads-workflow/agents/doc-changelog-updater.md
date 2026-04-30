@@ -10,6 +10,8 @@ tools: Read, Write, Edit, Bash, Grep, Glob, mcp__open-brain__save_memory, mcp__o
 mcpServers:
   - open-brain
 model: sonnet
+golden_prompt_extends: cognovis-base
+model_standards: [claude-sonnet-4-6]
 color: green
 ---
 

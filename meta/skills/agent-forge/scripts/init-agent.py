@@ -55,6 +55,8 @@ description: >-
   Example: Reviews code for security vulnerabilities. Use PROACTIVELY when code changes are made.
 tools: Read, Grep, Glob
 model: sonnet
+golden_prompt_extends: cognovis-base
+model_standards: [claude-sonnet-4-6]
 color: blue
 ---
 

@@ -7,6 +7,8 @@ description: >-
   edit plan documents.
 tools: Read, Glob, Grep, Edit
 model: opus
+golden_prompt_extends: cognovis-base
+model_standards: [claude-opus-4-7]
 ---
 
 # Plan Reviewer Agent

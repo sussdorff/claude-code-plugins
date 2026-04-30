@@ -8,6 +8,8 @@ description: >-
   state. Triggers on: wave monitor, poll wave, watch wave, monitor wave progress.
 tools: Bash, Read
 model: haiku
+golden_prompt_extends: cognovis-base
+model_standards: []
 ---
 
 # Wave Monitor Agent

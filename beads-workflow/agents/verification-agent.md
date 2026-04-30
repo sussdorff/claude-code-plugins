@@ -7,6 +7,8 @@ description: >-
   Returns structured VERIFIED or DISPUTED report.
 tools: Read, Bash, Grep, Glob
 model: opus
+golden_prompt_extends: cognovis-base
+model_standards: [claude-opus-4-7]
 cache_control: ephemeral
 color: blue
 ---

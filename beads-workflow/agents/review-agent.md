@@ -8,6 +8,8 @@ description: >-
   bead-orchestrator review loop.
 tools: Read, Bash, Grep, Glob
 model: opus
+golden_prompt_extends: cognovis-base
+model_standards: [claude-opus-4-7]
 system_prompt_file: malte/system-prompts/agents/review-agent.md
 cache_control: ephemeral
 color: red

@@ -7,6 +7,8 @@ description: |
   Use for e2e and demo MoC verification. One scenario per agent invocation.
 tools: Bash, Read, Glob
 model: sonnet
+golden_prompt_extends: cognovis-base
+model_standards: [claude-sonnet-4-6]
 color: cyan
 ---
 

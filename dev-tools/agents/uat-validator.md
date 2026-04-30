@@ -7,6 +7,8 @@ description: |
   unit tests, or implementation history.
 tools: Read, Bash, Grep, Glob, Write
 model: sonnet
+golden_prompt_extends: cognovis-base
+model_standards: [claude-sonnet-4-6]
 cache_control: ephemeral
 color: purple
 ---

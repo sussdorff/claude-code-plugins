@@ -2,6 +2,8 @@
 name: gui-review
 description: Visuell verifiziert UI-Aenderungen mit playwright-cli und optionalem Pencil-Design-Abgleich
 model: sonnet
+golden_prompt_extends: cognovis-base
+model_standards: [claude-sonnet-4-6]
 tools:
   - Bash(playwright-cli:*)
   - Bash(curl:*)

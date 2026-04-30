@@ -7,6 +7,8 @@ description: >-
   standalone (full audit) and scoped (file-list) modes.
 tools: Read, Bash, Grep, Glob
 model: haiku
+golden_prompt_extends: cognovis-base
+model_standards: []
 cache_control: ephemeral
 color: cyan
 ---

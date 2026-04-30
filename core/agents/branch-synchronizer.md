@@ -5,6 +5,8 @@ tools:
   - Bash
   - Read
   - Edit
+golden_prompt_extends: cognovis-base
+model_standards: []
 ---
 
 # Branch Synchronizer Subagent

@@ -5,6 +5,8 @@ tools:
   - Bash
   - Read
   - Grep
+golden_prompt_extends: cognovis-base
+model_standards: []
 ---
 
 # File Analyzer Subagent

@@ -2,6 +2,8 @@
 name: browser-tester
 description: Execute browser tests using agent-browser CLI - UI testing, form interaction, visual verification. Use after writing browser test code or when troubleshooting browser-based tests.
 model: sonnet
+golden_prompt_extends: cognovis-base
+model_standards: [claude-sonnet-4-6]
 tools: Bash, Glob, Grep, Read, WebFetch, TodoWrite, WebSearch
 ---
 
