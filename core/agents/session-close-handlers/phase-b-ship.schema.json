@@ -1,9 +1,9 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
   "title": "phase-b-ship output",
-  "description": "JSON emitted by phase-b-ship.sh. Covers Steps 13, 14, 15, 15b, 16, 16a, 16c of session-close Phase B. Partial completion is first-class: any sub-step can report status=not_attempted if a prior step failed. Exit 2 = merge conflict (partial JSON still emitted). Exit 0 = caller can reason about all sub-step outcomes including pipeline failures.",
+  "description": "JSON emitted by phase-b-ship.sh. Covers Steps 13, 14, 14b, 15, 15b, 16, 16a, 16c of session-close Phase B. Partial completion is first-class: any sub-step can report status=not_attempted if a prior step failed. Exit 2 = merge conflict (partial JSON still emitted). Exit 0 = caller can reason about all sub-step outcomes including pipeline failures.",
   "type": "object",
-  "required": ["kill_procs", "second_merge", "merge_feature", "version", "push_gate", "push", "pipeline", "plugin_cache"],
+  "required": ["kill_procs", "second_merge", "main_repo_scan", "merge_feature", "version", "push_gate", "push", "pipeline", "plugin_cache"],
   "properties": {
     "kill_procs": {
       "type": "object",
@@ -33,6 +33,28 @@
           "description": "ok=merged cleanly, conflict=merge conflict (exit 2), skipped=on main branch or dry-run"
         },
         "detail": {"type": "string"}
+      }
+    },
+    "main_repo_scan": {
+      "type": "object",
+      "description": "Step 14b: Scan main repo working tree for uncommitted generated files before merge",
+      "required": ["status", "committed_files", "advisory_files"],
+      "properties": {
+        "status": {
+          "type": "string",
+          "enum": ["clean", "committed", "committed_advisory", "advisory", "commit_failed", "dry_run", "skipped", "not_attempted"],
+          "description": "clean=main repo working tree was clean, committed=generated files auto-committed, committed_advisory=generated files committed + non-generated files noted as advisory, advisory=only non-generated uncommitted files found (non-blocking), commit_failed=tried to commit generated files but git commit failed (non-blocking), dry_run=would have committed in non-dry-run, skipped=not in worktree or no main repo, not_attempted=prior step failed"
+        },
+        "committed_files": {
+          "type": "array",
+          "items": {"type": "string"},
+          "description": "Generated files that were auto-staged and committed to main before the merge"
+        },
+        "advisory_files": {
+          "type": "array",
+          "items": {"type": "string"},
+          "description": "Non-generated uncommitted files found in main repo working tree (non-blocking advisory warning)"
+        }
       }
     },
     "merge_feature": {

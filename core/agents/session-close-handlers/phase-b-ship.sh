@@ -1,13 +1,14 @@
 #!/usr/bin/env bash
 # phase-b-ship.sh - Phase B ship batch handler
 #
-# Consolidates Steps 13, 14, 15, 15b, 16, 16a, 16c from session-close into a
+# Consolidates Steps 13, 14, 14b, 15, 15b, 16, 16a, 16c from session-close into a
 # single script that emits one JSON document. Replaces ~7 individual handler
 # calls with one tool use.
 #
 # Steps executed (in order):
 #   13: Kill worktree dev processes (portless namespace)
 #   14: Second merge from main (merge-from-main.sh)
+#   14b: Scan main repo working tree for uncommitted generated files
 #   15: Merge feature branch into main (merge-feature.sh)
 #   15b: Version bump + create tag (version.sh)
 #   16: Push + tag push
@@ -108,6 +109,11 @@ SECOND_MERGE_DETAIL=""
 MERGE_FEATURE_STATUS="not_attempted"
 MERGE_FEATURE_DETAIL=""
 
+MAIN_SCAN_STATUS="skipped"
+MAIN_SCAN_COMMITTED_FILES=()
+MAIN_SCAN_ADVISORY_FILES=()
+MAIN_SCAN_COMMITTED=false
+
 VERSION_STATUS="not_attempted"
 VERSION_TAG=""
 VERSION_VER=""
@@ -175,23 +181,21 @@ case "$MERGE2_RAW" in
   conflict)
     SECOND_MERGE_STATUS="conflict"
     SECOND_MERGE_DETAIL="merge conflict — resolve and re-run with --ship-only"
-    _emit_partial_json() {
-      jq -cn \
-        --argjson killed "$(printf '%s\n' "${KILL_PROCS_KILLED[@]+"${KILL_PROCS_KILLED[@]}"}" | jq -R . | jq -s . || echo '[]')" \
-        --arg kps "$KILL_PROCS_STATUS" \
-        --arg sms "$SECOND_MERGE_STATUS" --arg smd "$SECOND_MERGE_DETAIL" \
-        '{
-          kill_procs: {status:$kps, killed:$killed},
-          second_merge: {status:$sms, detail:$smd},
-          merge_feature: {status:"not_attempted", detail:""},
-          version: {status:"not_attempted", tag:"", version:""},
-          push_gate: {status:"not_attempted", detail:"", waited_seconds:0},
-          push: {status:"not_attempted", detail:""},
-          pipeline: {status:"not_attempted", run_url:""},
-          plugin_cache: {status:"not_attempted", detail:""}
-        }'
-    }
-    _emit_partial_json
+    jq -cn \
+      --argjson killed "$(printf '%s\n' "${KILL_PROCS_KILLED[@]+"${KILL_PROCS_KILLED[@]}"}" | jq -R . | jq -s . || echo '[]')" \
+      --arg kps "$KILL_PROCS_STATUS" \
+      --arg sms "$SECOND_MERGE_STATUS" --arg smd "$SECOND_MERGE_DETAIL" \
+      '{
+        kill_procs: {status:$kps, killed:$killed},
+        second_merge: {status:$sms, detail:$smd},
+        main_repo_scan: {status:"not_attempted", committed_files:[], advisory_files:[]},
+        merge_feature: {status:"not_attempted", detail:""},
+        version: {status:"not_attempted", tag:"", version:""},
+        push_gate: {status:"not_attempted", detail:"", waited_seconds:0},
+        push: {status:"not_attempted", detail:""},
+        pipeline: {status:"not_attempted", run_url:""},
+        plugin_cache: {status:"not_attempted", detail:""}
+      }'
     exit 2
     ;;
   error_fetch)
@@ -204,6 +208,92 @@ case "$MERGE2_RAW" in
     ;;
 esac
 echo "    merge status: $SECOND_MERGE_STATUS" >&2
+
+# ---------------------------------------------------------------------------
+# Step 14b: Scan main repo working tree for uncommitted generated files
+# ---------------------------------------------------------------------------
+# Before merging the feature branch into main, check if the main repo working
+# tree has uncommitted changes. Generated files (lockfiles, CHANGELOG.md,
+# files in generated/ dirs) are auto-staged and committed. Non-generated
+# uncommitted files are reported as an advisory warning (non-blocking).
+# ---------------------------------------------------------------------------
+echo "==> Step 14b: Scan main repo for uncommitted generated files" >&2
+
+if [[ "$IN_WORKTREE" == "true" && -n "$MAIN_REPO" ]]; then
+  MAIN_PORCELAIN=$(git -C "$MAIN_REPO" status --porcelain 2>/dev/null || true)
+  if [[ -z "$MAIN_PORCELAIN" ]]; then
+    MAIN_SCAN_STATUS="clean"
+    echo "    main repo working tree is clean" >&2
+  else
+    # Classify each changed file as generated or non-generated
+    _is_generated_file() {
+      local file="$1"
+      local base
+      base=$(basename "$file")
+      # Known generated basenames
+      case "$base" in
+        bun.lockb|package-lock.json|yarn.lock|pnpm-lock.yaml|CHANGELOG.md|CHANGELOG.rst)
+          return 0 ;;
+        *.lock)
+          return 0 ;;
+      esac
+      # Files under a generated/ directory segment
+      if [[ "$file" == */generated/* || "$file" == generated/* ]]; then
+        return 0
+      fi
+      return 1
+    }
+
+    while IFS= read -r line; do
+      [[ -z "$line" ]] && continue
+      file="${line:3}"
+      [[ -z "$file" ]] && continue
+      if _is_generated_file "$file"; then
+        MAIN_SCAN_COMMITTED_FILES+=("$file")
+      else
+        MAIN_SCAN_ADVISORY_FILES+=("$file")
+      fi
+    done < <(echo "$MAIN_PORCELAIN")
+
+    echo "    generated: ${#MAIN_SCAN_COMMITTED_FILES[@]}, non-generated (advisory): ${#MAIN_SCAN_ADVISORY_FILES[@]}" >&2
+
+    # Auto-commit generated files
+    if [[ ${#MAIN_SCAN_COMMITTED_FILES[@]} -gt 0 ]]; then
+      if [[ "$DRY_RUN" == "true" ]]; then
+        MAIN_SCAN_STATUS="dry_run"
+        echo "    [dry-run] would commit ${#MAIN_SCAN_COMMITTED_FILES[@]} generated file(s) to main" >&2
+      else
+        git -C "$MAIN_REPO" add -- "${MAIN_SCAN_COMMITTED_FILES[@]}"
+        if git -C "$MAIN_REPO" commit -m "chore: commit generated files before bead merge ($BRANCH)" 2>/dev/null; then
+          MAIN_SCAN_COMMITTED=true
+          echo "    committed ${#MAIN_SCAN_COMMITTED_FILES[@]} generated file(s) to main" >&2
+          MAIN_SCAN_STATUS="committed"
+        else
+          MAIN_SCAN_STATUS="commit_failed"
+          echo "    WARN: could not commit generated files in main repo" >&2
+        fi
+      fi
+    fi
+
+    # Report advisory files (non-blocking)
+    if [[ ${#MAIN_SCAN_ADVISORY_FILES[@]} -gt 0 ]]; then
+      case "$MAIN_SCAN_STATUS" in
+        committed)   MAIN_SCAN_STATUS="committed_advisory" ;;
+        dry_run)     MAIN_SCAN_STATUS="advisory" ;;
+        *)           MAIN_SCAN_STATUS="advisory" ;;
+      esac
+      echo "    ADVISORY: ${#MAIN_SCAN_ADVISORY_FILES[@]} non-generated file(s) uncommitted in main repo:" >&2
+      for f in "${MAIN_SCAN_ADVISORY_FILES[@]}"; do
+        echo "      - $f" >&2
+      done
+    fi
+
+    # If nothing changed the status from its initial "skipped", the tree was clean
+    [[ "$MAIN_SCAN_STATUS" == "skipped" ]] && MAIN_SCAN_STATUS="clean"
+  fi
+else
+  echo "    skipped (not in worktree or main repo not set)" >&2
+fi
 
 # ---------------------------------------------------------------------------
 # Step 15: Merge feature into main
@@ -226,12 +316,16 @@ if [[ "$IN_WORKTREE" == "true" && "$BRANCH" != "main" && -n "$MAIN_REPO" ]]; the
       MERGE_FEATURE_DETAIL="merge conflict on feature->main — resolve manually"
       jq -cn \
         --argjson killed "$(printf '%s\n' "${KILL_PROCS_KILLED[@]+"${KILL_PROCS_KILLED[@]}"}" | jq -R . | jq -s . || echo '[]')" \
+        --argjson msc_committed "$(printf '%s\n' "${MAIN_SCAN_COMMITTED_FILES[@]+"${MAIN_SCAN_COMMITTED_FILES[@]}"}" | jq -R . | jq -s . || echo '[]')" \
+        --argjson msc_advisory "$(printf '%s\n' "${MAIN_SCAN_ADVISORY_FILES[@]+"${MAIN_SCAN_ADVISORY_FILES[@]}"}" | jq -R . | jq -s . || echo '[]')" \
         --arg kps "$KILL_PROCS_STATUS" \
         --arg sms "$SECOND_MERGE_STATUS" --arg smd "$SECOND_MERGE_DETAIL" \
+        --arg mscs "$MAIN_SCAN_STATUS" \
         --arg mfs "$MERGE_FEATURE_STATUS" --arg mfd "$MERGE_FEATURE_DETAIL" \
         '{
           kill_procs: {status:$kps, killed:$killed},
           second_merge: {status:$sms, detail:$smd},
+          main_repo_scan: {status:$mscs, committed_files:$msc_committed, advisory_files:$msc_advisory},
           merge_feature: {status:$mfs, detail:$mfd},
           version: {status:"not_attempted", tag:"", version:""},
           push_gate: {status:"not_attempted", detail:"", waited_seconds:0},
@@ -247,12 +341,16 @@ if [[ "$IN_WORKTREE" == "true" && "$BRANCH" != "main" && -n "$MAIN_REPO" ]]; the
       # Unknown/error status from merge-feature — emit partial JSON and abort
       jq -cn \
         --argjson killed "$(printf '%s\n' "${KILL_PROCS_KILLED[@]+"${KILL_PROCS_KILLED[@]}"}" | jq -R . | jq -s . || echo '[]')" \
+        --argjson msc_committed "$(printf '%s\n' "${MAIN_SCAN_COMMITTED_FILES[@]+"${MAIN_SCAN_COMMITTED_FILES[@]}"}" | jq -R . | jq -s . || echo '[]')" \
+        --argjson msc_advisory "$(printf '%s\n' "${MAIN_SCAN_ADVISORY_FILES[@]+"${MAIN_SCAN_ADVISORY_FILES[@]}"}" | jq -R . | jq -s . || echo '[]')" \
         --arg kps "$KILL_PROCS_STATUS" \
         --arg sms "$SECOND_MERGE_STATUS" --arg smd "$SECOND_MERGE_DETAIL" \
+        --arg mscs "$MAIN_SCAN_STATUS" \
         --arg mfs "$MERGE_FEATURE_STATUS" --arg mfd "$MERGE_FEATURE_DETAIL" \
         '{
           kill_procs: {status:$kps, killed:$killed},
           second_merge: {status:$sms, detail:$smd},
+          main_repo_scan: {status:$mscs, committed_files:$msc_committed, advisory_files:$msc_advisory},
           merge_feature: {status:$mfs, detail:$mfd},
           version: {status:"not_attempted", tag:"", version:""},
           push_gate: {status:"not_attempted", detail:"", waited_seconds:0},
@@ -480,8 +578,11 @@ else
     # so the caller can surface the failure and not close beads
     jq -cn \
       --argjson killed "$(printf '%s\n' "${KILL_PROCS_KILLED[@]+"${KILL_PROCS_KILLED[@]}"}" | jq -R . | jq -s . || echo '[]')" \
+      --argjson msc_committed "$(printf '%s\n' "${MAIN_SCAN_COMMITTED_FILES[@]+"${MAIN_SCAN_COMMITTED_FILES[@]}"}" | jq -R . | jq -s . || echo '[]')" \
+      --argjson msc_advisory "$(printf '%s\n' "${MAIN_SCAN_ADVISORY_FILES[@]+"${MAIN_SCAN_ADVISORY_FILES[@]}"}" | jq -R . | jq -s . || echo '[]')" \
       --arg kps "$KILL_PROCS_STATUS" \
       --arg sms "$SECOND_MERGE_STATUS" --arg smd "$SECOND_MERGE_DETAIL" \
+      --arg mscs "$MAIN_SCAN_STATUS" \
       --arg mfs "$MERGE_FEATURE_STATUS" --arg mfd "$MERGE_FEATURE_DETAIL" \
       --arg vs "$VERSION_STATUS" --arg vt "$VERSION_TAG" --arg vv "$VERSION_VER" \
       --arg pgs "$PUSH_GATE_STATUS" --arg pgd "$PUSH_GATE_DETAIL" --argjson pgw "$PUSH_GATE_WAITED" \
@@ -490,6 +591,7 @@ else
       '{
         kill_procs: {status:$kps, killed:$killed},
         second_merge: {status:$sms, detail:$smd},
+        main_repo_scan: {status:$mscs, committed_files:$msc_committed, advisory_files:$msc_advisory},
         merge_feature: {status:$mfs, detail:$mfd},
         version: {status:$vs, tag:$vt, version:$vv},
         push_gate: {status:$pgs, detail:$pgd, waited_seconds:$pgw},
@@ -552,11 +654,16 @@ to_json_array() {
 }
 
 KILLED_JSON=$(to_json_array "${KILL_PROCS_KILLED[@]+"${KILL_PROCS_KILLED[@]}"}")
+MSC_COMMITTED_JSON=$(to_json_array "${MAIN_SCAN_COMMITTED_FILES[@]+"${MAIN_SCAN_COMMITTED_FILES[@]}"}")
+MSC_ADVISORY_JSON=$(to_json_array "${MAIN_SCAN_ADVISORY_FILES[@]+"${MAIN_SCAN_ADVISORY_FILES[@]}"}")
 
 jq -cn \
   --arg kps "$KILL_PROCS_STATUS" \
   --argjson killed "$KILLED_JSON" \
   --arg sms "$SECOND_MERGE_STATUS" --arg smd "$SECOND_MERGE_DETAIL" \
+  --arg mscs "$MAIN_SCAN_STATUS" \
+  --argjson msc_committed "$MSC_COMMITTED_JSON" \
+  --argjson msc_advisory "$MSC_ADVISORY_JSON" \
   --arg mfs "$MERGE_FEATURE_STATUS" --arg mfd "$MERGE_FEATURE_DETAIL" \
   --arg vs "$VERSION_STATUS" --arg vt "$VERSION_TAG" --arg vv "$VERSION_VER" \
   --arg pgs "$PUSH_GATE_STATUS" --arg pgd "$PUSH_GATE_DETAIL" --argjson pgw "$PUSH_GATE_WAITED" \
@@ -567,6 +674,7 @@ jq -cn \
   '{
     kill_procs: {status: $kps, killed: $killed},
     second_merge: {status: $sms, detail: $smd},
+    main_repo_scan: {status: $mscs, committed_files: $msc_committed, advisory_files: $msc_advisory},
     merge_feature: {status: $mfs, detail: $mfd},
     version: {status: $vs, tag: $vt, version: $vv},
     push_gate: {status: $pgs, detail: $pgd, waited_seconds: $pgw},
