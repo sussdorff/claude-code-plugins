@@ -478,6 +478,52 @@ def test_wave_dispatcher_constructs_cmux_send_command() -> None:
     assert found_send, f"Expected 'cld -b proj-abc' in send calls, got: {send_calls}"
 
 
+def test_wave_dispatcher_send_includes_newline_no_enter_flag() -> None:
+    """cmux send text must end with \\n — Enter must NOT be appended as --enter text."""
+    wd = _wd()
+
+    send_calls: list[list] = []
+    send_key_calls: list[list] = []
+
+    def mock_runner(cmd, **kwargs):
+        if cmd and cmd[0] == "cmux" and "new-split" in cmd:
+            return _MockResult(stdout="surface:42\n")
+        if cmd and cmd[0] == "cmux" and cmd[1] == "send" and "--surface" in cmd:
+            send_calls.append(cmd)
+        if cmd and cmd[0] == "cmux" and cmd[1] == "send-key":
+            send_key_calls.append(cmd)
+        return _MockResult()
+
+    dispatcher = wd.WaveDispatcher(runner=mock_runner)
+    exit_code, _ = dispatcher.dispatch(
+        bead_ids=["proj-abc"],
+        quick_ids=[],
+        workspace="ws:1",
+        base_surface="surface:1",
+        wave_id="wave-2026",
+        skip_scenarios=True,
+    )
+    assert exit_code == 0
+
+    # The send text must end with \n (cmux native escape for Enter)
+    assert send_calls, "Expected at least one cmux send call"
+    send_text = send_calls[-1][-1]  # last arg is the text
+    assert send_text.endswith("\n"), (
+        f"cmux send text must end with \\n to submit the command. Got: {send_text!r}"
+    )
+
+    # --enter must NOT appear anywhere in the send text (it's not a cmux send flag)
+    assert "--enter" not in send_text, (
+        f"--enter must NOT be appended as text. Got: {send_text!r}"
+    )
+
+    # send-key with 'enter' must NOT be used (redundant when \n is in the send text)
+    enter_key_calls = [c for c in send_key_calls if "enter" in c]
+    assert not enter_key_calls, (
+        f"cmux send-key enter must NOT be called when \\n is in send text. Got: {enter_key_calls}"
+    )
+
+
 def test_wave_dispatcher_quick_flag_routing() -> None:
     """--quick beads use cld -bq in the send command."""
     wd = _wd()

@@ -1626,6 +1626,7 @@ For all error scenarios, read `references/error-recovery.md`. It covers:
 
 - **Output language**: Respond in the user's language. The agent instructions are English but output should match the user.
 - **Use the scripts**: Prefer `wave-dispatch.py`, `wave-status.py`, and `wave-completion.py` over manual cmux calls. They're faster, produce structured output, and reduce context usage.
+- **Never append --enter as text**: `cmux send` has no `--enter` flag. If you ever need to send a command manually (which you should not — use `wave-dispatch.py`), use `cmux send "command\n"` where `\n` is the native escape that sends Enter. NEVER do `cmux send "command" --enter`.
 - **NEVER session close**: The wave orchestrator must never trigger or send `session close`. The bead-orchestrator (or quick-fix) handles this autonomously.
 - **No mid-agent Y/N gates**: `Agent()` is stateless — there is no `SendMessage` to resume a paused agent. All gates are either automatic (safe to apply) or terminal stops (user must re-invoke). Never pause and wait for a Y/N in the middle of a run.
 - **Two-step dry-run pattern**: When the caller wants to review before committing, they first invoke with `--dry-run` (shows the plan, stops before dispatch), then re-invoke with explicit bead IDs (skips re-discovery, proceeds to dispatch). This is the correct substitute for a mid-agent confirmation gate.
