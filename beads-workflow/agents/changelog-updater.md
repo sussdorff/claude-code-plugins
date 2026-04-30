@@ -6,6 +6,8 @@ tools:
   - Bash
   - Read
   - Edit
+golden_prompt_extends: cognovis-base
+model_standards: []
 ---
 
 # Changelog Updater Agent
