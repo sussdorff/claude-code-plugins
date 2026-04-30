@@ -505,11 +505,14 @@ def test_wave_dispatcher_send_includes_newline_no_enter_flag() -> None:
     )
     assert exit_code == 0
 
-    # The send text must end with \n (cmux native escape for Enter)
+    # The send text must end with the literal two-char escape \n (not a real newline byte).
+    # cmux send documents "Escape sequences: \n and \r send Enter" — this refers to the
+    # literal backslash-n characters, not a raw LF byte. Passing "\\n" in Python ensures
+    # cmux receives the two chars \ and n and processes them as its Enter escape.
     assert send_calls, "Expected at least one cmux send call"
     send_text = send_calls[-1][-1]  # last arg is the text
-    assert send_text.endswith("\n"), (
-        f"cmux send text must end with \\n to submit the command. Got: {send_text!r}"
+    assert send_text.endswith("\\n"), (
+        f"cmux send text must end with literal \\\\n (backslash-n) to submit the command. Got: {send_text!r}"
     )
 
     # --enter must NOT appear anywhere in the send text (it's not a cmux send flag)
@@ -517,10 +520,10 @@ def test_wave_dispatcher_send_includes_newline_no_enter_flag() -> None:
         f"--enter must NOT be appended as text. Got: {send_text!r}"
     )
 
-    # send-key with 'enter' must NOT be used (redundant when \n is in the send text)
+    # send-key with 'enter' must NOT be used (redundant when \n escape is in the send text)
     enter_key_calls = [c for c in send_key_calls if "enter" in c]
     assert not enter_key_calls, (
-        f"cmux send-key enter must NOT be called when \\n is in send text. Got: {enter_key_calls}"
+        f"cmux send-key enter must NOT be called when \\\\n is in send text. Got: {enter_key_calls}"
     )
 
 

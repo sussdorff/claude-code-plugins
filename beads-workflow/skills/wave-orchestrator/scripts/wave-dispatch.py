@@ -257,7 +257,7 @@ class WaveDispatcher:
             # Dispatch
             try:
                 self._runner(
-                    ["cmux", "send", "--surface", surface, f"WAVE_ID={wave_id} cld {cld_flag} {bid}\n"],
+                    ["cmux", "send", "--surface", surface, f"WAVE_ID={wave_id} cld {cld_flag} {bid}\\n"],
                     capture_output=True,
                     timeout=10,
                 )
