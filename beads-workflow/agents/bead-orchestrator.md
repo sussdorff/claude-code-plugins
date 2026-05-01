@@ -1165,15 +1165,18 @@ bd error messages can be misleading. Read them carefully before acting.
 
 - **"Dolt server unreachable … auto-start is suppressed because the server is
   externally managed (dolt.auto-start: false or explicit port configured)"**
-  This is the SHARED SERVER mode (`dolt.shared-server: true` in `.beads/config.yaml`,
-  default on this setup). The shared server is long-lived and managed by the user
-  — it must NOT be started or restarted per-project by an agent.
+  This is the SHARED SERVER mode. Dolt runs under `brew services` on this setup
+  (port 3306, data dir `~/.dolt-data/`, `keep_alive: true`). Lifecycle is owned
+  by `brew services`, NOT by `bd` — never `bd dolt start`, never `bd dolt stop`,
+  never `pkill dolt` (corrupts journal).
   1. Run `bd dolt status` ONCE to confirm reality.
   2. If it reports `running` → the failure was transient or argument-shaped. Retry
      the bd command, preferring the `--body-file -` / `--design-file -` stdin form
-     for any multi-line content. Do NOT run `bd dolt start`.
-  3. If it reports `not running` → STOP and escalate to the user. The user owns
-     the shared-server lifecycle; agents do not start it.
+     for any multi-line content. Do NOT touch the Dolt lifecycle.
+  3. If it reports `not running` → STOP and escalate to the user. Suggest
+     `brew services restart dolt`; do not invoke it yourself (shared
+     infrastructure → user confirmation required).
+  For deep triage, load the `dolt` skill (project-level skill in `core/skills/dolt/`).
 - **Two consecutive bd write failures with identical errors** → STOP. Report to
   user with both invocations and the actual error text. Do NOT enter a debug
   loop trying to restart Dolt, inspect logs, or guess at config — those paths

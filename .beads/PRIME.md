@@ -200,11 +200,18 @@ Manual fallback if the agent is unavailable:
 
 ## Operational hazards
 
+- **Dolt lifecycle is owned by `brew services`, not `bd`.** Dolt runs under
+  `brew services start dolt` (launchd, `keep_alive: true`) from `~/.dolt-data/`
+  on port 3306. Never `bd dolt start` / `bd dolt stop` / `pkill dolt`
+  (corrupts journal). Use `brew services restart dolt` if the user has
+  authorized it; otherwise escalate. For deep diagnosis load the `dolt` skill.
 - **`bd dolt push` fails**: always retry as `bd dolt pull && bd dolt push --force`
-  (Dolt bug dolthub/dolt#10807). Never use raw `dolt push --force`.
+  (Dolt bug dolthub/dolt#10807). Never use raw `dolt push --force`. Exception:
+  on `no common ancestor`, do NOT force-push — re-clone (see `dolt` skill).
 - **"Dolt server unreachable … externally managed"**: shared-server mode is
   intentional. Run `bd dolt status` once. If running → retry the bd command
-  (likely shell quoting); if not running → escalate to user. Never `bd dolt start`.
+  (likely shell quoting); if not running → escalate to user. Do NOT `bd dolt
+  start`; the user owns the brew-services lifecycle.
 - **`bd show --json` returns an array**: always use `.[0]` in jq:
   `bd show <id> --json | jq -r '.[0].description'`.
 - **No `--append-description`**: doesn't exist. For description edits: dump,

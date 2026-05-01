@@ -564,8 +564,9 @@ After Phase 16 completes, save a session summary via the open-brain MCP `save_me
   `--design-file -`) with a heredoc on stdin. NEVER use
   `--description "$(cat <<EOF…EOF)"` — Codex executes shell commands via
   `zsh -lc '…'`, and a nested heredoc with mixed quoting inside that single-quoted
-  wrapper breaks argument parsing and surfaces misleading "Dolt server unreachable"
-  errors. Stdin form is robust: `bd update <id> --body-file - <<'EOF'\n…\nEOF`.
+  wrapper breaks argument parsing and surfaces misleading "Dolt server unreachable
+  at 127.0.0.1:<port>" errors regardless of whether Dolt is actually reachable.
+  Stdin form is robust: `bd update <id> --body-file - <<'EOF'\n…\nEOF`.
 
 ## bd connection error decoder
 
@@ -573,15 +574,18 @@ bd error messages can be misleading. Read them carefully before acting.
 
 - **"Dolt server unreachable … auto-start is suppressed because the server is
   externally managed (dolt.auto-start: false or explicit port configured)"**
-  This is the SHARED SERVER mode (`dolt.shared-server: true` in `.beads/config.yaml`,
-  default on Malte's setup). The shared server is long-lived and managed by the user
-  — it must NOT be started or restarted per-project by an agent.
+  This is the SHARED SERVER mode. On Malte's setup, Dolt runs under `brew services`
+  (port 3306, data dir `~/.dolt-data/`, `keep_alive: true`). The lifecycle is owned
+  by `brew services`, NOT by `bd` — never `bd dolt start`, never `bd dolt stop`,
+  never `pkill dolt` (corrupts journal).
   1. Run `bd dolt status` ONCE to confirm reality.
   2. If it reports `running` → the failure was transient or argument-shaped
      (most often a heredoc/quoting bug — see Constraints). Retry the bd command
-     using the `--body-file -` stdin form. Do NOT run `bd dolt start`.
-  3. If it reports `not running` → STOP and escalate to the user. The user owns
-     the shared-server lifecycle; agents do not start it.
+     using the `--body-file -` stdin form. Do NOT touch the Dolt lifecycle.
+  3. If it reports `not running` → STOP and escalate to the user. Suggest
+     `brew services restart dolt`; do not invoke it yourself (modifies shared
+     infrastructure → user confirmation required).
+  For deep triage, load the `dolt` skill (`~/.codex/skills/dolt/`).
 - **Two consecutive bd write failures with identical errors** → STOP. Report to
   user with both invocations and the actual error text. Do NOT enter a debug
   loop trying to restart Dolt, inspect logs, or guess at config — those paths
