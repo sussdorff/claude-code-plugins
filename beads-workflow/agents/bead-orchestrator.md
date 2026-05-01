@@ -1158,6 +1158,26 @@ Do NOT spawn `core:session-close`.
 - All Codex calls go through `${CLAUDE_PLUGIN_ROOT}/scripts/codex-exec.py`
 - Every metric write MUST be keyed by `run_id` — NO bead_id-only writes
 
+## bd connection error decoder
+
+bd error messages can be misleading. Read them carefully before acting.
+
+- **"Dolt server unreachable … auto-start is suppressed because the server is
+  externally managed (dolt.auto-start: false or explicit port configured)"**
+  This is the SHARED SERVER mode (`dolt.shared-server: true` in `.beads/config.yaml`,
+  default on this setup). The shared server is long-lived and managed by the user
+  — it must NOT be started or restarted per-project by an agent.
+  1. Run `bd dolt status` ONCE to confirm reality.
+  2. If it reports `running` → the failure was transient or argument-shaped. Retry
+     the bd command, preferring the `--body-file -` / `--design-file -` stdin form
+     for any multi-line content. Do NOT run `bd dolt start`.
+  3. If it reports `not running` → STOP and escalate to the user. The user owns
+     the shared-server lifecycle; agents do not start it.
+- **Two consecutive bd write failures with identical errors** → STOP. Report to
+  user with both invocations and the actual error text. Do NOT enter a debug
+  loop trying to restart Dolt, inspect logs, or guess at config — those paths
+  cost minutes of agent time and almost never fix a misleading connection error.
+
 ## Session Capture
 
 Before returning, save a session summary via `mcp__open-brain__save_memory`:
