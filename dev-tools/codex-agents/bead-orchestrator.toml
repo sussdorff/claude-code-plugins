@@ -546,6 +546,13 @@ After Phase 16 completes, save a session summary via the open-brain MCP `save_me
 ## Constraints
 
 - Do NOT use `bd edit` (opens $EDITOR, blocks agents)
+- Do NOT run `bd prime`, `bd onboard`, or read the `beads` skill SKILL.md
+  (`~/.codex/skills/beads/SKILL.md`). The bead context (`bd show <id>`) is
+  injected into your prompt by the cdx wrapper, and these instructions are
+  the complete workflow. `bd prime` is a primer for plain `cdx`/`cld`
+  sessions without an orchestrator; running it here adds ~1k tokens of
+  duplicate context, may promote stores you don't use (e.g. `bd remember`),
+  and can route you down the wrong skill.
 - Do NOT close beads — session-close handles this. Exception: closing a parent during slicing.
 - Do NOT create beads for new work discovered during implementation — report to user.
 - All Codex adversarial calls go through `beads-workflow/scripts/codex-exec.sh`.

@@ -5,8 +5,8 @@
 
 # Session Close Protocol v3
 
-Session Close wird durch den `session-close` Agent orchestriert.
-Spawn via `Agent(subagent_type="session-close")`. Trigger: "session close", "session beenden", "release", "rc".
+Session Close wird durch den `core:session-close` Agent orchestriert.
+Spawn via `Agent(subagent_type="core:session-close")`. Trigger: "session close", "session beenden", "release", "rc".
 
 Dies handhabt automatisch:
 - Double-Merge Strategie (main→feature am Anfang und vor Push)
@@ -78,6 +78,23 @@ Bei `bd create` oder als Comment nach Erstellung:
 - Git workflow: hooks auto-sync, run `bd dolt commit && bd dolt push` at session end
 - Session management: check `bd ready` for available work
 
+## Memory routing (read this before saving anything)
+
+This setup uses **open-brain** as the single source of truth for persistent memory.
+Do NOT use `bd remember` / `bd memories` / `bd forget` — they exist in the bd CLI
+but are not part of this workflow.
+
+| What you want to save | Where it goes |
+|---|---|
+| Decision/fact specific to *this bead's work* | `bd update <id> --append-notes "..."` (audit trail on the bead) |
+| Session summary at end of bead run | open-brain `mcp__open-brain__save_memory` (type: `session_summary`) |
+| Cross-project learning, person/topic insight, architectural pattern | open-brain `mcp__open-brain__save_memory` (type per content) |
+| Per-session scratch notes | none — let it live in conversation context |
+
+Rule of thumb: if the next agent (in this repo or another) would benefit from
+knowing it tomorrow → open-brain. If it's just a footnote on this specific bead
+→ `--append-notes`. Anything else does not need to be persisted.
+
 ## Essential Commands
 
 ### Finding Work
@@ -97,6 +114,12 @@ Bei `bd create` oder als Comment nach Erstellung:
 - `bd close <id> --reason="explanation"` - Close with reason
 - **Tip**: When creating multiple issues/tasks/epics, use parallel subagents for efficiency
 - **WARNING**: Do NOT use `bd edit` - it opens $EDITOR (vim/nano) which blocks agents
+
+### Flag Pitfalls (create vs update)
+- **Labels**: `bd create` uses `-l`/`--labels` (comma-separated). `bd update` uses `--add-label`/`--remove-label`/`--set-labels`. Do NOT use `--add-label` with `create`.
+- **No `--append-description`**: Does not exist. Use `--append-notes` for notes. For description changes: export via `bd show <id> --json | jq -r '.[0].description' > /tmp/desc.md`, edit, then `bd update <id> --body-file /tmp/desc.md`.
+- **JSON output is array**: `bd show --json` returns an array. Always use `.[0]`: `jq -r '.[0].description'`.
+- **Long descriptions**: Use `--body-file` instead of inline `--description` to avoid shell escaping issues with heredocs.
 
 ### Dependencies & Blocking
 - `bd dep add <issue> <depends-on>` - Add dependency (issue depends on depends-on)
