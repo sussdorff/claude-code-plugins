@@ -2,6 +2,25 @@
 
 All notable changes to the claude-code-plugins marketplace are documented here.
 
+## [2026.04.142] - 2026-05-01
+
+### Documentation
+
+- **bead-orchestrator**: Add bd connection error decoder + stdin-form constraint([bd7838e](https://github.com/sussdorff/claude-code-plugins/commit/bd7838e1cbe500d4104c3cf13c4f4eff914b70f4))
+- **bead-orchestrator**: Forbid bd prime/onboard + ban beads SKILL detour([2de0eaa](https://github.com/sussdorff/claude-code-plugins/commit/2de0eaab4747e46dc916869d4021ab8f497868a4))
+- **dolt**: Rewrite skill for brew-services Dolt lifecycle([72d378b](https://github.com/sussdorff/claude-code-plugins/commit/72d378b4d520ed5b522acef900c7522dec7cc09d))
+- **bd-workflow**: Align with brew-services Dolt setup (port 3306, ~/.dolt-data/)([d87d169](https://github.com/sussdorff/claude-code-plugins/commit/d87d169e0202b8d04a9cba5f5fd8e7d22d9d6dc5))
+
+### Features
+
+- **CL-9b1**: Green — migrate changelog-updater to golden-prompt composition model([845dcee](https://github.com/sussdorff/claude-code-plugins/commit/845dcee5ee0ff9bb8aae05b4e572f27ba9abb58a))
+- **CL-xpg**: Green — migrate 38 agents to Golden-Prompt composition model([25f2510](https://github.com/sussdorff/claude-code-plugins/commit/25f251083fa0c672ba95cd944bb71ded552a9ace))
+
+### Refactoring
+
+- **CL-717**: Add requires_standards frontmatter to all skills fleet-wide([75d04db](https://github.com/sussdorff/claude-code-plugins/commit/75d04db8d5cd19c0a0771efcaa0101f707721030))
+- **bd-workflow**: Collapse beads SKILL into PRIME.md as single source of truth([3668f0d](https://github.com/sussdorff/claude-code-plugins/commit/3668f0dcd2de56a0d5c5fe4e360d5db2c1c66b4e))
+
 ## [2026.04.141] - 2026-04-30
 
 ### Bug Fixes
