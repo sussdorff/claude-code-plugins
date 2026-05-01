@@ -109,12 +109,21 @@ else
     echo "(SemVer $BUMP bump -- scripts/next-version.sh not found, using inline)"
   else
     # Fallback: inline CalVer calculation
+    # Format: vYYYY.MM.MICRO (3-part). Legacy 4-part tags (vYYYY.MM.DD.MICRO) are
+    # filtered out so they cannot be picked as "latest" and crash bash arithmetic.
     YEAR=$(date +%Y)
     MONTH=$(date +%m)
     TAG_PREFIX="v${YEAR}.${MONTH}"
-    MONTH_TAG=$(git -C "$REPO_ROOT" tag --list "${TAG_PREFIX}.*" --sort=-v:refname 2>/dev/null | head -1)
+    # Match only strict 3-part vYYYY.MM.MICRO; ignore 4-part legacy tags.
+    # `|| true` keeps set -e+pipefail happy when grep finds no matches.
+    MONTH_TAG=$(git -C "$REPO_ROOT" tag --list "${TAG_PREFIX}.*" --sort=-v:refname 2>/dev/null \
+      | { grep -E "^${TAG_PREFIX//./\\.}\\.[0-9]+$" || true; } | head -1)
     if [ -n "$MONTH_TAG" ]; then
       CURRENT_MICRO="${MONTH_TAG#"${TAG_PREFIX}."}"
+      # Defensive: take only the first numeric component before any dot, in case
+      # an unexpected suffix slipped through. 10# prevents octal parsing of "01".
+      CURRENT_MICRO="${CURRENT_MICRO%%.*}"
+      CURRENT_MICRO=$((10#${CURRENT_MICRO:-0}))
       NEXT_MICRO=$((CURRENT_MICRO + 1))
     else
       NEXT_MICRO=0
