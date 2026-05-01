@@ -3,568 +3,330 @@ name: dolt
 description: >
   Troubleshoot beads Dolt failures: `bd dolt` push/pull errors, merge conflicts,
   embedded/shared-server mode problems, remote auth issues, local DB recovery, re-clone,
-  reflog restore, and broken .beads Dolt config. Use whenever beads sync or Dolt
-  infrastructure is failing, including symptoms like "beads do not sync", "cannot push
-  issues", "no common ancestor", "not supported in embedded mode", or "lost local
-  database". Read the beads changelog first. Do not use for normal beads tracking (`bd
-  create/ready/close`), standalone Dolt databases, or regular git push/pull.
+  reflog restore, broken `.beads` Dolt config, and brew-services Dolt lifecycle. Use
+  whenever beads sync or Dolt infrastructure is failing — symptoms like "beads do not
+  sync", "cannot push issues", "no common ancestor", "not supported in embedded mode",
+  "Dolt server unreachable", or "lost local database". Read the beads changelog first.
+  Do not use for normal beads tracking (`bd create/ready/close`), standalone Dolt
+  databases, or regular git push/pull.
 requires_standards: [english-only]
 ---
 
 # dolt
 
-> **Version gate**: The SessionStart hook (`beads-version-gate.sh`) ensures the local `bd`
-> version matches the latest GitHub release. If this skill's instructions conflict with
-> actual `bd` behavior, trust `bd --help` and the CHANGELOG over this document.
+> **Version gate**: trust `bd --help` and the CHANGELOG over this document if they
+> disagree. Run `bd --version` and read recent CHANGELOG before diagnosing — version
+> upgrades change mode detection logic and metadata schema.
+>
+> ```bash
+> bd --version
+> cat /opt/homebrew/Cellar/beads/$(bd --version | awk '{print $3}')/CHANGELOG.md | head -120
+> ```
 
-## First Step: Read the Changelog
+## Architecture
 
-Before diagnosing any issue, **always** check which beads version is installed and read the
-relevant changelog sections. Breaking changes between versions are the #1 cause of "it was
-working before" problems.
+`brew services start dolt` runs Dolt at login (launchd, `keep_alive: true`). It reads
+`/opt/homebrew/etc/dolt/config.yaml`, which sets `data_dir: /Users/malte/.dolt-data` —
+the only override; everything else stays at Dolt defaults (port 3306, `root` no password,
+no TLS). bd connects via `BEADS_DOLT_SERVER_PORT=3306` in `~/.zshenv` (fleet-wide). Each
+project has `dolt.shared-server: true` in `.beads/config.yaml` and `"dolt_mode": "server"`
+in `.beads/metadata.json`. Push/pull goes via SQL protocol — does not trigger the embedded
+remotesapi dirty-working-set bug.
 
-```bash
-bd --version
-# Then read the changelog for recent breaking changes:
-cat /opt/homebrew/Cellar/beads/$(bd --version | awk '{print $3}')/CHANGELOG.md | head -120
-```
-
-Scan for keywords related to the current problem (embedded, server, shared, push, pull, etc.).
-Version upgrades frequently change mode detection logic, metadata.json schema, and default
-behaviors. Understanding what changed prevents wasted time on outdated fix procedures.
+**Lifecycle is owned by `brew services`, not bd.** Do NOT use `bd dolt start` /
+`bd dolt stop` — they would conflict with the brew-managed process and `keep_alive`.
 
 ## Golden Rules
 
-**NEVER call `/opt/homebrew/bin/dolt` directly** for push/pull/commit. Always use `bd dolt`
-subcommands. The `bd` wrapper handles credentials, database selection, and server connection.
+**Push pattern**: `bd dolt pull && bd dolt push --force`. Dolt
+[#10807](https://github.com/dolthub/dolt/issues/10807) dirties the remote working set on
+every push; `--force` overwrites phantom dirty state, NOT commit history. Pull first to
+merge others' commits. **Exception**: on `no common ancestor`, do NOT force-push —
+[Re-Clone](#re-clone-local-database) instead.
 
-**Exception**: `dolt` CLI is acceptable for low-level SQL and cloning that `bd dolt` doesn't expose:
-- `dolt --host ... --port ... --no-tls sql -q "..."` — direct SQL against local server
-- `dolt clone` — initial database setup (see [Re-Clone Local Database](#re-clone-local-database))
+**No raw `dolt` for sync**: never `dolt push/pull/commit` directly — always `bd dolt`. Two
+narrow exceptions: `dolt --host 127.0.0.1 --port 3306 --no-tls sql -q "..."` for direct
+SQL, and `dolt clone` for initial setup.
 
-**ALWAYS push with: `bd dolt pull && bd dolt push --force`.** Dolt has a known bug
-(dolthub/dolt#10807) where every push dirties the remote's working set, causing the next
-push to fail with "target has uncommitted changes". The `--force` here is safe — it overwrites
-phantom dirty state, NOT commit history. Pulling first ensures other users' commits are merged.
-Do NOT try to fix the dirty working set (DOLT_CHECKOUT, DOLT_RESET, server restart — none work).
-**Exception**: For "no common ancestor" errors, do NOT force-push — re-clone locally instead.
+**No `pkill`**: corrupts journal files. Use `brew services stop dolt`.
 
-**NEVER use `pkill` to stop the Dolt server.** Hard-killing the process corrupts journal files.
-Always use `bd dolt stop`. If `bd dolt stop` fails, investigate why — do not escalate to `pkill`.
+**No embedded mode**: `bd init` (without `--shared-server`) pushes via remotesapi, which
+dirties the remote working set on every push regardless of Dolt version. Always
+`bd init --shared-server`; verify `metadata.json` has `"dolt_mode": "server"`.
 
 ## Quick Triage
 
 ```bash
-bd --version                                    # Version check
-cat .beads/metadata.json                        # Check dolt_mode (embedded or server)
-cat .beads/config.yaml | grep shared            # shared-server: true or false
-bd dolt show                                    # Server mode only (fails in embedded)
-bd stats                                        # Works in both modes — verifies DB access
+brew services info dolt                       # Server running?
+bd dolt show                                  # Connection + remotes
+cat .beads/metadata.json                      # dolt_mode + dolt_database
+grep dolt .beads/config.yaml                  # shared-server: true?
+echo $BEADS_DOLT_SERVER_PORT                  # 3306?
+bd stats                                      # Verifies actual DB access
+dolt --host 127.0.0.1 --port 3306 --no-tls sql -q "SHOW DATABASES"
 ```
 
 | Symptom | Go to |
 |---------|-------|
-| Migrate embedded → shared-server | [Migrate Embedded to Shared-Server](#migrate-embedded-to-shared-server) |
-| Embedded mode push fails repeatedly | [Embedded Mode — Known Broken](#embedded-mode--known-broken) |
-| `not supported in embedded mode` | [Embedded Mode Fallback](#embedded-mode-fallback-since-0633) |
+| Server not running | `brew services start dolt` |
+| Brew started before data was in place | `brew services restart dolt` (Dolt indexes `data_dir` at start) |
+| `Dolt server unreachable at 127.0.0.1:3306` | [Server Lifecycle](#server-lifecycle) |
+| `database <name> not found` | [Re-Clone Local Database](#re-clone-local-database) |
 | `bd dolt push/pull` fails | [Diagnose Push Failures](#diagnose-push-failures) |
-| No `.beads/` at all | [New Project Setup](#new-project-setup) |
-| Stale files, wrong port | [Fix Misconfigured Project](#fix-existing-misconfigured-project) |
-| Local DB missing/corrupted | [Re-Clone Local Database](#re-clone-local-database) |
 | `corrupted journal` / `invalid journal record length` | [Journal Corruption Recovery](#journal-corruption-recovery) |
-| Remote data lost | [Remote Recovery via Reflog](#remote-recovery-via-reflog) |
+| `no common ancestor` | [Re-Clone Local Database](#re-clone-local-database) (do NOT force-push) |
+| `Merge conflict detected` on pull | [`scripts/resolve-merge-conflicts.sh`](scripts/resolve-merge-conflicts.sh) |
 | Remote DB doesn't exist | [Create Remote DB](#create-remote-db) |
-| `schema_migrations` dirty state on remote | [Known Issues](#known-issues) — drop table locally, force-push once |
-| Fleet-wide fix | Run `scripts/migrate-fleet-shared-server.sh` or read `references/fleet-cleanup.md` |
-| New team member | Read `references/team-onboarding.md` |
+| Remote data lost | [`scripts/remote-recovery-reflog.sh`](scripts/remote-recovery-reflog.sh) |
+| Project still on legacy `bd dolt start` setup | [`references/migrate-to-brew-services.md`](references/migrate-to-brew-services.md) |
+| Project still in embedded mode | [`references/migrate-embedded.md`](references/migrate-embedded.md) |
+| New project | [`scripts/new-project-setup.sh`](scripts/new-project-setup.sh) |
+| New team member | [`references/team-onboarding.md`](references/team-onboarding.md) |
+| Phantom database warnings in `bd doctor` | Cosmetic, [dolthub/dolt#2051](https://github.com/dolthub/dolt/issues/2051). Ignore. |
 
-## Architecture
+## Auth Layers
 
-**Recommended mode: shared Dolt server** (`bd init --shared-server`). One `dolt sql-server`
-process serves ALL projects from `~/.beads/shared-server/dolt/`. Push/pull uses the SQL
-protocol which does not dirty the remote working set. `bd` manages the server lifecycle
-automatically.
+| Context | User | Password | Where |
+|---------|------|----------|-------|
+| Local SQL | `root` | none | brew-managed dolt sql-server |
+| Remote push/pull | `__DOLT__grpc_username` per-DB | `DOLT_REMOTE_PASSWORD` env var | `~/.dolt-data/<db>/.dolt/repo_state.json` + `~/.zshenv` |
 
-**Auto-start (v1.0.0+)**: `bd` transparently starts the shared server on first use — do
-NOT add defensive `bd dolt start` calls to every workflow. Only run `bd dolt start`
-explicitly when recovering from `bd dolt stop` or when diagnosing a "server connection
-failed" error. There is no LaunchAgent or launchd keep-alive — the server runs as a
-child of the first `bd` invocation and persists until machine reboot or `bd dolt stop`.
+Watch out:
+- `DOLT_REMOTE_USER` is **not** an official env var — only `DOLT_REMOTE_PASSWORD` is. Username
+  must live in `repo_state.json`.
+- `DOLT_CLONE()` ignores env vars for username; pass `--user` explicitly:
+  ```sql
+  CALL DOLT_CLONE('--user', 'malte', 'https://dolt.cognovis.de/beads_<db>');
+  ```
+- `bd dolt remote add` does NOT write `__DOLT__grpc_username`. After adding, set manually:
+  ```bash
+  python3 -c "
+  import json, sys
+  p='/Users/malte/.dolt-data/<db>/.dolt/repo_state.json'
+  d=json.load(open(p))
+  d['remotes']['origin']['params']['__DOLT__grpc_username']='malte'
+  json.dump(d,open(p,'w'),indent=2)"
+  ```
 
-**Embedded Dolt** (`bd init`, the default since v1.0.0) is **NOT WORKING RELIABLY** for
-push/pull when the remote runs a Dolt SQL server (our setup). See
-[Embedded Mode — Known Broken](#embedded-mode--known-broken) for details. Do not use
-embedded mode for projects that push to `dolt.cognovis.de`.
-
-> **If a project is currently on embedded mode**: migrate it back to shared-server mode.
-> See [Migrate Embedded to Shared-Server](#migrate-embedded-to-shared-server).
-
-### Auth Layers
-
-There are **two distinct auth contexts**:
-
-| Context | User | Password | Purpose |
-|---------|------|----------|---------|
-| **Local SQL** | `root` | none | Connect to local shared Dolt server |
-| **Remote push/pull** | `__DOLT__grpc_username` in `repo_state.json` | `DOLT_REMOTE_PASSWORD` env var | Auth against dolt.cognovis.de |
-
-The remote username is stored per-database in `.dolt/repo_state.json` under
-`remotes.origin.params.__DOLT__grpc_username`. The password comes from the
-`DOLT_REMOTE_PASSWORD` environment variable (set in `~/.zshenv`).
-
-**Note**: `DOLT_REMOTE_USER` is NOT an official Dolt env var — only `DOLT_REMOTE_PASSWORD` is.
-
-### DOLT_CLONE Auth Gotcha
-
-`DOLT_CLONE()` does NOT read env vars for the username — it defaults to `root` and fails. Pass `--user` explicitly:
-```sql
--- WRONG: fails with "Access denied for user 'root'"
-CALL DOLT_CLONE('https://dolt.cognovis.de/beads_mira');
-
--- CORRECT
-CALL DOLT_CLONE('--user', 'malte', 'https://dolt.cognovis.de/beads_mira');
-```
-
-### Dolt CLI Global Flags
+## Dolt CLI flag order
 
 Global flags go **BEFORE** the subcommand:
+
 ```bash
 # CORRECT
-dolt --host 127.0.0.1 --port 3308 --no-tls sql -q "SELECT 1"
-
+dolt --host 127.0.0.1 --port 3306 --no-tls sql -q "SELECT 1"
 # WRONG — "unknown option"
 dolt sql --host 127.0.0.1 -q "SELECT 1"
 ```
 
-Local server has no TLS → `--no-tls` required. Local `root` has no password.
-macOS has no `mysql` client → use `dolt --host ... sql` instead.
+Local server has no TLS (`--no-tls` required) and no password for `root`. macOS has no
+`mysql` client — use `dolt --host ... sql` instead.
 
-## Our Setup
+---
 
-| Component | Location | Purpose |
-|-----------|----------|---------|
-| **Shared Dolt server** (recommended) | `~/.beads/shared-server/dolt/` | `bd init --shared-server` |
-| **Embedded Dolt** (broken, do not use) | `.beads/embeddeddolt/<db>/` per project | `bd init` (v1.0.0+) |
-| **Remote** | `dolt.cognovis.de` (Hetzner VPS, Caddy TLS → h2c) | Dolt RemoteAPI |
-| **Auth** | `__DOLT__grpc_username` in repo_state.json + `DOLT_REMOTE_PASSWORD` env var | Remote push/pull |
+## Server Lifecycle
 
-All projects should use shared-server mode. Embedded mode has a known remotesapi bug
-(see [Embedded Mode — Known Broken](#embedded-mode--known-broken)).
-
-**Red flags** (embedded mode):
-- `repo_state.json` has empty `params: {}` → auth fails with "Access denied for user 'root'"
-- `.beads/embeddeddolt/<db>` is empty or missing `.dolt/` → need to clone from remote
-- `metadata.json` has `dolt_mode: "server"` but no shared server running → mismatch
-
-**Red flags** (shared-server mode):
-- Missing `dolt.shared-server: true` in `.beads/config.yaml`
-- Missing `"dolt_mode": "server"` in `metadata.json` (required since bd 0.63.3)
-- `metadata.json` contains stale fields: `dolt_server_port`, `backend`, or `database`
-- A dolt process running from `.beads/dolt/` instead of `~/.beads/shared-server/dolt/`
-
-> **Not a red flag anymore**: `.beads/dolt-server.port` exists in shared-server mode —
-> bd 1.0.0+ writes it as runtime state on each invocation (gitignored). Deleting it is
-> harmless; it will be recreated on the next `bd` call. Only worry about it if bd is
-> using the port value to connect somewhere wrong (check `bd dolt show`).
-
-## Target State
-
-### Shared-Server Mode (recommended)
-
-#### `.beads/metadata.json`
-```json
-{
-  "dolt_mode": "server",
-  "dolt_database": "<prefix>",
-  "project_id": "<uuid>"
-}
+```bash
+brew services start dolt        # Manually start (also auto-starts at login)
+brew services stop dolt
+brew services restart dolt      # Needed after adding databases to ~/.dolt-data/
+brew services info dolt
+tail -f /opt/homebrew/var/log/dolt.log
+tail -f /opt/homebrew/var/log/dolt.error.log
 ```
 
-#### `.beads/config.yaml`
+The launchd plist is at `~/Library/LaunchAgents/homebrew.mxcl.dolt.plist` — let Homebrew
+manage it.
+
+Config file `/opt/homebrew/etc/dolt/config.yaml` has only one active line; the rest are
+commented stubs:
+
 ```yaml
-dolt.shared-server: true
+data_dir: /Users/malte/.dolt-data
 ```
 
-No port file needed — `bd` manages the port automatically.
+Defaults fill the rest (port 3306, host 127.0.0.1, no TLS).
 
-## Workflows
+**Critical**: Dolt indexes `data_dir` at process start. Adding a database to `~/.dolt-data/`
+while the server is running → invisible until `brew services restart dolt`.
 
-### Embedded Mode — Known Broken
-
-> **DO NOT USE embedded mode** for projects pushing to `dolt.cognovis.de`. Migrate to
-> shared-server mode instead.
-
-**Problem**: Embedded mode pushes via remotesapi (HTTPS). Every remotesapi push dirties
-the remote SQL server's working set (phantom row deletes in `events` and `issues` tables),
-causing the next push to fail with `"target has uncommitted changes"`. This happens even
-with Dolt v1.85.0 which supposedly fixed related issues (#10727, #10731).
-
-**Root cause**: The remotesapi write updates HEAD on the remote, but the SQL server's
-cached working set becomes stale — it sees a diff between its cached working set root
-hash and the new HEAD, reporting phantom changes. This is a Dolt bug that does not
-affect SQL-protocol pushes (shared-server mode).
-
-**Symptoms**:
-- Every second `bd dolt push` fails with `"target has uncommitted changes"`
-- `dolt_diff_stat('HEAD', 'WORKING')` on remote shows 1 row deleted from tables
-- Committing on remote fixes it temporarily but it recurs on next push
-- Dropping `schema_migrations`, clearing `dolt_ignore`, resetting working set — none of
-  these permanently fix it
-- Even a freshly initialized remote DB exhibits the same behavior
-
-**Workarounds that DON'T work permanently**:
-- `CALL dolt_checkout('.')` on remote — fixes one push, breaks again on next
-- Dropping `schema_migrations` table — unrelated to the actual cause
-- Clearing `dolt_ignore` entries — unrelated to the actual cause
-- Moving SQL listener to unused port — SQL engine still loads all DBs on startup
-
-**The only fix**: Migrate to shared-server mode (SQL protocol push, not remotesapi).
-
-### Migrate Embedded to Shared-Server
-
-**When**: Project is on embedded mode and experiencing the remotesapi dirty working set
-bug (every second push fails with "target has uncommitted changes").
-
-**Prerequisites**: Data already on remote at `dolt.cognovis.de/<db_name>`.
-
-#### Step 1: Push current data to remote (force if needed)
-
-```bash
-bd dolt push --force  # Force-push to ensure remote has latest local data
-```
-
-#### Step 2: Switch config to shared-server mode
-
-Edit `.beads/metadata.json` — change `dolt_mode` to `"server"`:
-```json
-{
-  "dolt_mode": "server",
-  "dolt_database": "<prefix>",
-  "project_id": "<uuid>"
-}
-```
-
-Edit `.beads/config.yaml` — set shared-server to true:
-```yaml
-dolt.shared-server: true
-```
-
-#### Step 3: Verify shared server is running
-
-```bash
-bd dolt show  # Should show "Mode: shared server" and "Server connection OK"
-```
-
-If the DB doesn't exist in the shared server yet:
-```bash
-# Clone from remote into the shared server
-dolt --host 127.0.0.1 --port 3308 --no-tls sql -q \
-  "CALL DOLT_CLONE('--user', 'malte', 'https://dolt.cognovis.de/<db_name>')"
-```
-
-#### Step 4: Add SQL remote (if missing)
-
-```bash
-bd dolt remote list  # Check if origin shows [SQL + CLI]
-# If it shows [CLI only]:
-bd dolt remote add origin https://dolt.cognovis.de/<db_name>
-```
-
-#### Step 5: Sync and verify
-
-See [`scripts/sync-verify.sh`](scripts/sync-verify.sh) for the full sync and consecutive-push verification sequence.
-
-#### Step 6: Clean up embedded artifacts
-
-After verifying everything works:
-```bash
-rm -rf .beads/embeddeddolt
-```
-
-### Embedded Mode Fallback (since 0.63.3)
-
-**Symptom**: `bd dolt show/push/pull/test` returns `Error: 'bd dolt ...' is not supported in
-embedded mode (no Dolt server)` — even though `config.yaml` has `dolt.shared-server: true`.
-
-**Root cause**: beads 0.63.3 made embedded mode the default. The `dolt.shared-server: true`
-config setting alone is no longer sufficient. `bd` now requires `"dolt_mode": "server"` in
-`metadata.json` to use shared-server mode. Without it, `bd` falls back to embedded mode and
-creates a `.beads/embeddeddolt/` directory.
-
-**Fix**:
-
-1. Set `dolt_mode` in metadata.json:
-```bash
-cat .beads/metadata.json
-# Add "dolt_mode": "server" if missing
-```
-
-2. Remove embedded mode artifacts:
-```bash
-rm -r .beads/embeddeddolt .beads/dolt-server.port 2>/dev/null
-```
-
-3. Verify:
-```bash
-bd dolt show    # Should show "Mode: shared server" and "Server connection OK"
-bd dolt pull    # Should pull from remote
-bd list --all   # Should show issues
-```
-
-**Note**: `bd init --shared-server --force` does NOT reliably set `dolt_mode: "server"` in
-0.63.3 — it may still create embedded mode. Manual metadata.json edit is the reliable fix.
-
-### New Project Setup
-
-See [`scripts/new-project-setup.sh`](scripts/new-project-setup.sh) for the full setup sequence (init, create remote DB, restart server, clone, update metadata.json, and initial push).
-
-**Setup Checklist:**
-1. Always use `--shared-server` flag (embedded mode is broken for remote push)
-2. Create remote dir as `dolt` user — `chown -R dolt:dolt` if created as root; wrong permissions crash the remote server on restart
-3. **Restart remote Dolt server** after creating the DB — it won't expose the new DB via RemoteAPI until restarted
-4. **Use `DOLT_CLONE` not `bd dolt remote add`** to create the local shared-server DB — clone automatically sets `__DOLT__grpc_username` in params; `bd dolt remote add` does NOT
-5. **Drop the `bd init`-created local DB** before cloning — `bd init` creates `<name>` (without `beads_` prefix), but the remote is `beads_<name>`; after clone, update `metadata.json` to `beads_<name>`
-6. **Set issue prefix in DB** — `bd config set issue_prefix <PREFIX>`; the `issue-prefix` in `config.yaml` is NOT read for this; without it, all `bd create/update` commands fail with "issue_prefix config is missing"
-7. First push to a brand-new empty remote may require `--force` (diverged init histories)
-8. Verify `metadata.json` has `"dolt_mode": "server"` and correct `dolt_database` after setup
-9. Run `bd prime` after compaction, clear, or new session
-
-### Fix Existing Misconfigured Project
-
-See [`scripts/fix-misconfigured.sh`](scripts/fix-misconfigured.sh) for both Option A (re-init) and Option B (manual fix: stop server, clean config, remove stale files, run doctor, and push).
-
-### Diagnose Push Failures
+## Diagnose Push Failures
 
 ```bash
 bd dolt show                    # Connection + remotes
-bd dolt remote list             # Should show origin with [SQL + CLI] or [SQL only]
+bd dolt remote list             # origin should be [SQL + CLI]
 ```
 
 | Error | Cause | Fix |
 |-------|-------|-----|
-| `Access denied for user 'root'` | Missing `__DOLT__grpc_username` in repo_state.json | Set it manually (see Auth Layers) or re-clone |
-| `Access denied for user 'X'` | Wrong/missing `DOLT_REMOTE_PASSWORD` env var | Check `~/.zshenv` |
-| `no common ancestor` | Local and remote diverged | [Re-Clone Local Database](#re-clone-local-database) |
-| `Merge conflict detected` | Same rows modified | [Resolve Pull Merge Conflicts](#resolve-pull-merge-conflicts) |
-| `database not found` | Remote DB missing | [Create Remote DB](#create-remote-db) |
-| `TLS handshake failed` | Caddy issue | `ssh dolt-server "systemctl status caddy"` |
-| `syntax error near '-'` | Hyphens in DB name | Use backtick quoting: `` USE `name` `` |
-| `[CLI only]` in remote list | SQL remote missing | `bd dolt remote add origin <url>` |
-| Server connection failed | Shared server not running | `bd dolt start` |
+| `Dolt server unreachable at 127.0.0.1:3306` | brew services not running | `brew services start dolt` |
+| `database <name> not found` | server started before data was copied, or DB really missing | `brew services restart dolt`; if still missing → [Re-Clone](#re-clone-local-database) |
+| `Access denied for user 'root'` | Missing `__DOLT__grpc_username` in repo_state.json | Set manually (see [Auth Layers](#auth-layers)) or re-clone |
+| `Access denied for user 'malte'` | Wrong/missing `DOLT_REMOTE_PASSWORD` | Check `~/.zshenv` |
+| `target has uncommitted changes` | [dolthub/dolt#10807](https://github.com/dolthub/dolt/issues/10807) | `bd dolt pull && bd dolt push --force` |
+| `no common ancestor` | Local & remote diverged | [Re-Clone](#re-clone-local-database) — do NOT force-push |
+| `Merge conflict detected` | Same rows modified on both sides | [`scripts/resolve-merge-conflicts.sh`](scripts/resolve-merge-conflicts.sh) |
+| `database not found` (remote) | Remote DB missing | [Create Remote DB](#create-remote-db) |
+| `TLS handshake failed` | Caddy issue on remote | `ssh dolt-server "systemctl status caddy"` |
+| `syntax error near '-'` | Hyphens in DB name in SQL | Use backticks: `` USE `name-with-hyphen` `` |
+| `[CLI only]` in remote list | SQL remote missing | `bd dolt remote add origin <url>` (then set auth manually) |
 
-### Resolve Pull Merge Conflicts
+## Re-Clone Local Database
 
-See [`scripts/resolve-merge-conflicts.sh`](scripts/resolve-merge-conflicts.sh) for the full conflict check and resolution sequence (check conflicts, resolve with --ours, commit on remote).
-
-### Journal Corruption Recovery
-
-**Symptom**: Server fails to start with `invalid journal record length` or `corrupted journal`.
-The error does NOT tell you WHICH database is corrupt — Dolt loads all subdirectories and fails
-on the first corrupt one.
-
-#### Step 1: Try `fsck` on the suspected DB
+When local DB is missing, corrupted, or too diverged from remote.
 
 ```bash
-bd dolt stop
-cd ~/.beads/shared-server/dolt/<db_name>
+# 1. Stop the server (Dolt locks data dir during clone via DOLT_CLONE doesn't need stop,
+#    but a local DB drop does)
+brew services stop dolt
+
+# 2. Drop or move corrupted DB
+rm -rf ~/.dolt-data/<db_name>     # or move to a backup location
+
+# 3. Restart server with empty target slot
+brew services start dolt
+
+# 4. Clone (DOLT_CLONE ignores env vars — pass --user explicitly)
+dolt --host 127.0.0.1 --port 3306 --no-tls sql -q \
+  "CALL DOLT_CLONE('--user', 'malte', 'https://dolt.cognovis.de/<db_name>')"
+
+# 5. Restart so Dolt indexes the new DB
+brew services restart dolt
+
+# 6. Verify
+bd dolt show && bd list
+```
+
+**Fallback** (server unhealthy): clone via CLI directly into the data dir:
+
+```bash
+brew services stop dolt
+cd ~/.dolt-data && dolt clone --user malte https://dolt.cognovis.de/<db_name>
+brew services start dolt
+```
+
+## Journal Corruption Recovery
+
+**Symptom**: server fails to start with `invalid journal record length` / `corrupted journal`.
+The error does NOT name the corrupt DB — Dolt loads all subdirs and fails on the first one.
+
+### Step 1: try `fsck` on the suspected DB
+
+```bash
+brew services stop dolt
+cd ~/.dolt-data/<db_name>
 dolt fsck --revive-journal-with-data-loss
+brew services start dolt
 ```
 
-The `--revive-journal-with-data-loss` flag is misleadingly named — it does NOT destroy data. It:
-1. Saves a backup of the corrupt journal file
-2. Revives the journal from data already on disk
-3. Allows the server to start normally
+The flag is misleading — it does NOT destroy data. It backs up the corrupt journal, revives
+it from on-disk data, and lets the server start.
 
-If `fsck` says "no data loss detected" but the server still won't start, the corrupt DB is a
-different one. Proceed to Step 2.
+### Step 2: isolate the corrupt database
 
-#### Step 2: Isolate the corrupt database
-
-Dolt loads ALL subdirectories in its data dir as databases. To find the corrupt one, move
-databases out and test.
-
-**CRITICAL**: Move databases OUTSIDE `~/.beads/shared-server/dolt/`, not into a subdirectory
-within it. Dolt recursively scans subdirectories — a `quarantine/` folder inside `dolt/` still
-gets loaded.
+If `fsck` says "no data loss detected" but server still won't start, you have the wrong DB.
+Move suspects **OUTSIDE** the data dir (Dolt recursively scans subdirs — a `quarantine/`
+inside `~/.dolt-data/` would still get loaded).
 
 ```bash
-bd dolt stop
-
-# Create quarantine OUTSIDE the dolt data dir
-mkdir -p ~/.beads/shared-server/quarantine
-
-# Move suspected DB out
-mv ~/.beads/shared-server/dolt/<suspect_db> ~/.beads/shared-server/quarantine/
-bd dolt start
+brew services stop dolt
+mkdir -p ~/.dolt-quarantine
+mv ~/.dolt-data/<suspect_db> ~/.dolt-quarantine/   # may need `dcg allow-once`
+brew services start dolt    # if it starts → that DB was corrupt
 ```
 
-If the server starts → that DB was corrupt. If not → move it back, try the next suspect.
+Prioritize by suspicion — match the error offset to journal sizes:
 
-**Prioritize by suspicion**: Check journal file sizes to match the error offset:
 ```bash
-for db in ~/.beads/shared-server/dolt/*/; do
+for db in ~/.dolt-data/*/; do
   j="$db.dolt/noms/vvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvv"
   [ -f "$j" ] && echo "$(basename $db): $(stat -f%z "$j") bytes"
 done
 ```
 
-The error offset (e.g. `offset 5592351`) hints at which DB — compare with journal sizes.
+### Step 3: if root `~/.dolt-data/.dolt` is also corrupted
 
-#### Step 3: If the root `.dolt` is also corrupted
-
-After a hard kill, the root `.dolt/noms/` may also be damaged (`root hash doesn't exist`).
-Fix by re-initializing:
+After a hard kill, the root `.dolt/noms/` may be damaged (`root hash doesn't exist`):
 
 ```bash
-bd dolt stop
-mv ~/.beads/shared-server/dolt/.dolt ~/.beads/shared-server/dolt/.dolt.bak
-cd ~/.beads/shared-server/dolt && dolt init
-bd dolt start
+brew services stop dolt
+mv ~/.dolt-data/.dolt ~/.dolt-data/.dolt.bak
+cd ~/.dolt-data && dolt init
+brew services start dolt
 ```
 
-This is safe — individual DB data lives in their own `.dolt/` subdirectories.
+Safe — individual DB data lives in their own `.dolt/` subdirs.
 
-#### Step 4: Recover or delete the corrupt DB
+### Step 4: recover or delete the corrupt DB
 
-- **If the DB exists on remote**: delete locally, re-clone (see [Re-Clone Local Database](#re-clone-local-database))
-- **If it's a duplicate** (e.g. `pvs` duplicating `beads_pvs`): delete it
-- **If it's an old backup** (e.g. `beads_mira.pre-recovery`): delete it
-- **After cleanup**: move all quarantined DBs back and verify `bd dolt start` succeeds
+- DB on remote → delete locally, [Re-Clone](#re-clone-local-database).
+- Duplicate or stale backup → just delete it.
+- Then move all quarantined DBs back and `brew services restart dolt`.
 
-Check for duplicates by inspecting the remote URL:
-```bash
-cat ~/.beads/shared-server/quarantine/<db>/.dolt/repo_state.json | grep url
-```
+Causes:
+- `pkill -f "dolt sql-server"` — never. Always `brew services stop dolt`.
+- Machine crash / power loss during write.
+- Multiple Dolt processes on the same data dir (don't run `bd dolt start` while brew services is up).
 
-#### Common causes of journal corruption
-
-- **`pkill -f "dolt sql-server"`** — NEVER do this. Always use `bd dolt stop`.
-- **Machine crash / power loss** during write
-- **Multiple Dolt processes** writing to the same data directory
-
-### Bead Disappears After Migration
-
-If a bead is missing after shared-server migration (shows in `bd list` on remote but not locally):
-
-```bash
-# 1. Check if bead exists on remote
-bd dolt pull
-bd list --all | grep <bead-id>
-
-# 2. If still missing: direct SQL INSERT from remote data
-# Get the bead data from remote
-dolt --host 127.0.0.1 --port 3308 --no-tls sql -q \
-  "USE beads_mira; SELECT * FROM issues WHERE id = '<bead-id>'"
-
-# 3. If the row is there but bd list doesn't show it, the local branch may be behind
-bd dolt pull  # retry after ensuring clean pull
-```
-
-This happens when the local DB was re-initialized during migration and the pull didn't fully sync.
-
-### Re-Clone Local Database
-
-When local DB is missing, corrupted, or too diverged.
-
-**Embedded mode** (v1.0.0+):
-```bash
-# 1. Remove corrupted DB
-rm -rf .beads/embeddeddolt/<db_name>
-
-# 2. Clone from remote
-cd .beads/embeddeddolt
-dolt clone --user malte https://dolt.cognovis.de/<db_name>
-
-# 3. Fix auth in repo_state.json (add __DOLT__grpc_username: malte)
-# See "Target State > Embedded Mode" for the full JSON structure
-
-# 4. Verify
-bd stats && bd dolt push
-```
-
-**Shared-server mode** (legacy):
-```bash
-# 1. Check if DB exists in shared server
-ls ~/.beads/shared-server/dolt/<db_name> 2>/dev/null && echo "EXISTS" || echo "MISSING"
-
-# 2. Drop corrupted DB (if it exists) — get port from bd dolt show
-dolt --host 127.0.0.1 --port 3308 --no-tls sql -q "DROP DATABASE \`<db_name>\`"
-
-# 3. Clone — must pass --user explicitly (DOLT_CLONE ignores env vars)
-dolt --host 127.0.0.1 --port 3308 --no-tls sql -q \
-  "CALL DOLT_CLONE('--user', 'malte', 'https://dolt.cognovis.de/<db_name>')"
-
-# 4. Verify
-bd dolt pull && bd dolt show && bd list
-```
-
-**Fallback** (server not running):
-```bash
-cd ~/.beads/shared-server/dolt
-dolt clone --user malte https://dolt.cognovis.de/<db_name>
-```
-
-### Create Remote DB
+## Create Remote DB
 
 ```bash
 ssh dolt-server "ls /var/lib/dolt/" | grep <db_name>
 # If missing:
-ssh dolt-server "cd /var/lib/dolt && mkdir -p <db_name> && cd <db_name> && /usr/local/bin/dolt init"
+ssh dolt-server "cd /var/lib/dolt && sudo -u dolt mkdir -p <db_name> && cd <db_name> && sudo -u dolt /usr/local/bin/dolt init"
+ssh dolt-server "chown -R dolt:dolt /var/lib/dolt/<db_name>"
+ssh dolt-server "systemctl restart dolt-server && sleep 3 && systemctl is-active dolt-server"
 ```
 
-Remote server: `ssh dolt-server` (Hetzner VPS, 116.202.111.75).
-Config: `/var/lib/dolt/config.yaml`, databases directly in `/var/lib/dolt/`.
-Backup: Daily cron at 3:00 AM, 7-day rotation, `/var/backups/dolt/`.
+Permissions matter — must be owned by the `dolt` user, not root. Restart so RemoteAPI sees
+the new DB.
 
-### Remote Recovery via Reflog
-
-Last resort when remote data was accidentally overwritten:
-
-See [`scripts/remote-recovery-reflog.sh`](scripts/remote-recovery-reflog.sh) for the full reflog inspection, hard reset, and re-clone sequence.
-
-**Note**: If schema has changed between commits (e.g. bigint→UUID migration from beads upgrade),
-merging branches will fail with "different primary keys". Use `DOLT_RESET` instead of merge,
-then re-import missing rows via CSV.
+Remote: `dolt.cognovis.de` (Hetzner VPS, 116.202.111.75). SSH alias `dolt-server` /
+`erp4projects`. Config `/var/lib/dolt/config.yaml`. Daily backup cron 03:00 →
+`/var/backups/dolt/` (7-day rotation).
 
 ## Pitfalls
 
-- **NEVER `pkill` the Dolt server**: `pkill -f "dolt sql-server"` corrupts journal files. Always `bd dolt stop`. This is the #1 cause of journal corruption.
-- **`DOLT_REMOTE_USER` is fake**: Not an official Dolt env var. Only `DOLT_REMOTE_PASSWORD` works. Username comes from `__DOLT__grpc_username` in `repo_state.json`
-- **DOLT_CLONE uses `root`**: Always pass `'--user', 'malte'` explicitly — env vars are ignored
-- **CLI flag order**: `--host`/`--port`/`--no-tls` go BEFORE `sql` subcommand, not after
-- **No TLS locally**: Local server needs `--no-tls` flag or you get "TLS requested but not supported"
-- **Local = `root` only**: Only `root` (no password) exists locally. `malte` is remote-only
-- **No `mysql` on macOS**: Use `dolt --host ... sql` instead
-- **`cd /var/lib/dolt` on remote**: Always cd there first — `dolt sql` from `/root` hits empty instance
-- **jq in zsh**: `!=` in jq gets mangled. Use `bash -c '...'` for jq with `!=`
-- **Remote URL**: `https://dolt.cognovis.de/<db>` only. Old `http://192.168.60.30:8080` is decommissioned
-- **First push fails**: New remote DB has no commit history — first push may need `--force` (ONLY for brand-new empty remotes, with user confirmation)
-- **NEVER force-push on shared remotes**: Destroys other users' commits. Re-clone locally instead
-- **Caddy TLS proxy**: Uses `transport http { versions 1.1 h2c }` — the `1.1` is critical for Dolt's dual-protocol. Source: [dolthub/dolt#9332](https://github.com/dolthub/dolt/issues/9332)
-- **Schema migration on bd upgrade**: `bd` auto-migrates schemas (e.g. comments.id bigint→UUID). This creates commits that can't merge with pre-migration branches. All team members must be on the same `bd` version.
-- **Embedded mode default (0.63.3+)**: `bd` defaults to embedded mode. `config.yaml` `dolt.shared-server: true` alone is NOT sufficient — you MUST also have `"dolt_mode": "server"` in `metadata.json`. Without it, `bd` creates `.beads/embeddeddolt/` and all `bd dolt` commands fail with "not supported in embedded mode".
-- **`bd init --shared-server` unreliable (0.63.3)**: Even with `--shared-server` flag, `bd init` may still create embedded mode. Always verify metadata.json after init and manually add `"dolt_mode": "server"` if missing.
-- **Embedded pull panics on empty DB (v1.0.0)**: `bd dolt pull` into a freshly initialized empty embedded DB crashes with nil pointer dereference. Use `dolt clone` instead for initial data load.
-- **Embedded init sets wrong remote (v1.0.0)**: `bd init` sets the Dolt remote to the git repo URL. Always fix with `bd dolt remote remove origin && bd dolt remote add origin https://dolt.cognovis.de/<db>`.
-- **Embedded auth defaults to `root`**: After `dolt clone` or `bd init`, `repo_state.json` has empty `params: {}`. Must add `__DOLT__grpc_username` manually or push/pull fails with "Access denied for user 'root'".
-- **Shared-server `bd dolt remote add` doesn't set auth**: In shared-server mode, `bd dolt remote add` does NOT write `__DOLT__grpc_username` to `~/.beads/shared-server/dolt/<db>/.dolt/repo_state.json`. After adding a remote, always set it manually: `python3 -c "import json; path='~/.beads/shared-server/dolt/<db>/.dolt/repo_state.json'; d=json.load(open(path)); d['remotes']['origin']['params']['__DOLT__grpc_username']='malte'; json.dump(d,open(path,'w'),indent=2)"`
-- **`bd dolt show` / `bd doctor` unsupported in embedded (v1.0.0)**: Cosmetic limitation. Use `bd stats` and `bd dolt push/pull` to verify health instead.
-- **`schema_migrations` table causes remote dirty state**: `bd` v1.0.0 creates a `schema_migrations` table in embedded mode. The Dolt SQL server on the remote auto-deletes it from WORKING on every startup/push, causing permanent "target has uncommitted changes" errors. Fix: drop the table locally (`DROP TABLE schema_migrations` + `DOLT_COMMIT`), verify both sides have same issue count, then `bd dolt push --force` once. `bd` works fine without it after initial migrations.
-- **Old shared Dolt server may still be running**: After migrating to embedded mode, check `ps aux | grep dolt` for a stale `dolt sql-server` on port 3308. Kill it — it's no longer needed and holds a duplicate copy of the DB pointing to the same remote.
+- **Phantom database warnings in `bd doctor`**: cosmetic, [dolthub/dolt#2051](https://github.com/dolthub/dolt/issues/2051). Restart fixes only temporarily; doesn't matter for operation.
+- **`pkill` corrupts journals.** Use `brew services stop dolt`. Don't `bd dolt stop` while brew services is running — it'd kill the brew-managed PID.
+- **Dolt indexes `data_dir` at start.** Add a DB while running → invisible until restart.
+- **`mv` on `~` paths is blocked by dcg sandbox.** Use `rsync -a` + `diff -r` + `rm`, or have user run `mv` manually with `dcg allow-once`.
+- **`DOLT_CLONE` defaults to `root`.** Always pass `'--user', 'malte'` — env vars ignored.
+- **`bd dolt remote add` does NOT write auth.** Always set `__DOLT__grpc_username` manually.
+- **First push to a brand-new empty remote** may need `--force` (diverged init histories). ONLY for empty remotes, with confirmation.
+- **NEVER force-push on shared remotes** beyond the dolt#10807 workaround pattern. Re-clone locally instead.
+- **Schema migration on bd upgrade**: `bd` auto-migrates schemas (e.g. `comments.id` bigint → UUID). These commits can't merge with pre-migration branches — keep team on the same `bd` version.
+- **Caddy on remote** uses `transport http { versions 1.1 h2c }` — the `1.1` is critical for Dolt's dual-protocol ([dolthub/dolt#9332](https://github.com/dolthub/dolt/issues/9332)). Don't simplify.
+- **`cd /var/lib/dolt` on remote** before any `dolt sql` — running from `/root` hits an empty instance.
+- **Remote URL is `https://dolt.cognovis.de/<db>`** only. Old `http://192.168.60.30:8080` is decommissioned.
+- **Hyphens in DB names** require backticks in SQL: `` USE `db-with-hyphen` ``.
 
 ## Infrastructure Reference
 
-- **Shared server** (recommended): Managed by `bd`, data in `~/.beads/shared-server/dolt/`
-- **Embedded Dolt** (broken, do not use): Per-project in `.beads/embeddeddolt/<db>/`
-- **Remote**: `dolt.cognovis.de` (116.202.111.75), SSH: `ssh dolt-server` (alias `erp4projects`)
-- **Remote config**: `/var/lib/dolt/config.yaml`, databases directly in `/var/lib/dolt/`
-- **Remote backup**: Daily cron 3:00 AM → `/var/backups/dolt/`, 7-day rotation, script `/usr/local/bin/dolt-backup.sh`
-- **Remote Caddy**: `servers :443 { protocols h1 h2 h2c }` + `transport http { versions 1.1 h2c }`
-- **Remote users**: `ssh dolt-server "cd /var/lib/dolt && dolt sql -q 'SELECT user, host FROM mysql.user;'"`
-- **All beads installations**: `find ~/code -maxdepth 4 -name ".beads" -type d`
-- **Full command reference**: `bd dolt --help`
+| Component | Location |
+|-----------|----------|
+| Dolt server (macOS) | `brew services start dolt` (launchd: `~/Library/LaunchAgents/homebrew.mxcl.dolt.plist`) |
+| Local data dir | `~/.dolt-data/` |
+| Local config | `/opt/homebrew/etc/dolt/config.yaml` (preserved across `brew upgrade dolt`) |
+| Local logs | `/opt/homebrew/var/log/dolt.log`, `dolt.error.log` |
+| Local port | 3306 |
+| bd port override | `BEADS_DOLT_SERVER_PORT=3306` in `~/.zshenv` |
+| Remote | `dolt.cognovis.de` (Hetzner, 116.202.111.75) |
+| Remote SSH | `ssh dolt-server` (alias `erp4projects`) |
+| Remote config | `/var/lib/dolt/config.yaml` |
+| Remote data | databases directly under `/var/lib/dolt/` |
+| Remote backup | daily 03:00 cron → `/var/backups/dolt/` (7-day rotation) |
+| All bd projects | `find ~/code -maxdepth 4 -name .beads -type d` |
+| Full bd commands | `bd dolt --help` |
 
 ## Reference Files
 
-- `references/fleet-cleanup.md` — Legacy bash script for fixing installations
-- `references/team-onboarding.md` — Step-by-step for new team members
+- [`references/team-onboarding.md`](references/team-onboarding.md) — new team member setup
+- [`references/migrate-to-brew-services.md`](references/migrate-to-brew-services.md) — one-time machine migration from `bd dolt start`
+- [`references/migrate-embedded.md`](references/migrate-embedded.md) — legacy embedded mode → shared-server
+- [`references/fleet-cleanup.md`](references/fleet-cleanup.md) — bulk-fix legacy installations
+- [`scripts/new-project-setup.sh`](scripts/new-project-setup.sh) — `bd init --shared-server` for a new project
+- [`scripts/fix-misconfigured.sh`](scripts/fix-misconfigured.sh) — repair drift in an existing project
+- [`scripts/sync-verify.sh`](scripts/sync-verify.sh) — consecutive-push verification
+- [`scripts/resolve-merge-conflicts.sh`](scripts/resolve-merge-conflicts.sh) — pull conflict resolver
+- [`scripts/remote-recovery-reflog.sh`](scripts/remote-recovery-reflog.sh) — last-resort remote restore

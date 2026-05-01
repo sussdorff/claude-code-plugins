@@ -16,7 +16,11 @@ ssh dolt-server "systemctl restart dolt-server && sleep 3 && systemctl is-active
 
 # Drop the local DB that bd init created (wrong name, no auth), then clone from remote.
 # DOLT_CLONE automatically sets __DOLT__grpc_username in the SQL remote — no manual fix needed.
-dolt --host 127.0.0.1 --port 3308 --no-tls sql -q "DROP DATABASE IF EXISTS $NAME; CALL DOLT_CLONE('--user', 'malte', 'https://dolt.cognovis.de/beads_$NAME');"
+# Port 3306 = brew-services-managed Dolt (matches BEADS_DOLT_SERVER_PORT in ~/.zshenv).
+dolt --host 127.0.0.1 --port 3306 --no-tls sql -q "DROP DATABASE IF EXISTS $NAME; CALL DOLT_CLONE('--user', 'malte', 'https://dolt.cognovis.de/beads_$NAME');"
+
+# Restart brew-managed dolt so it indexes the new DB (data_dir is read at start)
+brew services restart dolt
 
 # Update metadata.json to point to the cloned DB name (beads_NAME)
 python3 - "$NAME" <<'PYEOF'

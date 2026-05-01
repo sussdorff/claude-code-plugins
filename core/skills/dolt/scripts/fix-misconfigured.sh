@@ -6,7 +6,8 @@ bd init --shared-server --database <existing_db> --prefix <name> --force
 exit 0
 
 # Option B: Manual fix
-bd dolt stop 2>/dev/null
+# Note: server lifecycle is brew-managed — do NOT use `bd dolt stop`. If you really need
+# to stop the server (e.g. for a clean re-clone), use `brew services stop dolt`.
 rm -f .beads/dolt-server.port
 echo "dolt.shared-server: true" >> .beads/config.yaml
 # Clean metadata.json — keep only dolt_database and project_id
