@@ -123,13 +123,20 @@ bd create \
   --metadata='{"effort":"medium"}'
 ```
 
-For multi-line description / design / notes: use `--body-file -` with stdin
-heredoc. NEVER use `--description "$(cat <<EOF…EOF)"` — under codex's
-`zsh -lc` wrapper the nested quoting breaks and surfaces a misleading
-"Dolt server unreachable" error.
+For multi-line description / design / notes: write the body to a file first
+(e.g. `/tmp/<bead-slug>.md`) and pass `--body-file <path>`.
+
+NEVER use:
+- `--description "$(cat <<EOF…EOF)"` — under codex's `zsh -lc` wrapper the
+  nested quoting breaks and surfaces a misleading "Dolt server unreachable"
+  error.
+- `--body-file -` with inline heredoc on the `bd` invocation itself — the
+  destructive-bash guardrail (dcg) matches patterns inside the heredoc body
+  (false positive) and blocks the whole `bd create`. See CL-2l4. Also
+  fragile under codex's shell wrapper.
 
 ```bash
-bd create --title="..." -t feature -p 2 --body-file - <<'EOF'
+cat > /tmp/cl-foo.md <<'EOF'
 <description>
 
 ## Scenario
@@ -139,7 +146,12 @@ As a <persona>, I can <action> so that <outcome>.
 | # | AK | MoC | Evidence |
 | 1 | ... | unit | ... |
 EOF
+
+bd create --title="..." -t feature -p 2 --body-file /tmp/cl-foo.md
 ```
+
+The `cat > /tmp/foo <<EOF` step is fine — dcg only inspects `Bash` tool
+calls for destructive command-tokens, not heredoc bodies fed to `cat`.
 
 Discovered work? Link via dependency:
 
@@ -153,7 +165,7 @@ bd create --title="Found bug" -t bug -p 1 --deps discovered-from:<parent-id>
 |---|---|
 | Claim atomically | `bd update <id> --claim` |
 | Append to audit trail | `bd update <id> --append-notes "<context: state, next steps>"` |
-| Replace description (long) | `bd update <id> --body-file -` (stdin heredoc) |
+| Replace description (long) | `bd update <id> --body-file <path>` (write to file first) |
 | Add label | `bd update <id> --add-label=<label>` |
 | Close with reason | `bd close <id> --reason "<1-line summary with metrics>"` |
 | Close many at once | `bd close <id1> <id2> ...` |

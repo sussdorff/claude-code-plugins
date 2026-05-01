@@ -1171,8 +1171,10 @@ bd error messages can be misleading. Read them carefully before acting.
   never `pkill dolt` (corrupts journal).
   1. Run `bd dolt status` ONCE to confirm reality.
   2. If it reports `running` → the failure was transient or argument-shaped. Retry
-     the bd command, preferring the `--body-file -` / `--design-file -` stdin form
-     for any multi-line content. Do NOT touch the Dolt lifecycle.
+     the bd command. For multi-line content, write the body to a temp file first
+     and pass `--body-file <path>` / `--design-file <path>` (NOT inline heredoc:
+     dcg false-positives + codex shell-quoting fragility — see CL-2l4 / PRIME.md).
+     Do NOT touch the Dolt lifecycle.
   3. If it reports `not running` → STOP and escalate to the user. Suggest
      `brew services restart dolt`; do not invoke it yourself (shared
      infrastructure → user confirmation required).
