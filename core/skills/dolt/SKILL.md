@@ -89,7 +89,7 @@ dolt --host 127.0.0.1 --port 3306 --no-tls sql -q "SHOW DATABASES"
 | Context | User | Password | Where |
 |---------|------|----------|-------|
 | Local SQL | `root` | none | brew-managed dolt sql-server |
-| Remote push/pull | `__DOLT__grpc_username` per-DB | `DOLT_REMOTE_PASSWORD` env var | `~/.dolt-data/<db>/.dolt/repo_state.json` + `~/.zshenv` |
+| Remote push/pull | `__DOLT__grpc_username` per-DB | `~/.dolt-remote-password` (via LaunchAgent, see below) + `DOLT_REMOTE_PASSWORD` env var | `~/.dolt-data/<db>/.dolt/repo_state.json` + `~/.zshenv` |
 
 Watch out:
 - `DOLT_REMOTE_USER` is **not** an official env var — only `DOLT_REMOTE_PASSWORD` is. Username
@@ -121,17 +121,38 @@ injected into launchd's global environment via a dedicated LaunchAgent.
 echo -n "$DOLT_REMOTE_PASSWORD" > ~/.dolt-remote-password
 chmod 600 ~/.dolt-remote-password
 
-# 2. Create the auth LaunchAgent at ~/Library/LaunchAgents/com.cognovis.dolt-auth.plist
-#    ProgramArguments: reads password → launchctl setenv → launchctl stop dolt
-#    RunAtLoad: true — runs at every login
+# 2. Create ~/Library/LaunchAgents/com.cognovis.dolt-auth.plist with this exact content:
+```xml
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>Label</key>
+	<string>com.cognovis.dolt-auth</string>
+	<key>ProgramArguments</key>
+	<array>
+		<string>/bin/bash</string>
+		<string>-c</string>
+		<string>PW=$(cat /Users/malte/.dolt-remote-password) || { echo "ERROR: cannot read password file" &gt;&amp;2; exit 1; }; [ -n "$PW" ] || { echo "ERROR: password file is empty" &gt;&amp;2; exit 1; }; /bin/launchctl setenv DOLT_REMOTE_PASSWORD "$PW" || { echo "ERROR: launchctl setenv failed" &gt;&amp;2; exit 1; }; /bin/launchctl stop homebrew.mxcl.dolt</string>
+	</array>
+	<key>RunAtLoad</key>
+	<true/>
+	<key>StandardErrorPath</key>
+	<string>/Users/malte/.dolt-auth.err.log</string>
+	<key>StandardOutPath</key>
+	<string>/Users/malte/.dolt-auth.log</string>
+</dict>
+</plist>
+```
 #    KeepAlive is NOT set — this is a one-shot agent, not a persistent daemon
+#    Errors flow to ~/.dolt-auth.err.log; empty/missing password file causes a non-zero exit
 
 # 3. Load it
 launchctl load ~/Library/LaunchAgents/com.cognovis.dolt-auth.plist
 ```
 
 **How it works:**
-1. At login, `com.cognovis.dolt-auth` runs (RunAtLoad: true)
+1. At login, `homebrew.mxcl.dolt` and `com.cognovis.dolt-auth` start in parallel via RunAtLoad. `setenv` is called synchronously before `stop`, ensuring dolt's restarted process inherits the env var — the parallel start of `homebrew.mxcl.dolt` doesn't matter because `stop`+KeepAlive-restart happens after `setenv` completes.
 2. Reads password from `~/.dolt-remote-password`
 3. Sets `DOLT_REMOTE_PASSWORD` in launchd's global env table via `launchctl setenv`
 4. Stops `homebrew.mxcl.dolt` (SIGTERM) → `KeepAlive: true` auto-restarts dolt
