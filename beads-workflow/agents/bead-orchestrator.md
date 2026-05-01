@@ -1152,7 +1152,7 @@ Do NOT spawn `core:session-close`.
 - Tool boundaries for this agent defined in `malte/standards/agents/tool-boundaries.md`
 - Do NOT implement code yourself — delegate to impl subagent (Phase 5), fix-agent (Phase 6/8), or verification-fix (Phase 10)
 - Do NOT use `bd edit` (opens $EDITOR, blocks agents)
-- Do NOT run `bd prime`, `bd onboard`, or invoke the `beads` skill. The bead context (`bd show <id>`) is injected into your prompt and these instructions are the complete workflow. The SessionStart hook may have already emitted bd prime output for the user; you do not need to re-run it. The `beads` skill is for routing decisions in plain sessions — by the time the orchestrator runs, routing has already happened.
+- Do NOT run `bd prime` or `bd onboard` yourself. The SessionStart hook (`~/.claude/scripts/beads-session-start.zsh`) already emits `bd prime` output, so PRIME.md content is in the agent's context. The bead context (`bd show <id>`) is also injected into your prompt. Running `bd prime` again only duplicates context. (The `beads` skill that previously did routing has been removed — PRIME.md's Entrypoints table replaces it.)
 - Do NOT close beads — EVER. Beads are closed by session-close as the absolute last step after merge+push. The orchestrator hands off, it does not close. **Exception:** Closing a parent bead during slicing (Phase 0) is permitted.
 - Do NOT create beads for new work discovered during implementation — report to user instead
 - Do NOT use `cmux send` for review injection — review is inline (Phase 6). The old 2-pane flow (`cld -br`, cmux-reviewer, old Codex runtime wrapper) was removed in CCP-2vo.10
