@@ -108,6 +108,49 @@ Watch out:
   json.dump(d,open(p,'w'),indent=2)"
   ```
 
+### Persistent Auth Setup (macOS — brew-managed dolt)
+
+The brew dolt daemon runs as a user LaunchAgent (`~/Library/LaunchAgents/homebrew.mxcl.dolt.plist`).
+launchd does NOT inherit shell env vars (`~/.zshenv`/`~/.zshrc`), so `DOLT_REMOTE_PASSWORD` must be
+injected into launchd's global environment via a dedicated LaunchAgent.
+
+**One-time setup (already done on the main workstation):**
+
+```bash
+# 1. Store the password securely (from 1Password: vault API Keys, item "Dolt Remote - malte")
+echo -n "$DOLT_REMOTE_PASSWORD" > ~/.dolt-remote-password
+chmod 600 ~/.dolt-remote-password
+
+# 2. Create the auth LaunchAgent at ~/Library/LaunchAgents/com.cognovis.dolt-auth.plist
+#    ProgramArguments: reads password → launchctl setenv → launchctl stop dolt
+#    RunAtLoad: true — runs at every login
+#    KeepAlive is NOT set — this is a one-shot agent, not a persistent daemon
+
+# 3. Load it
+launchctl load ~/Library/LaunchAgents/com.cognovis.dolt-auth.plist
+```
+
+**How it works:**
+1. At login, `com.cognovis.dolt-auth` runs (RunAtLoad: true)
+2. Reads password from `~/.dolt-remote-password`
+3. Sets `DOLT_REMOTE_PASSWORD` in launchd's global env table via `launchctl setenv`
+4. Stops `homebrew.mxcl.dolt` (SIGTERM) → `KeepAlive: true` auto-restarts dolt
+5. Restarted dolt inherits `DOLT_REMOTE_PASSWORD` from launchd's global env table
+
+**Why `~/.zshenv` still exports `DOLT_REMOTE_PASSWORD`:**
+Direct `dolt` CLI calls (e.g., `dolt push --user=malte` from the terminal) read `DOLT_REMOTE_PASSWORD`
+from the shell environment. Keep it in `~/.zshenv` for these cases.
+The LaunchAgent handles the daemon's environment separately.
+
+**Note**: `dolt creds` (keypair auth) is for DoltHub only — NOT applicable for self-hosted servers
+with username/password auth. The `DOLT_REMOTE_PASSWORD` env var is the only supported mechanism.
+
+**Quickfix (after reboot if LaunchAgent fails or is not yet installed):**
+```bash
+launchctl setenv DOLT_REMOTE_PASSWORD "$(cat ~/.dolt-remote-password)"
+launchctl stop homebrew.mxcl.dolt  # KeepAlive restarts it with new env
+```
+
 ## Dolt CLI flag order
 
 Global flags go **BEFORE** the subcommand:
@@ -162,7 +205,8 @@ bd dolt remote list             # origin should be [SQL + CLI]
 | `Dolt server unreachable at 127.0.0.1:3306` | brew services not running | `brew services start dolt` |
 | `database <name> not found` | server started before data was copied, or DB really missing | `brew services restart dolt`; if still missing → [Re-Clone](#re-clone-local-database) |
 | `Access denied for user 'root'` | Missing `__DOLT__grpc_username` in repo_state.json | Set manually (see [Auth Layers](#auth-layers)) or re-clone |
-| `Access denied for user 'malte'` | Wrong/missing `DOLT_REMOTE_PASSWORD` | Check `~/.zshenv` |
+| `Access denied for user 'malte'` | Wrong/missing `DOLT_REMOTE_PASSWORD` | Check `~/.zshenv`; after reboot also verify daemon env: `launchctl getenv DOLT_REMOTE_PASSWORD` |
+| `must set DOLT_REMOTE_PASSWORD` (after reboot) | Brew dolt daemon started before auth LaunchAgent ran | Check: `launchctl list \| grep dolt-auth`; fix: `launchctl load ~/Library/LaunchAgents/com.cognovis.dolt-auth.plist` |
 | `target has uncommitted changes` | [dolthub/dolt#10807](https://github.com/dolthub/dolt/issues/10807) | `bd dolt pull && bd dolt push --force` |
 | `no common ancestor` | Local & remote diverged | [Re-Clone](#re-clone-local-database) — do NOT force-push |
 | `Merge conflict detected` | Same rows modified on both sides | [`scripts/resolve-merge-conflicts.sh`](scripts/resolve-merge-conflicts.sh) |
