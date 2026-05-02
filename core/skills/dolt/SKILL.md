@@ -62,6 +62,9 @@ bd dolt show                                  # Connection + remotes
 cat .beads/metadata.json                      # dolt_mode + dolt_database
 grep dolt .beads/config.yaml                  # shared-server: true?
 echo $BEADS_DOLT_SERVER_PORT                  # 3306?
+```
+
+```bash
 bd stats                                      # Verifies actual DB access
 dolt --host 127.0.0.1 --port 3306 --no-tls sql -q "SHOW DATABASES"
 ```
@@ -99,13 +102,12 @@ Watch out:
   CALL DOLT_CLONE('--user', 'malte', 'https://dolt.cognovis.de/beads_<db>');
   ```
 - `bd dolt remote add` does NOT write `__DOLT__grpc_username`. After adding, set manually:
-  ```bash
-  python3 -c "
-  import json, sys
-  p='/Users/malte/.dolt-data/<db>/.dolt/repo_state.json'
-  d=json.load(open(p))
-  d['remotes']['origin']['params']['__DOLT__grpc_username']='malte'
-  json.dump(d,open(p,'w'),indent=2)"
+  Save a script `set-dolt-username.py` with content below, then run `python3 set-dolt-username.py`:
+
+  ```python
+  import json; p='/Users/malte/.dolt-data/<db>/.dolt/repo_state.json'
+  d=json.load(open(p)); d['remotes']['origin']['params']['__DOLT__grpc_username']='malte'
+  json.dump(d,open(p,'w'),indent=2)
   ```
 
 ### Persistent Auth Setup (macOS — brew-managed dolt)
@@ -195,6 +197,9 @@ brew services start dolt        # Manually start (also auto-starts at login)
 brew services stop dolt
 brew services restart dolt      # Needed after adding databases to ~/.dolt-data/
 brew services info dolt
+```
+
+```bash
 tail -f /opt/homebrew/var/log/dolt.log
 tail -f /opt/homebrew/var/log/dolt.error.log
 ```
@@ -241,25 +246,18 @@ bd dolt remote list             # origin should be [SQL + CLI]
 When local DB is missing, corrupted, or too diverged from remote.
 
 ```bash
-# 1. Stop the server (Dolt locks data dir during clone via DOLT_CLONE doesn't need stop,
-#    but a local DB drop does)
+# 1. Stop, drop, restart
 brew services stop dolt
-
-# 2. Drop or move corrupted DB
 rm -rf ~/.dolt-data/<db_name>     # or move to a backup location
-
-# 3. Restart server with empty target slot
 brew services start dolt
+```
 
-# 4. Clone (DOLT_CLONE ignores env vars — pass --user explicitly)
+```bash
+# 2. Clone (DOLT_CLONE ignores env vars — pass --user explicitly)
 dolt --host 127.0.0.1 --port 3306 --no-tls sql -q \
   "CALL DOLT_CLONE('--user', 'malte', 'https://dolt.cognovis.de/<db_name>')"
-
-# 5. Restart so Dolt indexes the new DB
-brew services restart dolt
-
-# 6. Verify
-bd dolt show && bd list
+brew services restart dolt        # Dolt must re-index the new DB
+bd dolt show && bd list           # Verify
 ```
 
 **Fallback** (server unhealthy): clone via CLI directly into the data dir:
