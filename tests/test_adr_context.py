@@ -28,27 +28,12 @@ FIXTURES_DIR = Path(__file__).parent / "fixtures" / "adr_context"
 def _load_adr_context():
     """Load adr-context.py as a module, stripping PEP-723 header lines.
 
-    yaml (pyyaml) may not be available in the uv test env since it is a
-    PEP-723 runtime dependency. We import it from whatever Python environment
-    has it and inject it into the module namespace before exec so the script
-    can use it normally.
+    pyyaml must be installed in the test environment (e.g. via `uv run pytest`
+    which resolves the PEP-723 dependencies, or by listing pyyaml as a dev
+    dependency). If pyyaml is missing this will raise ImportError with a clear
+    message — do not probe hardcoded site-packages paths.
     """
-    # Ensure yaml is importable — try the current environment first, then
-    # probe known site-packages locations (conda/brew Python that has pyyaml).
-    try:
-        import yaml as _yaml_mod  # noqa: PLC0415
-    except ModuleNotFoundError:
-        _yaml_candidates = [
-            "/opt/homebrew/Caskroom/miniconda/base/lib/python3.12/site-packages",
-            "/opt/homebrew/lib/python3.12/site-packages",
-            "/usr/local/lib/python3.12/site-packages",
-        ]
-        for _site in _yaml_candidates:
-            _site_path = Path(_site)
-            if (_site_path / "yaml").is_dir() and str(_site_path) not in sys.path:
-                sys.path.insert(0, str(_site_path))
-                break
-        import yaml as _yaml_mod  # noqa: PLC0415
+    import yaml as _yaml_mod  # noqa: PLC0415
 
     source = SCRIPT_PATH.read_text()
     # Strip shebang + PEP-723 inline script metadata block so Python can parse it
@@ -187,6 +172,50 @@ class TestDiscoverAdrs:
         beta = next((r for r in results if r["id"] == "ADR-beta"), None)
         assert beta is not None
         assert "text" in beta["match_reason"]
+
+    def test_glob_matches_direct_children_for_double_star(self, adr_mod, tmp_adr_dir: Path):
+        """Regression: ADR-alpha applies_to=['core/**/*.py'] must match core/foo.py.
+
+        Previously _matches_glob delegated to PurePosixPath.match, which in
+        Python 3.12 only matches `**` against exactly one segment — so direct
+        children like `core/foo.py` and deeply nested children like
+        `core/a/b/foo.py` were both skipped, missing real ADR violations.
+        """
+        # Direct child (zero `**` segments)
+        results = adr_mod.discover_adrs(
+            adr_dir=tmp_adr_dir,
+            changed_paths=["core/foo.py"],
+            bead_description_override=None,
+        )
+        ids = [r["id"] for r in results]
+        assert "ADR-alpha" in ids, (
+            "ADR-alpha (applies_to: core/**/*.py) must match direct child core/foo.py"
+        )
+        # Multi-segment child (2+ `**` segments)
+        results_deep = adr_mod.discover_adrs(
+            adr_dir=tmp_adr_dir,
+            changed_paths=["core/a/b/foo.py"],
+            bead_description_override=None,
+        )
+        ids_deep = [r["id"] for r in results_deep]
+        assert "ADR-alpha" in ids_deep, (
+            "ADR-alpha (applies_to: core/**/*.py) must match deeply nested core/a/b/foo.py"
+        )
+
+    def test_loads_adrs_recursively(self, adr_mod, tmp_path: Path):
+        """Regression: _load_adrs must walk subdirectories (rglob, not glob)."""
+        nested = tmp_path / "adr" / "subdir"
+        nested.mkdir(parents=True)
+        # Copy fixture into a nested directory
+        import shutil
+        shutil.copy(FIXTURES_DIR / "adr_alpha.md", nested / "adr_alpha.md")
+        results = adr_mod.discover_adrs(
+            adr_dir=tmp_path / "adr",
+            changed_paths=["scripts/foo.py"],
+            bead_description_override=None,
+        )
+        ids = [r["id"] for r in results]
+        assert "ADR-alpha" in ids, "ADR in subdirectory must be discovered (recursive load)"
 
     def test_envelope_structure(self, adr_mod, tmp_adr_dir: Path):
         """discover_adrs_envelope emits valid execution-result envelope."""

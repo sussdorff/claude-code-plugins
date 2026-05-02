@@ -24,7 +24,6 @@ from __future__ import annotations
 
 import argparse
 import datetime
-import fnmatch
 import json
 import re
 import subprocess
@@ -84,7 +83,7 @@ def parse_adr_frontmatter(adr_path: Path) -> dict[str, Any] | None:
     Returns a dict with keys: id, status, date, applies_to, prohibits,
     decision_summary, path — or None if no frontmatter is found.
     """
-    text = adr_path.read_text()
+    text = adr_path.read_text(encoding="utf-8")
     if not text.startswith("---"):
         return None
     # Extract the YAML block between the first --- delimiters
@@ -106,9 +105,13 @@ def parse_adr_frontmatter(adr_path: Path) -> dict[str, Any] | None:
 
 
 def _load_adrs(adr_dir: Path) -> list[dict[str, Any]]:
-    """Walk adr_dir and return all successfully parsed ADR frontmatter dicts."""
+    """Walk adr_dir recursively and return all parsed ADR frontmatter dicts.
+
+    Uses rglob (recursive) to match the previous orchestrator fallback behavior
+    of `find docs/adr/ -name "*.md"`, which finds ADRs in subdirectories too.
+    """
     adrs: list[dict[str, Any]] = []
-    for md_file in sorted(adr_dir.glob("*.md")):
+    for md_file in sorted(adr_dir.rglob("*.md")):
         parsed = parse_adr_frontmatter(md_file)
         if parsed is not None:
             adrs.append(parsed)
@@ -120,23 +123,64 @@ def _load_adrs(adr_dir: Path) -> list[dict[str, Any]]:
 # ---------------------------------------------------------------------------
 
 
-def _matches_glob(path: str, pattern: str) -> bool:
-    """Return True if path matches the given glob pattern using fnmatch.
+def _glob_to_regex(pattern: str) -> str:
+    """Translate a path glob pattern into an anchored regex.
 
-    Handles double-star (**) patterns by checking every path suffix.
+    Semantics:
+      - `**` matches zero-or-more path segments (Bash globstar / .gitignore)
+      - `*`  matches any characters within a single path segment (no `/`)
+      - `?`  matches a single character within a segment
+      - `/`  is a literal path separator
+      - all other regex metacharacters are escaped
+
+    Examples:
+      core/**/*.py  → ^core(?:/.*)?/[^/]*\\.py$   (matches core/foo.py and core/a/b/foo.py)
+      scripts/*.py  → ^scripts/[^/]*\\.py$        (matches scripts/foo.py only)
+      **/*.md       → ^(?:.*/)?[^/]*\\.md$        (matches foo.md and a/b/foo.md)
     """
-    if fnmatch.fnmatch(path, pattern):
-        return True
-    # Expand ** by checking if any tail of the path matches the non-** part
-    if "**" in pattern:
-        parts = path.replace("\\", "/").split("/")
-        for i in range(len(parts)):
-            tail = "/".join(parts[i:])
-            # Replace ** with a wildcard-compatible fragment
-            simplified = pattern.replace("**/", "")
-            if fnmatch.fnmatch(tail, simplified):
-                return True
-    return False
+    # Tokenize: handle `**/`, `**`, `*`, `?`, and other characters
+    out: list[str] = []
+    i = 0
+    n = len(pattern)
+    while i < n:
+        c = pattern[i]
+        if pattern[i : i + 3] == "**/":
+            # zero-or-more path segments followed by separator
+            out.append("(?:.*/)?")
+            i += 3
+        elif pattern[i : i + 2] == "**":
+            # zero-or-more characters incl. separators
+            out.append(".*")
+            i += 2
+        elif c == "*":
+            # any characters except separator
+            out.append("[^/]*")
+            i += 1
+        elif c == "?":
+            out.append("[^/]")
+            i += 1
+        else:
+            out.append(re.escape(c))
+            i += 1
+    return "^" + "".join(out) + "$"
+
+
+def _matches_glob(path: str, pattern: str) -> bool:
+    """Return True if path matches the given glob pattern.
+
+    `**` semantics: a `**` segment matches zero-or-more path segments
+    (matching common .gitignore / Bash globstar semantics), so
+    `core/**/*.py` matches both `core/foo.py` and `core/a/b/foo.py`.
+
+    `*` matches within a single path segment (does NOT cross `/`), so
+    `scripts/*.py` matches `scripts/foo.py` but NOT `scripts/sub/foo.py`.
+
+    Implemented via _glob_to_regex because Python 3.12's
+    PurePosixPath.match only matches `**` against exactly one segment
+    (zero-segment case and 2+ segment cases both fail), which would skip
+    ADRs with common recursive `applies_to` globs.
+    """
+    return re.match(_glob_to_regex(pattern), path) is not None
 
 
 def _path_matches_adr(changed_paths: list[str], applies_to: list[str]) -> bool:
@@ -183,6 +227,7 @@ def discover_adrs(
     changed_paths: list[str],
     bead_description_override: str | None,
     bead_id: str | None = None,
+    _adrs: list[dict[str, Any]] | None = None,
 ) -> list[dict[str, Any]]:
     """Discover ADRs in scope for a bead.
 
@@ -192,11 +237,13 @@ def discover_adrs(
         bead_description_override: Pre-fetched bead description (for testing).
             If None and bead_id is given, attempts to call `bd show <bead_id>`.
         bead_id: Bead identifier used to fetch description when override is None.
+        _adrs: Optional pre-loaded ADR list (avoids re-reading disk when the
+            caller has already called _load_adrs). Internal use only.
 
     Returns:
         List of ADR dicts with keys: id, path, decision_summary, match_reason.
     """
-    adrs = _load_adrs(adr_dir)
+    adrs = _adrs if _adrs is not None else _load_adrs(adr_dir)
 
     # Determine bead description text for text-based matching
     if bead_description_override is not None:
@@ -218,7 +265,7 @@ def discover_adrs(
             match_reason = "path"
 
         # Text-based matching (bead description references the ADR id)
-        if bead_text and re.search(re.escape(adr_id), bead_text, re.IGNORECASE):
+        if bead_text and re.search(rf"\b{re.escape(adr_id)}\b", bead_text, re.IGNORECASE):
             if match_reason is None:
                 match_reason = "text"
             else:
@@ -289,19 +336,23 @@ def inject_adrs_envelope(
 
     Returns execution-result envelope with data.markdown.
     """
+    # Load ADR metadata once — reused for both discovery and formatting.
+    all_adrs_list = _load_adrs(adr_dir)
+    all_adrs = {a["id"]: a for a in all_adrs_list}
+
     adrs_in_scope = discover_adrs(
         adr_dir=adr_dir,
         changed_paths=changed_paths,
         bead_description_override=bead_description_override,
         bead_id=bead_id,
+        _adrs=all_adrs_list,
     )
 
     if not adrs_in_scope:
         markdown = "No ADRs in scope for this bead."
         summary = "No ADRs in scope."
     else:
-        # Load full metadata for each ADR so we can format prohibitions
-        all_adrs = {a["id"]: a for a in _load_adrs(adr_dir)}
+        # Use already-loaded full metadata for each ADR to format prohibitions
         sections: list[str] = ["## ADR Constraints (mandatory)\n"]
         for entry in adrs_in_scope:
             adr_id = entry["id"]
@@ -339,15 +390,18 @@ def verify_adrs_envelope(
         data.discovered_adrs: list of {id, path, decision_summary}
         data.violations: list of {adr, rule, evidence, fixability}
     """
+    # Load once — reused for both discovery and violation checking.
+    all_adrs_list = _load_adrs(adr_dir)
+    all_adrs = {a["id"]: a for a in all_adrs_list}
+
     # Always re-discover from changed_paths (ignores caller-supplied provenance)
     adrs_in_scope = discover_adrs(
         adr_dir=adr_dir,
         changed_paths=changed_paths,
         bead_description_override=bead_description_override,
         bead_id=bead_id,
+        _adrs=all_adrs_list,
     )
-
-    all_adrs = {a["id"]: a for a in _load_adrs(adr_dir)}
 
     discovered_adrs: list[dict[str, Any]] = [
         {"id": a["id"], "path": a["path"], "decision_summary": a["decision_summary"]}
@@ -362,8 +416,15 @@ def verify_adrs_envelope(
         meta = all_adrs.get(adr_id, {})
         prohibits: list[str] = meta.get("prohibits", [])
         for rule in prohibits:
-            # Case-insensitive substring match of key words from the prohibition
-            # Use first 60 chars of rule as the matching key (the actionable part)
+            # Design note: violation detection uses prohibition prose as a
+            # heuristic — it only catches violations where the diff contains
+            # the prohibition text verbatim (typically as a comment quoting the
+            # rule). It does NOT analyze code semantics, so for example a
+            # prohibition "Do not use httpx" will not detect a bare
+            # `import httpx` line unless the diff also contains the prose.
+            # For structural violation detection, extend ADR frontmatter with a
+            # `pattern:` field and check that instead. This is documented in
+            # the `verify` subparser --help description.
             key = rule[:60].lower()
             if key and key in diff_lower:
                 violations.append(
@@ -459,7 +520,7 @@ def main() -> None:
     p_discover = sub.add_parser("discover", help="Discover ADRs in scope")
     p_discover.add_argument("--bead", default=None, help="Bead ID for text-matching")
     p_discover.add_argument("--changed-paths", default=None, help="Comma-separated list of changed paths")
-    p_discover.add_argument("--output", default="json", choices=["json"])
+    p_discover.add_argument("--output", default="json", choices=["json", "paths"])
     p_discover.add_argument("--adr-dir", default=None, help="Path to ADR directory (default: docs/adr/)")
 
     # inject
@@ -470,7 +531,13 @@ def main() -> None:
     p_inject.add_argument("--adr-dir", default=None, help="Path to ADR directory")
 
     # verify
-    p_verify = sub.add_parser("verify", help="Verify ADR compliance against a diff")
+    p_verify = sub.add_parser(
+        "verify",
+        help=(
+            "Verify ADR compliance against a diff. "
+            "Heuristic: detects violations when diff contains prohibition text verbatim."
+        ),
+    )
     p_verify.add_argument("--bead", default=None, help="Bead ID")
     p_verify.add_argument("--diff", default="main...HEAD", help="Git diff range")
     p_verify.add_argument("--output", default="json", choices=["json"])
@@ -510,7 +577,14 @@ def main() -> None:
             bead_description_override=None,
             bead_id=bead_id,
         )
-        print(json.dumps(result, indent=2))
+        if args.output == "paths":
+            # --output=paths: bare output format (shell convenience, exception to
+            # envelope contract per AK2's "where applicable" clause). Use
+            # --output=json (default) for the canonical Execution-Result envelope.
+            for entry in result["data"]["adrs_in_scope"]:
+                print(entry["path"])
+        else:
+            print(json.dumps(result, indent=2))
 
     elif args.command == "inject":
         result = inject_adrs_envelope(
@@ -520,6 +594,10 @@ def main() -> None:
             bead_id=bead_id,
         )
         if args.output == "markdown":
+            # --output=markdown: bare markdown for direct prompt injection
+            # (convenience format, exception to envelope contract per AK2's
+            # "where applicable" clause). Use --output=json for the canonical
+            # Execution-Result envelope (data.markdown contains the same text).
             print(result["data"]["markdown"])
         else:
             print(json.dumps(result, indent=2))
