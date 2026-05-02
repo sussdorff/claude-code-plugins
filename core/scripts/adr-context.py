@@ -28,7 +28,7 @@ import json
 import re
 import subprocess
 import sys
-from pathlib import Path, PurePosixPath
+from pathlib import Path
 from typing import Any
 
 import yaml
@@ -105,9 +105,13 @@ def parse_adr_frontmatter(adr_path: Path) -> dict[str, Any] | None:
 
 
 def _load_adrs(adr_dir: Path) -> list[dict[str, Any]]:
-    """Walk adr_dir and return all successfully parsed ADR frontmatter dicts."""
+    """Walk adr_dir recursively and return all parsed ADR frontmatter dicts.
+
+    Uses rglob (recursive) to match the previous orchestrator fallback behavior
+    of `find docs/adr/ -name "*.md"`, which finds ADRs in subdirectories too.
+    """
     adrs: list[dict[str, Any]] = []
-    for md_file in sorted(adr_dir.glob("*.md")):
+    for md_file in sorted(adr_dir.rglob("*.md")):
         parsed = parse_adr_frontmatter(md_file)
         if parsed is not None:
             adrs.append(parsed)
@@ -119,14 +123,64 @@ def _load_adrs(adr_dir: Path) -> list[dict[str, Any]]:
 # ---------------------------------------------------------------------------
 
 
+def _glob_to_regex(pattern: str) -> str:
+    """Translate a path glob pattern into an anchored regex.
+
+    Semantics:
+      - `**` matches zero-or-more path segments (Bash globstar / .gitignore)
+      - `*`  matches any characters within a single path segment (no `/`)
+      - `?`  matches a single character within a segment
+      - `/`  is a literal path separator
+      - all other regex metacharacters are escaped
+
+    Examples:
+      core/**/*.py  → ^core(?:/.*)?/[^/]*\\.py$   (matches core/foo.py and core/a/b/foo.py)
+      scripts/*.py  → ^scripts/[^/]*\\.py$        (matches scripts/foo.py only)
+      **/*.md       → ^(?:.*/)?[^/]*\\.md$        (matches foo.md and a/b/foo.md)
+    """
+    # Tokenize: handle `**/`, `**`, `*`, `?`, and other characters
+    out: list[str] = []
+    i = 0
+    n = len(pattern)
+    while i < n:
+        c = pattern[i]
+        if pattern[i : i + 3] == "**/":
+            # zero-or-more path segments followed by separator
+            out.append("(?:.*/)?")
+            i += 3
+        elif pattern[i : i + 2] == "**":
+            # zero-or-more characters incl. separators
+            out.append(".*")
+            i += 2
+        elif c == "*":
+            # any characters except separator
+            out.append("[^/]*")
+            i += 1
+        elif c == "?":
+            out.append("[^/]")
+            i += 1
+        else:
+            out.append(re.escape(c))
+            i += 1
+    return "^" + "".join(out) + "$"
+
+
 def _matches_glob(path: str, pattern: str) -> bool:
     """Return True if path matches the given glob pattern.
 
-    Uses PurePosixPath.match which is path-segment-aware (treats '/' as a
-    boundary, unlike fnmatch.fnmatch). Supports '**' glob patterns natively
-    in Python 3.12+ (which we target).
+    `**` semantics: a `**` segment matches zero-or-more path segments
+    (matching common .gitignore / Bash globstar semantics), so
+    `core/**/*.py` matches both `core/foo.py` and `core/a/b/foo.py`.
+
+    `*` matches within a single path segment (does NOT cross `/`), so
+    `scripts/*.py` matches `scripts/foo.py` but NOT `scripts/sub/foo.py`.
+
+    Implemented via _glob_to_regex because Python 3.12's
+    PurePosixPath.match only matches `**` against exactly one segment
+    (zero-segment case and 2+ segment cases both fail), which would skip
+    ADRs with common recursive `applies_to` globs.
     """
-    return PurePosixPath(path).match(pattern)
+    return re.match(_glob_to_regex(pattern), path) is not None
 
 
 def _path_matches_adr(changed_paths: list[str], applies_to: list[str]) -> bool:
@@ -362,10 +416,15 @@ def verify_adrs_envelope(
         meta = all_adrs.get(adr_id, {})
         prohibits: list[str] = meta.get("prohibits", [])
         for rule in prohibits:
-            # NOTE: violation detection uses prohibition prose as a heuristic.
-            # Only catches violations where the diff contains the exact prohibition
-            # text (e.g. as a comment). For structural violation detection, extend
-            # ADR frontmatter with a `pattern:` field and check that instead.
+            # Design note: violation detection uses prohibition prose as a
+            # heuristic — it only catches violations where the diff contains
+            # the prohibition text verbatim (typically as a comment quoting the
+            # rule). It does NOT analyze code semantics, so for example a
+            # prohibition "Do not use httpx" will not detect a bare
+            # `import httpx` line unless the diff also contains the prose.
+            # For structural violation detection, extend ADR frontmatter with a
+            # `pattern:` field and check that instead. This is documented in
+            # the `verify` subparser --help description.
             key = rule[:60].lower()
             if key and key in diff_lower:
                 violations.append(
@@ -472,7 +531,13 @@ def main() -> None:
     p_inject.add_argument("--adr-dir", default=None, help="Path to ADR directory")
 
     # verify
-    p_verify = sub.add_parser("verify", help="Verify ADR compliance against a diff")
+    p_verify = sub.add_parser(
+        "verify",
+        help=(
+            "Verify ADR compliance against a diff. "
+            "Heuristic: detects violations when diff contains prohibition text verbatim."
+        ),
+    )
     p_verify.add_argument("--bead", default=None, help="Bead ID")
     p_verify.add_argument("--diff", default="main...HEAD", help="Git diff range")
     p_verify.add_argument("--output", default="json", choices=["json"])
@@ -513,7 +578,9 @@ def main() -> None:
             bead_id=bead_id,
         )
         if args.output == "paths":
-            # One ADR file path per line — no JSON wrapper, for shell variable capture.
+            # --output=paths: bare output format (shell convenience, exception to
+            # envelope contract per AK2's "where applicable" clause). Use
+            # --output=json (default) for the canonical Execution-Result envelope.
             for entry in result["data"]["adrs_in_scope"]:
                 print(entry["path"])
         else:
@@ -527,6 +594,10 @@ def main() -> None:
             bead_id=bead_id,
         )
         if args.output == "markdown":
+            # --output=markdown: bare markdown for direct prompt injection
+            # (convenience format, exception to envelope contract per AK2's
+            # "where applicable" clause). Use --output=json for the canonical
+            # Execution-Result envelope (data.markdown contains the same text).
             print(result["data"]["markdown"])
         else:
             print(json.dumps(result, indent=2))

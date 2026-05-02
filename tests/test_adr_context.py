@@ -173,6 +173,50 @@ class TestDiscoverAdrs:
         assert beta is not None
         assert "text" in beta["match_reason"]
 
+    def test_glob_matches_direct_children_for_double_star(self, adr_mod, tmp_adr_dir: Path):
+        """Regression: ADR-alpha applies_to=['core/**/*.py'] must match core/foo.py.
+
+        Previously _matches_glob delegated to PurePosixPath.match, which in
+        Python 3.12 only matches `**` against exactly one segment — so direct
+        children like `core/foo.py` and deeply nested children like
+        `core/a/b/foo.py` were both skipped, missing real ADR violations.
+        """
+        # Direct child (zero `**` segments)
+        results = adr_mod.discover_adrs(
+            adr_dir=tmp_adr_dir,
+            changed_paths=["core/foo.py"],
+            bead_description_override=None,
+        )
+        ids = [r["id"] for r in results]
+        assert "ADR-alpha" in ids, (
+            "ADR-alpha (applies_to: core/**/*.py) must match direct child core/foo.py"
+        )
+        # Multi-segment child (2+ `**` segments)
+        results_deep = adr_mod.discover_adrs(
+            adr_dir=tmp_adr_dir,
+            changed_paths=["core/a/b/foo.py"],
+            bead_description_override=None,
+        )
+        ids_deep = [r["id"] for r in results_deep]
+        assert "ADR-alpha" in ids_deep, (
+            "ADR-alpha (applies_to: core/**/*.py) must match deeply nested core/a/b/foo.py"
+        )
+
+    def test_loads_adrs_recursively(self, adr_mod, tmp_path: Path):
+        """Regression: _load_adrs must walk subdirectories (rglob, not glob)."""
+        nested = tmp_path / "adr" / "subdir"
+        nested.mkdir(parents=True)
+        # Copy fixture into a nested directory
+        import shutil
+        shutil.copy(FIXTURES_DIR / "adr_alpha.md", nested / "adr_alpha.md")
+        results = adr_mod.discover_adrs(
+            adr_dir=tmp_path / "adr",
+            changed_paths=["scripts/foo.py"],
+            bead_description_override=None,
+        )
+        ids = [r["id"] for r in results]
+        assert "ADR-alpha" in ids, "ADR in subdirectory must be discovered (recursive load)"
+
     def test_envelope_structure(self, adr_mod, tmp_adr_dir: Path):
         """discover_adrs_envelope emits valid execution-result envelope."""
         envelope = adr_mod.discover_adrs_envelope(
