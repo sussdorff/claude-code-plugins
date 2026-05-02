@@ -69,6 +69,15 @@ def verification_phase_section(content: str) -> str:
     return content[start:end]
 
 
+def adr_compliance_section(content: str) -> str:
+    """Return only the ADR Compliance Check section from verification-agent.md."""
+    start = content.find("### ADR Compliance Check")
+    if start == -1:
+        return ""
+    end = content.find("### Docs-Existence Check", start)
+    return content[start:end] if end != -1 else content[start:]
+
+
 class TestProvenanceInOrchestrator:
     def test_verification_phase_template_contains_standards_applied(self):
         content = BEAD_ORCHESTRATOR_MD.read_text()
@@ -257,6 +266,20 @@ class TestVetoChecks:
         assert "PROVENANCE-ADR" in content
         # ADR violations are almost always fixability: human
         assert "fixability: human" in content
+
+    def test_adr_check_rediscovers_from_diff(self):
+        """ADR compliance must use adr-context verify as ground truth."""
+        content = adr_compliance_section(VERIFICATION_AGENT_MD.read_text())
+        assert "Always re-discover relevant ADRs from the diff" in content
+        assert 'adr-context.py" verify --bead=<bead_id> --diff=<diff_range>' in content
+        assert "Use the helper output (NOT caller provenance) as ground truth." in content
+
+    def test_adr_scope_field_is_informational_not_a_gate(self):
+        """Caller provenance stays in the report but must not suppress ADR checking."""
+        content = adr_compliance_section(VERIFICATION_AGENT_MD.read_text())
+        assert "adrs_in_scope" in content
+        assert "Caller provenance is logged for audit but does not gate the check." in content
+        assert 'Skip entirely if value is "none"' not in content
 
     def test_scenario_doc_missing_fixability_auto(self):
         """Spec must describe: missing doc → fixability: auto."""

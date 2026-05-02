@@ -344,6 +344,41 @@ class TestVerifyAdrs:
         discovered_ids = [a["id"] for a in envelope["data"]["discovered_adrs"]]
         assert "ADR-alpha" in discovered_ids
 
+    def test_disputed_for_fresh_adr_discovered_from_diff(self, adr_mod, tmp_adr_dir: Path):
+        """A newly relevant ADR must still dispute the diff even if caller provenance was empty."""
+        fresh_adr = tmp_adr_dir / "adr_fresh.md"
+        fresh_adr.write_text(
+            """---
+id: ADR-fresh
+status: accepted
+date: 2026-05-02
+contract: subprocess-policy
+applies_to:
+  - scripts/*.py
+prohibits:
+  - Do not add direct subprocess.run without CommandRunner
+decision_summary: "Subprocess calls must route through CommandRunner."
+---
+
+# ADR-fresh
+""",
+            encoding="utf-8",
+        )
+        diff_text = (
+            "--- a/scripts/foo.py\n+++ b/scripts/foo.py\n"
+            "@@ -1 +1 @@\n"
+            "+subprocess.run(['ls'])  # Do not add direct subprocess.run without CommandRunner\n"
+        )
+        envelope = adr_mod.verify_adrs_envelope(
+            adr_dir=tmp_adr_dir,
+            changed_paths=["scripts/foo.py"],
+            diff_text=diff_text,
+            bead_description_override=None,
+        )
+        assert envelope["data"]["verdict"] == "DISPUTED"
+        violation = next(v for v in envelope["data"]["violations"] if v["adr"] == "ADR-fresh")
+        assert violation["fixability"] == "human"
+
     def test_discovered_adrs_structure(self, adr_mod, tmp_adr_dir: Path):
         """Each discovered_adrs entry has id, path, decision_summary."""
         diff_text = "--- a/scripts/foo.py\n+++ b/scripts/foo.py\n@@ -1 +1 @@\n+x = 1\n"

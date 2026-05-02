@@ -51,6 +51,17 @@ def test_condition_true_no_bead_reports_hoist_due():
 
 
 # ---------------------------------------------------------------------------
+# 2b. CI mode: hoist debt fails the check
+# ---------------------------------------------------------------------------
+
+def test_ci_mode_fails_on_hoist_due():
+    """CI mode must exit non-zero when hoist debt is detected."""
+    stdout, stderr, rc = run_checker(args=["--ci"])
+    assert rc == 1, f"Expected exit 1 in CI mode, got {rc}\nstderr: {stderr}"
+    assert "HOIST DUE" in stdout, f"Expected 'HOIST DUE' in output:\n{stdout}"
+
+
+# ---------------------------------------------------------------------------
 # 3. Evidence listed
 # ---------------------------------------------------------------------------
 

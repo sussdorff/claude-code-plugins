@@ -243,16 +243,21 @@ fixability: auto
 
 ### ADR Compliance Check
 
-**Preferred method:** Run `adr-context.py verify` to re-discover and check automatically:
+**Procedure:**
+1. Always re-discover relevant ADRs from the diff:
 ```bash
 uv run "${CLAUDE_PLUGIN_ROOT}/core/scripts/adr-context.py" verify --bead=<bead_id> --diff=<diff_range> --output=json
 ```
-Parse the JSON: if `data.verdict == "DISPUTED"`, emit PROVENANCE-ADR finding per violation in `data.violations`.
-If `adr-context.py` is not available, fall back to the manual procedure below.
+2. Use the helper output (NOT caller provenance) as ground truth.
+3. Caller provenance is logged for audit but does not gate the check.
+4. Parse the JSON: if `data.verdict == "DISPUTED"`, emit PROVENANCE-ADR finding per violation in `data.violations`.
+5. If `adr-context.py` is not available, fall back to the manual procedure below.
 
-**Input:** `adrs_in_scope` from Caller Provenance. Skip entirely if value is "none".
+**Audit trail:** Keep `adrs_in_scope` in the input contract and echo it in the verification report. Treat it as informational provenance about what the caller knew at invocation time, not as the authority for which ADRs apply.
 
-**Procedure:**
+**Manual fallback input:** `adrs_in_scope` from Caller Provenance. Use it as an audit trail and starting list only when `adr-context.py` is unavailable.
+
+**Manual fallback procedure:**
 1. For each ADR file path listed in `adrs_in_scope`:
    - Read the ADR file
    - Identify the core decision (usually in "## Decision" or "## Status" section)
@@ -272,7 +277,12 @@ fixability: human
 that require human judgment to resolve. Only mark `fixability: auto` when the violation is purely
 structural (e.g. a required file format or header the ADR mandates).
 
-**If `adrs_in_scope: "none"`:** Emit:
+**If caller `adrs_in_scope: "none"` and `adr-context.py` succeeded:** Emit:
+```
+PROVENANCE-ADR-CALLER: adrs_in_scope=none (informational; helper re-discovery still ran)
+```
+
+**If caller `adrs_in_scope: "none"` and `adr-context.py` is unavailable:** Emit:
 ```
 PROVENANCE-ADR: skipped (no ADRs in provenance)
 ```
@@ -395,6 +405,7 @@ VERDICT: DISPUTED
 fixability: auto | human
 
 <Summary lines (one per check):>
+PROVENANCE-ADR-CALLER: <original adrs_in_scope value from caller; informational only>
 PROVENANCE-STANDARDS: <skipped | VERIFIED | N DISPUTED>
 PROVENANCE-ADR: <skipped | VERIFIED | N DISPUTED>
 PROVENANCE-DOCS: <skipped | VERIFIED | N DISPUTED>
