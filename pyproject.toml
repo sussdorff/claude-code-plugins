@@ -13,3 +13,10 @@ test = [
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+# Live integration tests (network / MCP / subprocess against live config) are
+# opt-in. Plain `pytest` excludes them; run them explicitly with
+# `pytest -m integration` when live data is available.
+addopts = "-m 'not integration'"
+markers = [
+  "integration: live integration tests (require network, MCP servers, or external config)",
+]
