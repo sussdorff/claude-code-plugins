@@ -326,9 +326,8 @@ Before spawning subagents, gather:
    # b) Skills referenced
    bd show <bead-id> | grep -oE '/[a-z][a-z0-9-]+' | sort -u
    # c) ADRs in scope — use adr-context.py discover if available, else fall back to find
-   if command -v uv &>/dev/null && [ -f "core/scripts/adr-context.py" ]; then
-     ADR_RESULT=$(uv run core/scripts/adr-context.py discover --bead=<bead-id> --output=json 2>/dev/null)
-     ADRS_IN_SCOPE=$(echo "$ADR_RESULT" | python3 -c "import json,sys; d=json.load(sys.stdin); print('\n'.join(a['path'] for a in d.get('data',{}).get('adrs_in_scope',[])))" 2>/dev/null)
+   if command -v uv &>/dev/null && [ -f "${CLAUDE_PLUGIN_ROOT}/core/scripts/adr-context.py" ]; then
+     ADRS_IN_SCOPE=$(uv run "${CLAUDE_PLUGIN_ROOT}/core/scripts/adr-context.py" discover --bead=<bead-id> --output=paths 2>/dev/null)
    else
      ADRS_IN_SCOPE=$(find docs/adr/ -name "*.md" 2>/dev/null || find . -maxdepth 4 -path "*/docs/adr/*.md" 2>/dev/null)
    fi
@@ -488,7 +487,7 @@ Load these standards before implementing:
 {STANDARDS_ENFORCEMENT_PREAMBLE — from Phase 4, verbatim}
 
 ### ADR Constraints
-{Run `uv run core/scripts/adr-context.py inject --bead={BEAD_ID} --output=markdown` and paste the output here. If script not available, omit this section.}
+{Run `uv run "${CLAUDE_PLUGIN_ROOT}/core/scripts/adr-context.py" inject --bead={BEAD_ID} --output=markdown` and paste the output here. If script not available, omit this section.}
 
 ### Project Architecture Context
 {Content of .claude/project-context.md or CLAUDE.md}

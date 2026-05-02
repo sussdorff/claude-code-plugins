@@ -28,27 +28,12 @@ FIXTURES_DIR = Path(__file__).parent / "fixtures" / "adr_context"
 def _load_adr_context():
     """Load adr-context.py as a module, stripping PEP-723 header lines.
 
-    yaml (pyyaml) may not be available in the uv test env since it is a
-    PEP-723 runtime dependency. We import it from whatever Python environment
-    has it and inject it into the module namespace before exec so the script
-    can use it normally.
+    pyyaml must be installed in the test environment (e.g. via `uv run pytest`
+    which resolves the PEP-723 dependencies, or by listing pyyaml as a dev
+    dependency). If pyyaml is missing this will raise ImportError with a clear
+    message — do not probe hardcoded site-packages paths.
     """
-    # Ensure yaml is importable — try the current environment first, then
-    # probe known site-packages locations (conda/brew Python that has pyyaml).
-    try:
-        import yaml as _yaml_mod  # noqa: PLC0415
-    except ModuleNotFoundError:
-        _yaml_candidates = [
-            "/opt/homebrew/Caskroom/miniconda/base/lib/python3.12/site-packages",
-            "/opt/homebrew/lib/python3.12/site-packages",
-            "/usr/local/lib/python3.12/site-packages",
-        ]
-        for _site in _yaml_candidates:
-            _site_path = Path(_site)
-            if (_site_path / "yaml").is_dir() and str(_site_path) not in sys.path:
-                sys.path.insert(0, str(_site_path))
-                break
-        import yaml as _yaml_mod  # noqa: PLC0415
+    import yaml as _yaml_mod  # noqa: PLC0415
 
     source = SCRIPT_PATH.read_text()
     # Strip shebang + PEP-723 inline script metadata block so Python can parse it
