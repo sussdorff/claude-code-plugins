@@ -26,7 +26,30 @@ FIXTURES_DIR = Path(__file__).parent / "fixtures" / "adr_context"
 
 
 def _load_adr_context():
-    """Load adr-context.py as a module, stripping PEP-723 header lines."""
+    """Load adr-context.py as a module, stripping PEP-723 header lines.
+
+    yaml (pyyaml) may not be available in the uv test env since it is a
+    PEP-723 runtime dependency. We import it from whatever Python environment
+    has it and inject it into the module namespace before exec so the script
+    can use it normally.
+    """
+    # Ensure yaml is importable — try the current environment first, then
+    # probe known site-packages locations (conda/brew Python that has pyyaml).
+    try:
+        import yaml as _yaml_mod  # noqa: PLC0415
+    except ModuleNotFoundError:
+        _yaml_candidates = [
+            "/opt/homebrew/Caskroom/miniconda/base/lib/python3.12/site-packages",
+            "/opt/homebrew/lib/python3.12/site-packages",
+            "/usr/local/lib/python3.12/site-packages",
+        ]
+        for _site in _yaml_candidates:
+            _site_path = Path(_site)
+            if (_site_path / "yaml").is_dir() and str(_site_path) not in sys.path:
+                sys.path.insert(0, str(_site_path))
+                break
+        import yaml as _yaml_mod  # noqa: PLC0415
+
     source = SCRIPT_PATH.read_text()
     # Strip shebang + PEP-723 inline script metadata block so Python can parse it
     lines = source.splitlines()
@@ -47,9 +70,12 @@ def _load_adr_context():
             continue
         filtered.append(line)
     cleaned = "\n".join(filtered)
-    spec = importlib.util.spec_from_loader("adr_context", loader=None)
-    module = importlib.util.module_from_spec(spec)  # type: ignore[arg-type]
-    exec(compile(cleaned, str(SCRIPT_PATH), "exec"), module.__dict__)  # noqa: S102
+    # Build a minimal module namespace with yaml pre-injected
+    module_ns: dict = {"__name__": "adr_context", "__file__": str(SCRIPT_PATH), "yaml": _yaml_mod}
+    exec(compile(cleaned, str(SCRIPT_PATH), "exec"), module_ns)  # noqa: S102
+    # Wrap dict as a simple namespace object so attribute access works
+    import types  # noqa: PLC0415
+    module = types.SimpleNamespace(**module_ns)
     return module
 
 
