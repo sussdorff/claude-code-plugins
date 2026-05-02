@@ -6,12 +6,25 @@ All notable changes to the claude-code-plugins marketplace are documented here.
 
 ### Bug Fixes
 
+- **dolt**: Split BLOCKING shell blocks in SKILL.md to pass skill-auditor CI([af1c245](https://github.com/sussdorff/claude-code-plugins/commit/af1c245ecf69f73061134d92549216754467974f))
+
+### Miscellaneous
+
+- **CCP-xkrn**: Add YAML frontmatter to ADR-0001..ADR-0004([feab589](https://github.com/sussdorff/claude-code-plugins/commit/feab589f3b18a37e1f59be3f0ffdc317b61a80f3))
+## [2026.05.0] - 2026-05-02
+
+### Bug Fixes
+
 - **session-close**: Version.sh tolerates legacy 4-part CalVer tags([c263a7a](https://github.com/sussdorff/claude-code-plugins/commit/c263a7a9e84b4061864f5f46b037166e55186d76))
 - **dolt**: Improve persistent auth docs — inline plist, update Auth Layers table, clarify race([1ae8c28](https://github.com/sussdorff/claude-code-plugins/commit/1ae8c28a2db79e42336dd8f7e8aa72a66cf26f00))
 
 ### Documentation
 
 - **dolt**: Add persistent auth setup via LaunchAgent in Auth Layers section([a507623](https://github.com/sussdorff/claude-code-plugins/commit/a5076233b3a37605a2b53b4aef8023bae34eff16))
+
+### Features
+
+- **review-agent**: Add B4 external-resource verification + anti-hallucination guards([ffc1660](https://github.com/sussdorff/claude-code-plugins/commit/ffc16606ce5c37ae1d4b9113713d100eacee2726))
 
 ### Miscellaneous
 
