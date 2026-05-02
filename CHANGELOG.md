@@ -6,6 +6,7 @@ All notable changes to the claude-code-plugins marketplace are documented here.
 
 ### Features
 
+- **CCP-tpg3**: Add ADR hoist GitHub Action and verification-agent ADR re-discovery
 - **adr-context**: New helper script with discover/inject/verify modes for ADR-based context injection into implementer and verification-agent prompts
 
 ### Bug Fixes
@@ -2016,4 +2017,3 @@ All notable changes to the claude-code-plugins marketplace are documented here.
 - Streamline command-creator skill (28% reduction)([eb24f60](https://github.com/sussdorff/claude-code-plugins/commit/eb24f602913b25725251566330108d76a591061c))
 - Convert standalone skills to proper plugin structure([3401ffa](https://github.com/sussdorff/claude-code-plugins/commit/3401ffa2e1782c2314f82532a2d0428bbc468717))
 - **command-creator**: Use model family names instead of version numbers([63f686c](https://github.com/sussdorff/claude-code-plugins/commit/63f686c1192e4afd96d7faa7e726e4afa4cff056))
-
