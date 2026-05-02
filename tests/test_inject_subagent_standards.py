@@ -80,6 +80,8 @@ def run_hook(
     # Remove any inherited test env vars that would affect behavior
     for key in ["CCP_NO_SUBAGENT_STANDARDS", "CCP_ORCHESTRATOR_RUN_ID", "AGENT_STANDARDS_YML"]:
         env.pop(key, None)
+    env["UV_CACHE_DIR"] = env.get("UV_CACHE_DIR") or str(Path(tempfile.gettempdir()) / "uv-cache")
+    env["UV_PYTHON"] = f"{sys.version_info.major}.{sys.version_info.minor}"
 
     if standards_file is not None:
         env["AGENT_STANDARDS_YML"] = str(standards_file)

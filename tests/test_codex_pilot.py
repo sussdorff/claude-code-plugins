@@ -12,7 +12,6 @@ import pytest
 
 
 REPO_ROOT = Path(__file__).parent.parent
-USER_CODEX_SKILLS = Path.home() / ".codex" / "skills"
 INVENTORY_SCRIPT = REPO_ROOT / "scripts" / "codex_skills.py"
 SYNC_SCRIPT = REPO_ROOT / "scripts" / "sync-codex-skills"
 PILOT_SKILLS = {"project-context", "spec-developer", "bug-triage"}
@@ -34,7 +33,25 @@ SKILL_NAMES = [record["name"] for record in INVENTORY]
 GENERATED_METADATA_SKILLS = [
     record["name"] for record in INVENTORY if not bool(record["has_openai_yaml"])
 ]
-_user_skills_present = USER_CODEX_SKILLS.is_dir()
+
+
+@pytest.fixture(scope="module")
+def isolated_user_codex_skills(tmp_path_factory: pytest.TempPathFactory) -> tuple[Path, dict[str, str]]:
+    """Sync skills into an isolated HOME so tests do not depend on ~/.codex state."""
+    home = tmp_path_factory.mktemp("codex-skills-home")
+    user_codex_skills = home / ".codex" / "skills"
+    user_codex_skills.mkdir(parents=True)
+    env = {**os.environ, "HOME": str(home)}
+    result = subprocess.run(
+        [str(SYNC_SCRIPT)],
+        cwd=REPO_ROOT,
+        env=env,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert result.returncode == 0, f"isolated skill sync failed:\n{result.stdout}{result.stderr}"
+    return user_codex_skills, env
 
 
 class TestInventorySurface:
@@ -55,40 +72,48 @@ class TestInventorySurface:
         assert GENERATED_METADATA_SKILLS, "Expected at least one generated metadata skill"
 
 
-@pytest.mark.skipif(
-    not _user_skills_present and not os.environ.get("PILOT_USER_SYNC"),
-    reason="user-scoped sync not available on this machine (run sync-codex-skills or set PILOT_USER_SYNC=1)",
-)
 class TestUserScopedSync:
-    """The user-scoped Codex skills dir contains the full skill fleet.
+    """The user-scoped Codex skills sync target contains the full skill fleet.
 
     This repo is dev-only. The only sync target is ~/.codex/skills (or ~/.agents/skills).
     See docs/architecture/dev-repo-principle.md.
     """
 
-    def test_every_discovered_skill_is_in_user_codex_skills(self):
-        missing = [skill for skill in SKILL_NAMES if not (USER_CODEX_SKILLS / skill).is_dir()]
+    def test_every_discovered_skill_is_in_user_codex_skills(
+        self, isolated_user_codex_skills: tuple[Path, dict[str, str]]
+    ):
+        user_codex_skills, _env = isolated_user_codex_skills
+        missing = [skill for skill in SKILL_NAMES if not (user_codex_skills / skill).is_dir()]
         assert not missing, (
             f"Missing user-scoped skills: {missing}\nRun: scripts/sync-codex-skills"
         )
 
-    def test_user_scoped_skills_have_skill_md(self):
+    def test_user_scoped_skills_have_skill_md(
+        self, isolated_user_codex_skills: tuple[Path, dict[str, str]]
+    ):
+        user_codex_skills, _env = isolated_user_codex_skills
         missing = [
-            skill for skill in SKILL_NAMES if not (USER_CODEX_SKILLS / skill / "SKILL.md").exists()
+            skill for skill in SKILL_NAMES if not (user_codex_skills / skill / "SKILL.md").exists()
         ]
         assert not missing, f"Missing SKILL.md in user-scoped skills: {missing}"
 
-    def test_user_scoped_skills_have_openai_yaml(self):
+    def test_user_scoped_skills_have_openai_yaml(
+        self, isolated_user_codex_skills: tuple[Path, dict[str, str]]
+    ):
+        user_codex_skills, _env = isolated_user_codex_skills
         missing = [
             skill
             for skill in SKILL_NAMES
-            if not (USER_CODEX_SKILLS / skill / "agents" / "openai.yaml").exists()
+            if not (user_codex_skills / skill / "agents" / "openai.yaml").exists()
         ]
         assert not missing, f"Missing openai.yaml in user-scoped skills: {missing}"
 
-    def test_generated_metadata_covers_non_pilot_skills(self):
+    def test_generated_metadata_covers_non_pilot_skills(
+        self, isolated_user_codex_skills: tuple[Path, dict[str, str]]
+    ):
+        user_codex_skills, _env = isolated_user_codex_skills
         for skill in GENERATED_METADATA_SKILLS[:5]:
-            yaml_path = USER_CODEX_SKILLS / skill / "agents" / "openai.yaml"
+            yaml_path = user_codex_skills / skill / "agents" / "openai.yaml"
             if not yaml_path.exists():
                 continue  # Covered by test_user_scoped_skills_have_openai_yaml
             content = yaml_path.read_text()
@@ -96,10 +121,14 @@ class TestUserScopedSync:
             assert "short_description:" in content
             assert "default_prompt:" in content
 
-    def test_full_fleet_user_sync_check_passes(self):
+    def test_full_fleet_user_sync_check_passes(
+        self, isolated_user_codex_skills: tuple[Path, dict[str, str]]
+    ):
+        _user_codex_skills, env = isolated_user_codex_skills
         result = subprocess.run(
             [str(SYNC_SCRIPT), "--check"],
             cwd=REPO_ROOT,
+            env=env,
             capture_output=True,
             text=True,
             check=False,

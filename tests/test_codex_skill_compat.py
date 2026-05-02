@@ -28,7 +28,8 @@ def test_portable_skill_scans_as_works_as_is() -> None:
     assert results[0]["status"] == "works-as-is"
 
 
-def test_remediated_beads_skill_scans_as_works_as_is() -> None:
-    results = scan_subset("beads")
+def test_remediated_beads_related_skill_scans_as_works_as_is() -> None:
+    results = scan_subset("dolt")
+    assert results[0]["name"] == "dolt"
     assert results[0]["status"] == "works-as-is"
     assert not results[0]["findings"]

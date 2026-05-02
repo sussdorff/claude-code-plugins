@@ -629,6 +629,26 @@ def _run_render_brief(
     return proc.stdout
 
 
+def _read_existing_disk_brief(project: "_cfg.ProjectConfig", date: str) -> tuple[bool, str | None]:
+    """Read an existing disk brief from the current path or legacy project path."""
+    candidates = [
+        _cfg.brief_path(project, date),
+        _cfg.legacy_briefs_dir(project) / f"{date}.md",
+    ]
+    seen: set[Path] = set()
+    for path in candidates:
+        if path in seen:
+            continue
+        seen.add(path)
+        if not path.is_file():
+            continue
+        try:
+            return True, path.read_text()
+        except OSError:
+            return True, None
+    return False, None
+
+
 # ---------------------------------------------------------------------------
 # Per-project, per-date execution
 # ---------------------------------------------------------------------------
@@ -682,12 +702,10 @@ def run_for_project(
     if ob_content is not None:
         return {"skipped": True, "content": ob_content}
 
-    # Fallback: disk check (for offline / OB-unavailable scenarios)
-    if _cfg.brief_exists(project, date):
-        try:
-            disk_content = _cfg.brief_path(project, date).read_text()
-        except OSError:
-            disk_content = None
+    # Fallback: disk check (for offline / OB-unavailable scenarios).
+    # Check the current user-local path first, then the legacy project-local path.
+    disk_found, disk_content = _read_existing_disk_brief(project, date)
+    if disk_found:
         return {"skipped": True, "content": disk_content}
 
     # Discovered (unconfigured) projects: render a stub section instead of
@@ -840,7 +858,7 @@ def _inject_warning_block(content: str, unconfigured: list[str]) -> str:
         return content
 
     slugs_str = ", ".join(unconfigured)
-    warning = f"⚠️ Active projects not in config: {slugs_str}\n\n"
+    warning = f"⚠️ Aktive Projekte nicht in Config: {slugs_str}\n\n"
     return warning + content
 
 
