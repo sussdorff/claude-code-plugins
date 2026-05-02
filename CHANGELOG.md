@@ -4,6 +4,10 @@ All notable changes to the claude-code-plugins marketplace are documented here.
 
 ## [Unreleased]
 
+### Features
+
+- **adr-context**: New helper script with discover/inject/verify modes for ADR-based context injection into implementer and verification-agent prompts
+
 ### Bug Fixes
 
 - **dolt**: Split BLOCKING shell blocks in SKILL.md to pass skill-auditor CI([af1c245](https://github.com/sussdorff/claude-code-plugins/commit/af1c245ecf69f73061134d92549216754467974f))
