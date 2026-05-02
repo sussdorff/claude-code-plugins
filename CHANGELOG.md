@@ -6,11 +6,31 @@ All notable changes to the claude-code-plugins marketplace are documented here.
 
 ### Bug Fixes
 
+- **CCP-2n67**: Address review findings iteration 1([aedda63](https://github.com/sussdorff/claude-code-plugins/commit/aedda63c326a237aa01157904378950d6bb2efd5))
+- **CCP-2n67**: Address codex adversarial findings([1818b1a](https://github.com/sussdorff/claude-code-plugins/commit/1818b1aedfc982cc7baf0cf8d0d32fc70ac177f1))
+
+### Features
+
+- **CCP-2n67**: Green — adr-context.py discover/inject/verify with tests([3a858e5](https://github.com/sussdorff/claude-code-plugins/commit/3a858e5f18beff6d7f25107e83631b77f498a454))
+- **CCP-2n67**: Green — wire adr-context.py into bead-orchestrator and verification-agent([724bc97](https://github.com/sussdorff/claude-code-plugins/commit/724bc97666a25096d1f9c9239a190fdb78483696))
+
+### Testing
+
+- **CCP-2n67**: Red — adr-context discover/inject/verify tests([883e967](https://github.com/sussdorff/claude-code-plugins/commit/883e967fef6d4baf8796208d4cf117d710dd519e))
+## [2026.05.1] - 2026-05-02
+
+### Bug Fixes
+
 - **dolt**: Split BLOCKING shell blocks in SKILL.md to pass skill-auditor CI([af1c245](https://github.com/sussdorff/claude-code-plugins/commit/af1c245ecf69f73061134d92549216754467974f))
 
 ### Miscellaneous
 
 - **CCP-xkrn**: Add YAML frontmatter to ADR-0001..ADR-0004([feab589](https://github.com/sussdorff/claude-code-plugins/commit/feab589f3b18a37e1f59be3f0ffdc317b61a80f3))
+- **changelog**: Update changelog for CCP-xkrn([151bc0a](https://github.com/sussdorff/claude-code-plugins/commit/151bc0a52c7361fdc05b7c0d5fb2eb65c339a9f3))
+
+### Merge
+
+- Worktree-bead-CCP-xkrn([384827d](https://github.com/sussdorff/claude-code-plugins/commit/384827d0b86e0e0f63cea746affa4f3e2a644b86))
 ## [2026.05.0] - 2026-05-02
 
 ### Bug Fixes
