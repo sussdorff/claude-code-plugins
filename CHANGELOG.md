@@ -4,10 +4,25 @@ All notable changes to the claude-code-plugins marketplace are documented here.
 
 ## [Unreleased]
 
+### Bug Fixes
+
+- **ci**: Use ${CLAUDE_PLUGIN_ROOT} for adr-context.py refs in agents([0762897](https://github.com/sussdorff/claude-code-plugins/commit/0762897b8b919942b8326b380b7c67b9b49900bd))
+- Stabilize pytest drift([37f1f9b](https://github.com/sussdorff/claude-code-plugins/commit/37f1f9b25c121e917d6ad25940f039aaf10a547e))
+- **wave-orchestrator**: Reduce dispatch overhead([a56472e](https://github.com/sussdorff/claude-code-plugins/commit/a56472e48f67fb70b90d68b6fce8cca8416fa38c))
+
 ### Features
 
-- **CCP-tpg3**: Add ADR hoist GitHub Action and verification-agent ADR re-discovery
-- **adr-context**: New helper script with discover/inject/verify modes for ADR-based context injection into implementer and verification-agent prompts
+- Add adr gap workflow and verification rediscovery([fa41f62](https://github.com/sussdorff/claude-code-plugins/commit/fa41f622bbdd7029a87a4a8e62d71564247e589f))
+- **session-close**: Add repo-local verification hook (CCP-ldkh)([344bfb7](https://github.com/sussdorff/claude-code-plugins/commit/344bfb7f57a66da136a260d7d412333b6a8d6cf7))
+
+### Miscellaneous
+
+- **changelog**: Update for CCP-tpg3([c06ff38](https://github.com/sussdorff/claude-code-plugins/commit/c06ff38074af1ccc95dbd09c650eb8dd3bae553f))
+
+### Testing
+
+- Exclude live integration tests from default pytest run([0c4be1c](https://github.com/sussdorff/claude-code-plugins/commit/0c4be1c1b0561fded0d46e452fdf9e7e04234299))
+## [2026.05.2] - 2026-05-02
 
 ### Bug Fixes
 
@@ -16,12 +31,24 @@ All notable changes to the claude-code-plugins marketplace are documented here.
 
 ### Features
 
+- **CCP-2n67**: Green — adr-context.py discover/inject/verify with tests([a7c1570](https://github.com/sussdorff/claude-code-plugins/commit/a7c15708b3561238444082be756970be99cd67e7))
+- **CCP-2n67**: Green — wire adr-context.py into bead-orchestrator and verification-agent([c4d9ce1](https://github.com/sussdorff/claude-code-plugins/commit/c4d9ce1a4a8e58e6ef3280f0b856c336f451f511))
 - **CCP-2n67**: Green — adr-context.py discover/inject/verify with tests([3a858e5](https://github.com/sussdorff/claude-code-plugins/commit/3a858e5f18beff6d7f25107e83631b77f498a454))
 - **CCP-2n67**: Green — wire adr-context.py into bead-orchestrator and verification-agent([724bc97](https://github.com/sussdorff/claude-code-plugins/commit/724bc97666a25096d1f9c9239a190fdb78483696))
+- **CCP-2n67**: Adr-context.py discover/inject/verify modes([8022c88](https://github.com/sussdorff/claude-code-plugins/commit/8022c8837adff472dbe61f84c933dad31dc73c9d))
+
+### Miscellaneous
+
+- **changelog**: Update changelog for CCP-2n67([4879798](https://github.com/sussdorff/claude-code-plugins/commit/4879798cef4c3f43e2564bef83c984920bb63057))
 
 ### Testing
 
+- **CCP-2n67**: Red — adr-context discover/inject/verify tests([51890f3](https://github.com/sussdorff/claude-code-plugins/commit/51890f3696b5833ddfa54f8b31c059085ed4cf2e))
 - **CCP-2n67**: Red — adr-context discover/inject/verify tests([883e967](https://github.com/sussdorff/claude-code-plugins/commit/883e967fef6d4baf8796208d4cf117d710dd519e))
+
+### Merge
+
+- Worktree-bead-CCP-2n67([d4f0963](https://github.com/sussdorff/claude-code-plugins/commit/d4f0963813ef6f7104a12d68d78c4ac6be8b9fd9))
 ## [2026.05.1] - 2026-05-02
 
 ### Bug Fixes
@@ -2017,3 +2044,4 @@ All notable changes to the claude-code-plugins marketplace are documented here.
 - Streamline command-creator skill (28% reduction)([eb24f60](https://github.com/sussdorff/claude-code-plugins/commit/eb24f602913b25725251566330108d76a591061c))
 - Convert standalone skills to proper plugin structure([3401ffa](https://github.com/sussdorff/claude-code-plugins/commit/3401ffa2e1782c2314f82532a2d0428bbc468717))
 - **command-creator**: Use model family names instead of version numbers([63f686c](https://github.com/sussdorff/claude-code-plugins/commit/63f686c1192e4afd96d7faa7e726e4afa4cff056))
+
