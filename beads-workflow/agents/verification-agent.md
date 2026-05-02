@@ -245,7 +245,7 @@ fixability: auto
 
 **Preferred method:** Run `adr-context.py verify` to re-discover and check automatically:
 ```bash
-uv run core/scripts/adr-context.py verify --bead=<bead_id> --diff=<diff_range> --output=json
+uv run "${CLAUDE_PLUGIN_ROOT}/core/scripts/adr-context.py" verify --bead=<bead_id> --diff=<diff_range> --output=json
 ```
 Parse the JSON: if `data.verdict == "DISPUTED"`, emit PROVENANCE-ADR finding per violation in `data.violations`.
 If `adr-context.py` is not available, fall back to the manual procedure below.
