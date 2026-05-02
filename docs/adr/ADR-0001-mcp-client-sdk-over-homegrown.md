@@ -1,3 +1,17 @@
+---
+id: ADR-0001
+status: accepted
+date: 2026-04-25
+contract: mcp-client-transport
+applies_to:
+  - scripts/query-sources.py
+  - scripts/orchestrate-brief.py
+prohibits:
+  - "Do not write custom MCP HTTP clients using httpx or urllib for Streamable-HTTP transport"
+  - "Do not call MCP tools without using mcp.client.streamable_http.streamablehttp_client + ClientSession"
+  - "Do not use Authorization: Bearer header with open-brain (use x-api-key)"
+decision_summary: "Use the official mcp Python SDK (mcp>=1.11) for all MCP Streamable-HTTP clients in this repository."
+---
 # ADR-0001: Use Official mcp Python SDK for MCP Streamable-HTTP Clients
 
 ## Status

@@ -1,3 +1,15 @@
+---
+id: ADR-0004
+status: accepted
+date: 2026-04-26
+contract: claude-sandbox-policy
+applies_to:
+  - ~/.claude/settings.json
+prohibits:
+  - "Do not re-enable Claude Code sandbox without re-evaluating the single-user operating model"
+  - "Do not add sandbox.excludedCommands entries to work around friction; disable the sandbox instead"
+decision_summary: "Disable Claude Code's built-in OS-level sandbox for single-user interactive development; rely on operator review of bash blocks and the DCG hook."
+---
 # ADR-0004: Disable Claude Code Sandbox for Single-User Development
 
 ## Status

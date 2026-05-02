@@ -1,3 +1,18 @@
+---
+id: ADR-0002
+status: accepted
+date: 2026-04-25
+contract: open-brain-sor-daily-brief
+applies_to:
+  - scripts/orchestrate-brief.py
+  - scripts/migrate-disk-briefs-to-open-brain.py
+  - core/skills/daily-brief/SKILL.md
+prohibits:
+  - "Do not use disk as primary store for daily briefs; open-brain is the SoR"
+  - "Do not use session_ref without project slug (use daily-brief-{project}-{date})"
+  - "Do not silently swallow open-brain write errors; they must surface as RuntimeError"
+decision_summary: "Promote open-brain to the primary system-of-record for daily briefs; disk write is opt-in via --persist-disk."
+---
 # ADR-0002: open-brain as System-of-Record for Daily Briefs
 
 ## Status
