@@ -8,6 +8,7 @@
 # Steps executed (in order):
 #   1: First merge from main (merge-from-main.sh)
 #   2: Plan cleanup (malte/plans/ bead-ID-named files)
+#   3a: Repo-local verification hook (scripts/session-close-verify.sh)
 #   3: Git status/diff capture
 #   4: Bun audit              (skip with --skip-audit)
 #   5: Code simplification advisory (skip with --skip-simplify)
@@ -19,7 +20,7 @@
 # conventional commit when changelog.status == "updated".
 #
 # Usage:
-#   phase-b-prepare.sh [--dry-run] [--skip-audit] [--skip-simplify]
+#   phase-b-prepare.sh [--dry-run] [--skip-audit] [--skip-simplify] [--skip-local-verify]
 #
 # Emits a single JSON document on stdout; stderr for human-readable progress.
 #
@@ -42,12 +43,14 @@ set -uo pipefail
 DRY_RUN=false
 SKIP_AUDIT=false
 SKIP_SIMPLIFY=false
+SKIP_LOCAL_VERIFY=false
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
-    --dry-run)       DRY_RUN=true;       shift ;;
-    --skip-audit)    SKIP_AUDIT=true;    shift ;;
-    --skip-simplify) SKIP_SIMPLIFY=true; shift ;;
+    --dry-run)           DRY_RUN=true;           shift ;;
+    --skip-audit)        SKIP_AUDIT=true;        shift ;;
+    --skip-simplify)     SKIP_SIMPLIFY=true;     shift ;;
+    --skip-local-verify) SKIP_LOCAL_VERIFY=true; shift ;;
     *) shift ;;
   esac
 done
@@ -91,6 +94,14 @@ GIT_STAGED=()
 GIT_UNSTAGED=()
 GIT_UNTRACKED=()
 
+LOCAL_VERIFY_STATUS="skipped"
+LOCAL_VERIFY_SUMMARY=""
+LOCAL_VERIFY_SCRIPT="$REPO_ROOT/scripts/session-close-verify.sh"
+LOCAL_VERIFY_EXIT_CODE=0
+LOCAL_VERIFY_ERRORS=()
+LOCAL_VERIFY_OPEN_ITEMS=()
+LOCAL_VERIFY_OUTPUT_TAIL=()
+
 BUN_AUDIT_STATUS="skipped"
 BUN_AUDIT_VULNS=()
 
@@ -127,6 +138,7 @@ case "$MERGE_STATUS_RAW" in
       '{
         first_merge: {status:$ms, detail:$md},
         plan_cleanup: {deleted:[], kept:[]},
+        local_verify: {status:"not_attempted", summary:"", script:"", exit_code:0, errors:[], open_items:[], output_tail:[]},
         git_state: {staged:[], unstaged:[], untracked:[]},
         bun_audit: {status:"not_attempted", vulns:[]},
         simplify: {status:"not_attempted", changed_code_files:0},
@@ -175,6 +187,74 @@ if [[ -d "$PLANS_DIR" ]]; then
   done < <(find "$PLANS_DIR" -maxdepth 1 -type f -print0 2>/dev/null)
 else
   echo "    no plans dir, skipping" >&2
+fi
+
+# ---------------------------------------------------------------------------
+# Step 3a: Repo-local verification hook
+# ---------------------------------------------------------------------------
+# Repos may define scripts/session-close-verify.sh to run fast local gates before
+# session-close commits and ships. The script should print an execution-result
+# JSON envelope as its final stdout line. Legacy exit-code-only scripts are
+# supported, but structured JSON is preferred for actionable summaries.
+# ---------------------------------------------------------------------------
+echo "==> Step 3a: Repo-local verification" >&2
+
+if [[ "$SKIP_LOCAL_VERIFY" == "true" ]]; then
+  LOCAL_VERIFY_STATUS="skipped"
+  LOCAL_VERIFY_SUMMARY="skipped (--skip-local-verify)"
+  echo "    skipped (--skip-local-verify)" >&2
+elif [[ "$DRY_RUN" == "true" ]]; then
+  LOCAL_VERIFY_STATUS="skipped"
+  LOCAL_VERIFY_SUMMARY="skipped (dry-run)"
+  echo "    skipped (dry-run)" >&2
+elif [[ ! -f "$LOCAL_VERIFY_SCRIPT" ]]; then
+  LOCAL_VERIFY_STATUS="skipped"
+  LOCAL_VERIFY_SUMMARY="no scripts/session-close-verify.sh hook"
+  echo "    no scripts/session-close-verify.sh hook, skipping" >&2
+else
+  LV_EXIT=0
+  LV_OUT=$(
+    cd "$REPO_ROOT" && SESSION_CLOSE=1 SESSION_CLOSE_REPO_ROOT="$REPO_ROOT" bash "$LOCAL_VERIFY_SCRIPT" 2>&1
+  ) || LV_EXIT=$?
+  LV_EXIT=${LV_EXIT:-0}
+  LOCAL_VERIFY_EXIT_CODE=$LV_EXIT
+
+  while IFS= read -r line; do
+    [[ -n "$line" ]] && LOCAL_VERIFY_OUTPUT_TAIL+=("$line")
+  done < <(printf '%s\n' "$LV_OUT" | tail -50)
+
+  LV_JSON=$(printf '%s\n' "$LV_OUT" | tail -n 1)
+  if printf '%s' "$LV_JSON" | jq -e 'type == "object" and (.status | type == "string")' >/dev/null 2>&1; then
+    LV_STATUS=$(printf '%s' "$LV_JSON" | jq -r '.status')
+    case "$LV_STATUS" in
+      ok|warning|error) LOCAL_VERIFY_STATUS="$LV_STATUS" ;;
+      *) LOCAL_VERIFY_STATUS="error" ;;
+    esac
+    LOCAL_VERIFY_SUMMARY=$(printf '%s' "$LV_JSON" | jq -r '.summary // ""')
+    while IFS= read -r line; do
+      [[ -n "$line" ]] && LOCAL_VERIFY_ERRORS+=("$line")
+    done < <(printf '%s' "$LV_JSON" | jq -r '.errors[]? | if type == "object" then (.message // empty) else tostring end' 2>/dev/null)
+    while IFS= read -r line; do
+      [[ -n "$line" ]] && LOCAL_VERIFY_OPEN_ITEMS+=("$line")
+    done < <(printf '%s' "$LV_JSON" | jq -r '.open_items[]? | if type == "object" then (.summary // empty) else tostring end' 2>/dev/null)
+  else
+    if [[ "$LV_EXIT" -eq 0 ]]; then
+      LOCAL_VERIFY_STATUS="ok"
+      LOCAL_VERIFY_SUMMARY="local verification hook completed without structured JSON"
+    else
+      LOCAL_VERIFY_STATUS="error"
+      LOCAL_VERIFY_SUMMARY="local verification hook failed without structured JSON"
+      LOCAL_VERIFY_ERRORS+=("scripts/session-close-verify.sh exited $LV_EXIT")
+    fi
+  fi
+
+  if [[ "$LV_EXIT" -ne 0 && "$LOCAL_VERIFY_STATUS" != "error" ]]; then
+    LOCAL_VERIFY_STATUS="error"
+    LOCAL_VERIFY_ERRORS+=("scripts/session-close-verify.sh exited $LV_EXIT despite status=$LV_STATUS")
+  fi
+
+  echo "    local verify status: $LOCAL_VERIFY_STATUS" >&2
+  [[ -n "$LOCAL_VERIFY_SUMMARY" ]] && echo "    $LOCAL_VERIFY_SUMMARY" >&2
 fi
 
 # ---------------------------------------------------------------------------
@@ -339,6 +419,9 @@ to_json_array() {
 STAGED_JSON=$(to_json_array "${GIT_STAGED[@]+"${GIT_STAGED[@]}"}")
 UNSTAGED_JSON=$(to_json_array "${GIT_UNSTAGED[@]+"${GIT_UNSTAGED[@]}"}")
 UNTRACKED_JSON=$(to_json_array "${GIT_UNTRACKED[@]+"${GIT_UNTRACKED[@]}"}")
+LV_ERRORS_JSON=$(to_json_array "${LOCAL_VERIFY_ERRORS[@]+"${LOCAL_VERIFY_ERRORS[@]}"}")
+LV_OPEN_ITEMS_JSON=$(to_json_array "${LOCAL_VERIFY_OPEN_ITEMS[@]+"${LOCAL_VERIFY_OPEN_ITEMS[@]}"}")
+LV_OUTPUT_TAIL_JSON=$(to_json_array "${LOCAL_VERIFY_OUTPUT_TAIL[@]+"${LOCAL_VERIFY_OUTPUT_TAIL[@]}"}")
 DELETED_JSON=$(to_json_array "${PLAN_DELETED[@]+"${PLAN_DELETED[@]}"}")
 KEPT_JSON=$(to_json_array "${PLAN_KEPT[@]+"${PLAN_KEPT[@]}"}")
 VULNS_JSON=$(to_json_array "${BUN_AUDIT_VULNS[@]+"${BUN_AUDIT_VULNS[@]}"}")
@@ -352,6 +435,13 @@ jq -cn \
   --argjson staged "$STAGED_JSON" \
   --argjson unstaged "$UNSTAGED_JSON" \
   --argjson untracked "$UNTRACKED_JSON" \
+  --arg lvs "$LOCAL_VERIFY_STATUS" \
+  --arg lvsu "$LOCAL_VERIFY_SUMMARY" \
+  --arg lvscript "$LOCAL_VERIFY_SCRIPT" \
+  --argjson lvexit "$LOCAL_VERIFY_EXIT_CODE" \
+  --argjson lverrors "$LV_ERRORS_JSON" \
+  --argjson lvopen "$LV_OPEN_ITEMS_JSON" \
+  --argjson lvout "$LV_OUTPUT_TAIL_JSON" \
   --arg bas "$BUN_AUDIT_STATUS" \
   --argjson bavulns "$VULNS_JSON" \
   --arg simstatus "$SIMPLIFY_STATUS" \
@@ -362,6 +452,7 @@ jq -cn \
   '{
     first_merge: {status: $fms, detail: $fmd},
     plan_cleanup: {deleted: $del, kept: $kpt},
+    local_verify: {status: $lvs, summary: $lvsu, script: $lvscript, exit_code: $lvexit, errors: $lverrors, open_items: $lvopen, output_tail: $lvout},
     git_state: {staged: $staged, unstaged: $unstaged, untracked: $untracked},
     bun_audit: {status: $bas, vulns: $bavulns},
     simplify: {status: $simstatus, changed_code_files: $simchanged},

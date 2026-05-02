@@ -14,6 +14,8 @@ State schema (all fields optional — missing fields render as "unknown"):
   version_tag             (str)  - Version tag created (e.g. "v2026.04.47"), or ""
   changelog_updated       (bool) - Whether CHANGELOG.md was updated
   doc_gaps                (list) - List of documentation gap strings (may be empty)
+  local_verify_status     (str)  - ok, warning, error, skipped, or unknown
+  local_verify_summary    (str)  - Repo-local verification summary
   learnings_extracted     (bool) - Whether learnings extraction ran
   session_summary_saved   (bool) - Whether session summary was saved to open-brain
   turn_log_status         (str)  - One of: uploaded_deleted, empty_deleted,
@@ -54,6 +56,8 @@ def render(state: dict) -> str:
     version_tag = _str(state.get("version_tag"), "")
     changelog = _yn(state.get("changelog_updated"))
     doc_gaps = state.get("doc_gaps") or []
+    local_verify_status = _str(state.get("local_verify_status"), "skipped")
+    local_verify_summary = _str(state.get("local_verify_summary"), "")
     learnings = _yn(state.get("learnings_extracted"))
     summary_saved = _yn(state.get("session_summary_saved"))
     turn_log = _str(state.get("turn_log_status"), "skipped_no_file")
@@ -99,6 +103,10 @@ def render(state: dict) -> str:
     else:
         doc_gaps_display = "none"
 
+    local_verify_display = local_verify_status
+    if local_verify_summary:
+        local_verify_display = f"{local_verify_status} - {local_verify_summary}"
+
     # Format version tag
     version_display = version_tag if version_tag else "none"
 
@@ -115,6 +123,7 @@ def render(state: dict) -> str:
         f"- Version tag:          {version_display}",
         f"- Changelog updated:    {changelog}",
         f"- Doc gaps:             {doc_gaps_display}",
+        f"- Local verification:   {local_verify_display}",
         f"- Learnings extracted:  {learnings}",
         f"- Session summary:      {summary_saved}",
         f"- Turn-log:             {turn_log_display}",

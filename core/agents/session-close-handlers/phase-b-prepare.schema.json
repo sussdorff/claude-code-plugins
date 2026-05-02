@@ -1,9 +1,9 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
   "title": "phase-b-prepare output",
-  "description": "JSON emitted by phase-b-prepare.sh. Covers Steps 1, 2, 3, 4, 5, 7, 9 of session-close Phase B. Exit 2 = merge conflict (partial JSON still emitted). Exit 0 = caller can reason about all sub-step outcomes.",
+  "description": "JSON emitted by phase-b-prepare.sh. Covers Steps 1, 2, 3a, 3, 4, 5, 7, 9 of session-close Phase B. Exit 2 = merge conflict (partial JSON still emitted). Exit 0 = caller can reason about all sub-step outcomes.",
   "type": "object",
-  "required": ["first_merge", "plan_cleanup", "git_state", "bun_audit", "simplify", "changelog", "docs_check"],
+  "required": ["first_merge", "plan_cleanup", "local_verify", "git_state", "bun_audit", "simplify", "changelog", "docs_check"],
   "properties": {
     "first_merge": {
       "type": "object",
@@ -35,6 +35,45 @@
           "type": "array",
           "items": {"type": "string"},
           "description": "Plan files kept (bead still active)"
+        }
+      }
+    },
+    "local_verify": {
+      "type": "object",
+      "description": "Step 3a: Optional repo-local session-close verification hook at scripts/session-close-verify.sh",
+      "required": ["status", "summary", "script", "exit_code", "errors", "open_items", "output_tail"],
+      "properties": {
+        "status": {
+          "type": "string",
+          "enum": ["ok", "warning", "error", "skipped", "not_attempted"],
+          "description": "ok=hook passed, warning=hook completed with caveats, error=hook blocks session-close, skipped=no hook/dry-run/skip flag"
+        },
+        "summary": {
+          "type": "string",
+          "description": "Human-readable hook result summary"
+        },
+        "script": {
+          "type": "string",
+          "description": "Hook path that was checked"
+        },
+        "exit_code": {
+          "type": "integer",
+          "description": "Exit code returned by the hook, or 0 when not run"
+        },
+        "errors": {
+          "type": "array",
+          "items": {"type": "string"},
+          "description": "Blocking error messages extracted from the hook result"
+        },
+        "open_items": {
+          "type": "array",
+          "items": {"type": "string"},
+          "description": "Non-blocking follow-up summaries reported by the hook"
+        },
+        "output_tail": {
+          "type": "array",
+          "items": {"type": "string"},
+          "description": "Last lines of hook output for debugging"
         }
       }
     },

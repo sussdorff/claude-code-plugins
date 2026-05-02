@@ -196,11 +196,11 @@ Proceed from this checkpoint? (y/n)
 
 ## Phase B: Ship-Close (Steps 1-7, 9, 13-17)
 
-### Steps 1, 2, 3, 4, 5, 7, 9: Prepare (phase-b-prepare.sh)
+### Steps 1, 2, 3a, 3, 4, 5, 7, 9: Prepare (phase-b-prepare.sh)
 
 Run the prepare handler before Step 6 (conventional commit). This single call replaces
-seven individual step handlers (first merge, plan cleanup, git-state capture, bun audit,
-simplification advisory, changelog, and docs check).
+the individual step handlers for first merge, plan cleanup, repo-local verification,
+git-state capture, bun audit, simplification advisory, changelog, and docs check.
 
 1. **Detect environment:**
    ```bash
@@ -216,6 +216,7 @@ simplification advisory, changelog, and docs check).
      ${DRY_RUN:+--dry-run} \
      ${SKIP_AUDIT:+--skip-audit} \
      ${SKIP_SIMPLIFY:+--skip-simplify} \
+     ${SKIP_LOCAL_VERIFY:+--skip-local-verify} \
      2>/dev/null)
    PREPARE_EXIT=$?
    ```
@@ -223,6 +224,9 @@ simplification advisory, changelog, and docs check).
    ```
    .first_merge.status      - ok|conflict|skipped|failed
    .plan_cleanup.deleted[]  - plan files deleted
+   .local_verify.status     - ok|warning|error|skipped
+   .local_verify.summary    - repo-local verification summary
+   .local_verify.errors[]   - blocking local verification errors
    .git_state.staged[]      - files staged for commit
    .git_state.unstaged[]    - files modified but not staged
    .git_state.untracked[]   - untracked files
@@ -245,18 +249,42 @@ simplification advisory, changelog, and docs check).
    ```
 
 5. **Review with user:**
+   - If `.local_verify.status == "error"`: STOP before Step 6. Report `.local_verify.summary`,
+     `.local_verify.errors[]`, and relevant `.local_verify.output_tail[]`. Do not commit, ship,
+     push, or close beads.
+   - If `.local_verify.status == "warning"`: report the caveat; proceed only after user confirms
+     in interactive mode. In non-interactive mode, proceed and include the warning in the summary.
    - Show `.git_state.unstaged[]` and `.git_state.untracked[]` — ask which files to stage
    - If `.bun_audit.status` is `high` or `critical`: report vulnerabilities, ask whether to proceed
    - If `.simplify.status` is `advisory`: note for the user (non-blocking)
    - If `.docs_check.gaps[]` non-empty: report gaps (advisory, non-blocking)
 
-   **If `--non-interactive`:** Skip all prompts above. Auto-stage all `.git_state.unstaged[]`
+   **If `--non-interactive`:** Skip all prompts above except a local verification error, which is
+   not defaultable and must return `BLOCKED: local verification failed`. Auto-stage all `.git_state.unstaged[]`
    files. If `.bun_audit.status` is `high` or `critical`: log vulnerabilities to bead notes
    (`bd update <id> --append-notes="Security audit: <vulns>"`) and proceed automatically.
    Simplify and docs-check notes are silently logged; no user interaction.
 
 6. **Note for Step 6 (conventional commit):** If `.changelog.status == "updated"`,
    `CHANGELOG.md` is already staged — include it in the Step 6 commit (no separate changelog commit).
+
+#### Repo-Local Verification Hook
+
+If a repository contains `scripts/session-close-verify.sh`, `phase-b-prepare.sh` runs it before
+the git-state snapshot and before the conventional commit. This is the repo-owned place for
+local CI equivalents and known-failure policy, especially for projects whose real GitHub Actions
+need secrets, self-hosted runners, Docker services, or `act` setup.
+
+Hook contract:
+- Execute from the repo root.
+- Prefer a final stdout line that conforms to `core/contracts/execution-result.schema.json`.
+- Use `status=error` for blockers; session-close must stop before commit/ship.
+- Use `status=warning` for known CI caveats that should not block, and include a bead/issue ID
+  or expiry in `open_items`.
+- The hook may call `act` when the repo has a trustworthy local Actions harness, but direct
+  commands are preferred for fast deterministic checks.
+- Avoid leaving generated files dirty unless they are intentional session-close inputs; any
+  changes left behind are captured by the subsequent git-state snapshot.
 
 ### Step 6: Conventional Commit
 
@@ -529,6 +557,8 @@ print(json.dumps({
   'version_tag':            ship.get('version', {}).get('tag', ''),
   'changelog_updated':      prepare.get('changelog', {}).get('status') == 'updated',
   'doc_gaps':               prepare.get('docs_check', {}).get('gaps', []),
+  'local_verify_status':    prepare.get('local_verify', {}).get('status', 'skipped'),
+  'local_verify_summary':   prepare.get('local_verify', {}).get('summary', ''),
   'learnings_extracted':    os.environ.get('LEARNINGS_EXTRACTED', 'false') == 'true',
   'session_summary_saved':  os.environ.get('SESSION_SUMMARY_SAVED', 'false') == 'true',
   'turn_log_status':        os.environ.get('TURN_LOG_STATUS', 'skipped_no_file'),
@@ -560,6 +590,7 @@ Check ALL repos modified during the session (e.g. `~/code/claude/` for skills/st
 | Feature->main merge conflict | STOP, report, do NOT force |
 | Push failed | Warn, show push.status in final summary with retry instruction, continue to close beads |
 | Handler script missing | Warn, skip that step, continue |
+| Repo-local verification failed | STOP before commit/ship. Beads stay `in_progress`. Report hook summary/errors. |
 | bd command missing | Warn, skip beads steps |
 | git-cliff missing | Warn, skip changelog |
 | Dolt push fails | Warn, continue (non-blocking) |
@@ -589,6 +620,7 @@ Check ALL repos modified during the session (e.g. `~/code/claude/` for skills/st
 | `--ship-only` | Run only Phase B: commit, changelog, merge, push, close (Steps 1-7, 9, 13-17). No learnings/debrief. |
 | `--skip-audit` | Skip dependency audit (Step 4) |
 | `--skip-simplify` | Skip code simplification (Step 5) |
+| `--skip-local-verify` | Skip optional repo-local `scripts/session-close-verify.sh` hook. Emergency bypass only. |
 | `--skip-learnings` | Skip learnings extraction (Step 10) |
 | `--skip-debrief` | Skip session debrief (Step 11) |
 | `--skip-summary` | Skip session summary (Step 12) |

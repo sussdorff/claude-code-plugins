@@ -134,7 +134,30 @@ Scan for `malte/plans/` directory. For each bead-ID-named file (pattern `^[a-z]+
 
 Skip silently if the directory does not exist.
 
+### Step 3a: Repo-Local Verification
+
+Skip if `--skip-local-verify`.
+
+If `scripts/session-close-verify.sh` exists, run it from the repo root before committing,
+pushing, or closing beads:
+
+```bash
+SESSION_CLOSE=1 SESSION_CLOSE_REPO_ROOT="$REPO_ROOT" bash "$REPO_ROOT/scripts/session-close-verify.sh"
+```
+
+Prefer hooks that print a final stdout line conforming to
+`core/contracts/execution-result.schema.json`. If the hook reports `status=error` or exits
+nonzero without structured output, STOP. Beads stay `in_progress`. Report the summary/errors
+and do not continue to commit, ship, push, or close beads. If the hook reports `status=warning`,
+surface the caveat and continue only after confirmation in interactive mode.
+
+This hook is the repo-owned place for local CI equivalents such as `act` runs, Docker service
+checks, private-registry smoke tests, or fast direct commands.
+
 ### Step 3: Git Status Review
+
+Run after repo-local verification so any intentional generated changes left by the hook are
+visible in the status review.
 
 ```bash
 git status --short
@@ -481,6 +504,7 @@ fi
 | Feature->main merge conflict | STOP, report, do NOT force |
 | Push failed | Warn, show push.status in final summary with retry instruction, continue to close beads |
 | Handler script missing | Warn, skip that step, continue |
+| Repo-local verification failed | STOP before commit/ship. Beads stay `in_progress`. Report hook summary/errors. |
 | bd command missing | Warn, skip beads steps |
 | git-cliff missing | Warn, skip changelog |
 | Dolt push fails | Warn, continue (non-blocking) |
@@ -551,6 +575,7 @@ and the Codex agent runtime.
 | `--ship-only` | Run only Phase B: commit, changelog, merge, push, close |
 | `--skip-audit` | Skip dependency audit (Step 4) |
 | `--skip-simplify` | Skip code simplification (Step 5) |
+| `--skip-local-verify` | Skip optional repo-local `scripts/session-close-verify.sh` hook. Emergency bypass only. |
 | `--skip-learnings` | Skip learnings extraction (Step 10) |
 | `--skip-debrief` | Skip session debrief (Step 11) |
 | `--skip-summary` | Skip session summary (Step 12) |
