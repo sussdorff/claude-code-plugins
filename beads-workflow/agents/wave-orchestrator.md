@@ -24,15 +24,29 @@ sets up cmux panes, dispatches `cld -b <id>` into each, and monitors until compl
 - `wave-status.py` — Reads all surfaces in parallel, pattern-matches status, returns structured JSON
 - `wave-completion.py` — Quick check: all beads closed + all panes idle? Returns JSON + exit code
 - `wave-lock.py` — Single-instance guard: prevents two wave orchestrators from running concurrently
+- `arch-signal-detect.py` — Detects beads that need architecture review before dispatch
 
 These scripts replace manual per-surface cmux calls. Use them instead of invoking cmux
 directly for dispatch, monitoring, and completion checks.
 
-**Finding scripts:** Locate them via:
+**Finding scripts:** Resolve bundled scripts once before Phase 0.5 and reuse the
+variables throughout this run. `${CLAUDE_PLUGIN_ROOT}` is the primary path; `find`
+is only a last-resort fallback when the env var is unset.
 ```bash
-find ~/.claude/skills -name "wave-dispatch.py" 2>/dev/null | head -1
-find . -path "*/wave-orchestrator/scripts/wave-dispatch.py" 2>/dev/null | head -1
+if [[ -n "${CLAUDE_PLUGIN_ROOT:-}" ]]; then
+  WAVE_ORCHESTRATOR_SCRIPT_DIR="${CLAUDE_PLUGIN_ROOT}/beads-workflow/skills/wave-orchestrator/scripts"
+  [[ -d "$WAVE_ORCHESTRATOR_SCRIPT_DIR" ]] || WAVE_ORCHESTRATOR_SCRIPT_DIR="${CLAUDE_PLUGIN_ROOT}/skills/wave-orchestrator/scripts"
+fi
+WAVE_DISPATCH_PY="${WAVE_ORCHESTRATOR_SCRIPT_DIR}/wave-dispatch.py"; WAVE_STATUS_PY="${WAVE_ORCHESTRATOR_SCRIPT_DIR}/wave-status.py"
+WAVE_COMPLETION_PY="${WAVE_ORCHESTRATOR_SCRIPT_DIR}/wave-completion.py"; WAVE_LOCK_PY="${WAVE_ORCHESTRATOR_SCRIPT_DIR}/wave-lock.py"; ARCH_SIGNAL_DETECT_PY="${WAVE_ORCHESTRATOR_SCRIPT_DIR}/arch-signal-detect.py"
 ```
+
+Only if `${CLAUDE_PLUGIN_ROOT}` is unset, set `WAVE_ORCHESTRATOR_SCRIPT_DIR` via
+`find ~/.claude/skills -path "*/wave-orchestrator/scripts" -type d 2>/dev/null | head -1`;
+if that returns empty, try `find . -path "*/wave-orchestrator/scripts" -type d 2>/dev/null | head -1`.
+Do not call `find` when `${CLAUDE_PLUGIN_ROOT}` is set. After assignment, all five
+variables must point to existing files; if any are missing, abort before manual
+cmux fallback.
 
 ## Arguments
 
@@ -78,12 +92,6 @@ running concurrently. The lock is stored at `$MAIN_REPO_ROOT/.wave-orchestrator.
 ### Acquiring the lock
 
 ```bash
-# Locate wave-lock.py
-WAVE_LOCK_SH=$(find ~/.claude/skills -name "wave-lock.py" 2>/dev/null | head -1)
-if [[ -z "$WAVE_LOCK_SH" ]]; then
-  WAVE_LOCK_SH=$(find . -path "*/wave-orchestrator/scripts/wave-lock.py" 2>/dev/null | head -1)
-fi
-
 MAIN_REPO_ROOT=$(git rev-parse --show-toplevel 2>/dev/null || echo "$HOME")
 LOCK_FILE="$MAIN_REPO_ROOT/.wave-orchestrator.lock"
 
@@ -91,7 +99,7 @@ LOCK_FILE="$MAIN_REPO_ROOT/.wave-orchestrator.lock"
 WAVE_ID="wave-$(date -u +%Y%m%d-%H%M%S)"
 
 # Acquire: fail-fast if another live orchestrator holds the lock
-python3 "$WAVE_LOCK_SH" acquire "$LOCK_FILE" "$WAVE_ID" "${CMUX_SURFACE:-unknown}"
+python3 "$WAVE_LOCK_PY" acquire "$LOCK_FILE" "$WAVE_ID" "${CMUX_SURFACE:-unknown}"
 ```
 
 **Fail-fast behavior:**
@@ -108,13 +116,13 @@ python3 "$WAVE_LOCK_SH" acquire "$LOCK_FILE" "$WAVE_ID" "${CMUX_SURFACE:-unknown
 Release on clean exit (after Phase 7 completes or on user-requested abort):
 
 ```bash
-python3 "$WAVE_LOCK_SH" release "$LOCK_FILE"
+python3 "$WAVE_LOCK_PY" release "$LOCK_FILE"
 ```
 
 Use a bash trap to ensure release even on unexpected exit:
 
 ```bash
-trap 'python3 "$WAVE_LOCK_SH" release "$LOCK_FILE" 2>/dev/null || true' EXIT
+trap 'python3 "$WAVE_LOCK_PY" release "$LOCK_FILE" 2>/dev/null || true' EXIT
 ```
 
 ### Status check
@@ -122,7 +130,7 @@ trap 'python3 "$WAVE_LOCK_SH" release "$LOCK_FILE" 2>/dev/null || true' EXIT
 To inspect whether a wave is running without acquiring:
 
 ```bash
-python3 "$WAVE_LOCK_SH" status "$LOCK_FILE"
+python3 "$WAVE_LOCK_PY" status "$LOCK_FILE"
 ```
 
 ---
@@ -320,8 +328,15 @@ done
 ```
 Then exit Phase 1.25 (return to Phase 1.5 with `$PHASE_125_ARCH_FINDINGS` empty).
 
-**Skip silently if the wave has only 1 bead** (no cross-bead invariants to check).
-Exit Phase 1.25 immediately with `$PHASE_125_ARCH_FINDINGS` empty.
+**Skip if the wave has fewer than 3 beads** (`if wave_size < 3: skip`). For
+1- or 2-bead waves, Phase 1.25 is not worth the Codex/subagent overhead. Log
+per bead:
+```bash
+for id in <all bead IDs in wave>; do
+  bd update "$id" --append-notes="Wave review skipped: wave_size=<N> (<3); Phase 1.25 requires at least 3 beads. User: $(whoami), $(date -u +%Y-%m-%dT%H:%M:%SZ)"
+done
+```
+Then exit Phase 1.25 immediately with `$PHASE_125_ARCH_FINDINGS` empty.
 
 ### Spawning the Wave-Reviewer Subagent
 
@@ -670,7 +685,7 @@ omit this section from the council prompt.
 Run the bundled detection script on all beads in the current wave:
 
 ```bash
-python3 ./scripts/arch-signal-detect.py <bead-id1> <bead-id2> ... > /tmp/arch-signals.json
+python3 "$ARCH_SIGNAL_DETECT_PY" <bead-id1> <bead-id2> ... > /tmp/arch-signals.json
 ```
 
 The script outputs a JSON array with per-bead scores:
@@ -955,7 +970,7 @@ are mandatory:
 
 ```bash
 # Mixed wave: some full, some quick-fix (from Wave Table modes)
-python3 ./scripts/wave-dispatch.py \
+python3 "$WAVE_DISPATCH_PY" \
   mira-adapters-0al \
   --quick mira-fix-x3r \
   --quick mira-adapters-doq \
@@ -1065,7 +1080,7 @@ One or more panes show error/crash signals (ECONNREFUSED, fatal, panic, tracebac
      `$ORCH_SURFACE` captured earlier — `--workspace` and `--base-pane`
      are mandatory):
      ```bash
-     python3 ./scripts/wave-dispatch.py <bead-id> \
+     python3 "$WAVE_DISPATCH_PY" <bead-id> \
        --workspace "$ORCH_WORKSPACE" \
        --base-pane "$ORCH_SURFACE" \
        > /tmp/wave-config-updated.json
@@ -1175,7 +1190,7 @@ config file was not found.
 3. If config is present but completion script failing:
    - Attempt one manual run:
      ```bash
-     python3 ./scripts/wave-completion.py /tmp/wave-config.json
+     python3 "$WAVE_COMPLETION_PY" /tmp/wave-config.json
      ```
    - Read the script output/error and diagnose
 4. If infrastructure issue persists: escalate to user with full `details` from verdict.
@@ -1208,7 +1223,7 @@ monitor_result = Agent(
 ### Quick Completion Check (using wave-completion.py)
 
 ```bash
-python3 ./scripts/wave-completion.py /tmp/wave-config.json
+python3 "$WAVE_COMPLETION_PY" /tmp/wave-config.json
 echo $?  # 0 = all done, 1 = not yet
 ```
 

@@ -26,6 +26,8 @@ Degraded mode: if RUN_ID is empty or the metrics module is unavailable,
 codex still runs — only metrics recording is skipped (WARNING to stderr).
 
 Exit code: propagates codex's exact exit code (or 124 on timeout).
+For non-retryable Codex configuration errors detected on stderr, exits 1
+without waiting for CODEX_EXEC_TIMEOUT.
 """
 
 import json
@@ -43,9 +45,17 @@ from pathlib import Path
 # ---------------------------------------------------------------------------
 
 TIMEOUT_EXIT_CODE = 124
+FAST_FAIL_EXIT_CODE = 1
 DEFAULT_TIMEOUT = 300
 DEFAULT_MAX_PROMPT_CHARS = 32000
 DEFAULT_TAIL_BUFFER = 1024
+
+FAST_FAIL_ERROR_PATTERNS = (
+    re.compile(r"\bHTTP\s*400\b", re.IGNORECASE),
+    re.compile(r"\bstatus(?:\s*code)?\s*[:=]?\s*400\b", re.IGNORECASE),
+    re.compile(r"\bmodel[_ -]?not[_ -]?supported\b", re.IGNORECASE),
+    re.compile(r"\bunsupported[_ -]?model\b", re.IGNORECASE),
+)
 
 
 # ---------------------------------------------------------------------------
@@ -197,6 +207,30 @@ def _parse_token_usage(lines: list[str]) -> tuple[int, int, int, int]:
 
 
 # ---------------------------------------------------------------------------
+# Fast-fail detection
+# ---------------------------------------------------------------------------
+
+
+def _codex_fast_fail_reason(text: str) -> str | None:
+    """Return a stable reason when Codex stderr contains a non-retryable error."""
+    for pattern in FAST_FAIL_ERROR_PATTERNS:
+        if pattern.search(text):
+            return pattern.pattern
+    return None
+
+
+def _kill_process_group(proc: subprocess.Popen) -> None:
+    """Kill codex and any children started in its process group."""
+    try:
+        os.killpg(os.getpgid(proc.pid), signal.SIGKILL)
+    except (ProcessLookupError, PermissionError):
+        try:
+            proc.kill()
+        except (ProcessLookupError, PermissionError):
+            pass
+
+
+# ---------------------------------------------------------------------------
 # Run codex with streaming + timeout
 # ---------------------------------------------------------------------------
 
@@ -215,12 +249,13 @@ def _run_codex(
     buffered_lines: list[str] = []
     exit_code = 0
     timed_out = False
+    fast_failed = False
 
     try:
         proc = subprocess.Popen(
             cmd,
             stdout=subprocess.PIPE,
-            stderr=None,  # inherit stderr
+            stderr=subprocess.PIPE,
             stdin=subprocess.DEVNULL,
             start_new_session=True,  # creates a new process group for codex and all its children
         )
@@ -231,31 +266,57 @@ def _run_codex(
     def _kill_on_timeout():
         nonlocal timed_out
         timed_out = True
-        try:
-            os.killpg(os.getpgid(proc.pid), signal.SIGKILL)
-        except (ProcessLookupError, PermissionError):
-            # Process already exited or pgid lookup failed — fall back to direct kill
-            try:
-                proc.kill()
-            except (ProcessLookupError, PermissionError):
-                pass
+        _kill_process_group(proc)
 
-    timer = threading.Timer(timeout_secs, _kill_on_timeout)
-    timer.start()
+    def _watch_stderr_for_fast_fail():
+        nonlocal fast_failed
+        assert proc.stderr is not None
+        tail = ""
+        while True:
+            raw = proc.stderr.read(1)
+            if not raw:
+                break
+            char = raw.decode("utf-8", errors="replace")
+            sys.stderr.write(char)
+            sys.stderr.flush()
+            tail = (tail + char)[-4096:]
+            reason = _codex_fast_fail_reason(tail)
+            if reason is not None:
+                fast_failed = True
+                print(
+                    "\ncodex-exec.py: ERROR: detected non-retryable Codex error "
+                    f"({reason}); terminating without waiting for CODEX_EXEC_TIMEOUT",
+                    file=sys.stderr,
+                )
+                _kill_process_group(proc)
+                break
 
-    try:
+    def _stream_stdout():
         assert proc.stdout is not None
         for raw_line in proc.stdout:
             line = raw_line.decode("utf-8", errors="replace")
             sys.stdout.write(line)
             sys.stdout.flush()
             buffered_lines.append(line)
+
+    timer = threading.Timer(timeout_secs, _kill_on_timeout)
+    timer.start()
+    stdout_thread = threading.Thread(target=_stream_stdout, daemon=True)
+    stderr_thread = threading.Thread(target=_watch_stderr_for_fast_fail, daemon=True)
+    stdout_thread.start()
+    stderr_thread.start()
+
+    try:
         proc.wait()
     finally:
         timer.cancel()
+        stdout_thread.join(timeout=1)
+        stderr_thread.join(timeout=1)
 
     if timed_out:
         return TIMEOUT_EXIT_CODE, buffered_lines
+    if fast_failed:
+        return FAST_FAIL_EXIT_CODE, buffered_lines
 
     exit_code = proc.returncode if proc.returncode is not None else 0
     return exit_code, buffered_lines
