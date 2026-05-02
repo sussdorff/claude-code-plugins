@@ -2,6 +2,20 @@
 
 All notable changes to the claude-code-plugins marketplace are documented here.
 
+## [Unreleased]
+
+### Bug Fixes
+
+- **session-close**: Version.sh tolerates legacy 4-part CalVer tags([c263a7a](https://github.com/sussdorff/claude-code-plugins/commit/c263a7a9e84b4061864f5f46b037166e55186d76))
+- **dolt**: Improve persistent auth docs — inline plist, update Auth Layers table, clarify race([1ae8c28](https://github.com/sussdorff/claude-code-plugins/commit/1ae8c28a2db79e42336dd8f7e8aa72a66cf26f00))
+
+### Documentation
+
+- **dolt**: Add persistent auth setup via LaunchAgent in Auth Layers section([a507623](https://github.com/sussdorff/claude-code-plugins/commit/a5076233b3a37605a2b53b4aef8023bae34eff16))
+
+### Miscellaneous
+
+- **beads-orchestrator**: Align body-file guidance with PRIME.md([3c238ce](https://github.com/sussdorff/claude-code-plugins/commit/3c238cefa109440b41c5bc66bea686264ef0159f))
 ## [2026.04.142] - 2026-05-01
 
 ### Documentation
@@ -10,6 +24,7 @@ All notable changes to the claude-code-plugins marketplace are documented here.
 - **bead-orchestrator**: Forbid bd prime/onboard + ban beads SKILL detour([2de0eaa](https://github.com/sussdorff/claude-code-plugins/commit/2de0eaab4747e46dc916869d4021ab8f497868a4))
 - **dolt**: Rewrite skill for brew-services Dolt lifecycle([72d378b](https://github.com/sussdorff/claude-code-plugins/commit/72d378b4d520ed5b522acef900c7522dec7cc09d))
 - **bd-workflow**: Align with brew-services Dolt setup (port 3306, ~/.dolt-data/)([d87d169](https://github.com/sussdorff/claude-code-plugins/commit/d87d169e0202b8d04a9cba5f5fd8e7d22d9d6dc5))
+- **bd-workflow**: Update changelog for v2026.04.142([bd22db4](https://github.com/sussdorff/claude-code-plugins/commit/bd22db444e76d098853479fd5a6a0281d254e5b7))
 
 ### Features
 
@@ -20,7 +35,6 @@ All notable changes to the claude-code-plugins marketplace are documented here.
 
 - **CL-717**: Add requires_standards frontmatter to all skills fleet-wide([75d04db](https://github.com/sussdorff/claude-code-plugins/commit/75d04db8d5cd19c0a0771efcaa0101f707721030))
 - **bd-workflow**: Collapse beads SKILL into PRIME.md as single source of truth([3668f0d](https://github.com/sussdorff/claude-code-plugins/commit/3668f0dcd2de56a0d5c5fe4e360d5db2c1c66b4e))
-
 ## [2026.04.141] - 2026-04-30
 
 ### Bug Fixes
@@ -30,9 +44,21 @@ All notable changes to the claude-code-plugins marketplace are documented here.
 
 ### Features
 
-- **polaris-g8b**: Scan main repo for uncommitted generated files before merge([12cad68](https://github.com/sussdorff/claude-code-plugins/commit/12cad68))
+- **polaris-g8b**: Scan main repo for uncommitted generated files before merge([12cad68](https://github.com/sussdorff/claude-code-plugins/commit/12cad68c17472877455f7492d037dffd164e1e9b))
+## [2026.04.140] - 2026-04-28
+
+### Bug Fixes
+
+- **wave-orchestrator**: Replace broken Y/N gates with deterministic behaviors([00451ce](https://github.com/sussdorff/claude-code-plugins/commit/00451ce5d553784ad630ce74a93b104359119a1e))
+## [2026.04.139] - 2026-04-26
+
+### Features
+
 - **session-close**: Add cliff.toml and --push-gate flag([8d8e374](https://github.com/sussdorff/claude-code-plugins/commit/8d8e3745597476c402700cfa274c3d07a8549029))
 
+### Miscellaneous
+
+- Update CHANGELOG.md for cliff.toml and push-gate flag([d0130e2](https://github.com/sussdorff/claude-code-plugins/commit/d0130e29e844b5aa5005961512a88d262822e6b0))
 ## [2026.04.138] - 2026-04-26
 
 ### Bug Fixes

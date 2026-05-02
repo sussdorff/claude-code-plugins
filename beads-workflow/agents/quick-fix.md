@@ -209,6 +209,16 @@ If a specialized agent matches the bead's scope, use it. Otherwise use `general-
 - COMMIT your changes. Uncommitted work is lost.
   git add <files> && git commit -m "{type}({BEAD_ID}): {short description}"
 - Keep changes minimal — this is a quick fix, not a redesign.
+
+### Anti-Hallucination Constraints (BLOCKING)
+- Do NOT fabricate external resources: URLs, S3 paths, CDN refs, DICOM UIDs, registry identifiers,
+  asset paths, third-party API endpoints, or package names. Plausible structure is not evidence
+  of existence. LLM agents are known to hallucinate URLs that look real but do not resolve.
+- Any external reference you introduce MUST come from: the bead description, an existing
+  reference in this codebase (verifiable via grep), official documentation you have fetched, or
+  a live `curl -sI -o /dev/null -w '%{http_code}' --max-time 10 '<url>'` probe returning 2xx/3xx.
+- If you cannot verify, do NOT invent — report the gap in your output instead.
+- Phase 2 Codex review will check for fabricated URLs; verifying upfront is cheaper than a fix loop.
 ```
 
 Wait for the subagent to complete. If it reports failure, STOP and report to user.
@@ -260,6 +270,12 @@ For EACH finding, classify as:
 REGRESSION: <file>:<line> — <description> (new defect in THIS diff — BLOCKING)
 PRE_EXISTING: <file>:<line> — <description> (already present before — NOT blocking)
 OUT_OF_SCOPE: <file>:<line> — <description> (unrelated — NOT blocking)
+
+ALSO flag any added URL, S3 path, CDN/asset ref, DICOM UID treated as a resolvable path,
+or registry identifier that looks fabricated (made-up bucket/host name, invented IDs
+presented as real resources, fictional public dataset paths). LLM agents hallucinate
+plausible-looking URLs — flag suspicious ones as REGRESSION even if the surrounding
+shell/code logic is correct. Plausible structure is not evidence of existence.
 
 This is a quick fix — only REGRESSION findings matter.
 Report only actual bugs and regressions. If none: LGTM"

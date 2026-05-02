@@ -66,7 +66,7 @@ If `iteration >= 3`: **do not block**. Return `Status: CLEAN` with a warning not
    git diff <diff_range>           # e.g. abc1234...HEAD (THREE dots!)
    ```
 4. Run **Phase A: Spec Compliance** (A1 Completeness, A2 MoC Coverage, A3 Scenario Coverage, A4 TDD Discipline).
-5. Run **Phase B: Code Quality** (B1 Code Quality).
+5. Run **Phase B: Code Quality** (B1 Code Quality, B2 Mock-Interface Consistency, B3 Async Pollution, B4 External Resource Verification).
 6. Run **Phase C: Healthcare Compliance** (C1 Regulatory, C2 Human Factors) — only if changed files touch healthcare-relevant code.
 7. Produce the structured Review Report.
 
@@ -252,6 +252,52 @@ When the diff modifies handler code that contains fire-and-forget patterns, veri
 
 **Note:** `.catch(() => {})` is ALWAYS a finding regardless of test cleanup — silent error swallowing is an anti-pattern in production code. Report as `[CODE-QUALITY] FIX` (not async-pollution) with guidance to handle the error properly (log, rethrow with context, or reset state).
 
+#### B4. External Resource Verification
+
+When the diff introduces or modifies references to external URLs or resource identifiers, verify they actually resolve. **Static review of code logic does NOT detect fabricated resources** — only an HTTP probe does. LLM agents are known to fabricate URLs that look structurally correct (real-looking IDs, plausible bucket names, valid pattern) but do not exist.
+
+**Targets to extract from the diff:**
+
+| Resource type | Pattern |
+|---------------|---------|
+| HTTP/HTTPS URLs | `https?://...` (literal or string-interpolated) |
+| S3 URIs | `s3://bucket/key` or `https://<bucket>.s3.<region>.amazonaws.com/<key>` |
+| Public CDN / asset paths | jsdelivr, unpkg, GitHub raw, public buckets |
+| Container/image registry refs | `ghcr.io/...`, `docker.io/...`, `<host>/<repo>:<tag>` that the code expects to pull |
+| Public dataset paths | DICOM viewer test data, ML model weights, sample datasets — paths the code/tests expect to fetch from |
+| External identifiers presented as resolvable resources | DICOM Study/Series/SOPInstance UIDs used to construct an asset URL (NOT bare IDs in unit tests) |
+
+**How to extract and probe:**
+
+Use the canonical helper. It extracts URLs from added lines in the diff, skips known false-positives (license/comment/localhost/example), probes each with HEAD then ranged GET, and emits an execution-result envelope:
+
+```bash
+python3 "${CLAUDE_PLUGIN_ROOT}/beads-workflow/scripts/probe-urls.py" --diff-range <diff_range>
+```
+
+Exit codes: `0` = clean (or sampled with caveats), `1` = blocking findings (fabricated URLs detected), `2` = script error.
+
+Read `data.findings[]` from the JSON envelope. Each entry with `severity: "blocking"` becomes one `[EXTERNAL-RESOURCE] FIX` line in your report.
+
+**What counts as a finding:**
+- HTTP `4xx` or `5xx` (other than transient `429` / `503` with `Retry-After`) → `[EXTERNAL-RESOURCE] FIX: <url> returned <code> — referenced in <file:line> but does not resolve`
+- DNS resolution failure (`curl: (6)`) → `[EXTERNAL-RESOURCE] FIX: <url> DNS lookup failed — host does not exist (likely fabricated)`
+- TLS handshake failure on a public host → `[EXTERNAL-RESOURCE] FIX: <url> TLS handshake failed — referenced in <file:line>`
+- Constructed URLs (string interpolation): substitute representative values from nearby diff context and probe one example. If the URL is purely runtime-parameterized and no static example can be constructed → `[EXTERNAL-RESOURCE] DECIDE: <expr> at <file:line> — runtime-parameterized URL, cannot verify resolvability statically; recommend live integration test`
+
+**Skip these (false positives — DO NOT flag):**
+- URLs in license headers (apache.org, gnu.org, mozilla.org, opensource.org)
+- URLs in code comments / docstrings that link to documentation (e.g. `# See https://docs.python.org/...`)
+- URLs in CHANGELOG / release-notes entries that link to PRs/issues that may not exist yet
+- `localhost`, `127.0.0.1`, `0.0.0.0`, `*.localhost` (test infrastructure / portless namespace)
+- `example.com`, `example.org`, `<example>` placeholders
+- URLs already present in the codebase before this diff (only check **added** lines from `git diff | grep '^+'`)
+- URLs inside disabled/commented-out test cases (`xit`, `xdescribe`, `pytest.mark.skip`)
+
+**Performance note:** If the diff introduces more than 30 distinct external URLs, probe a representative sample (the first 30 unique hosts) and flag the others as `[EXTERNAL-RESOURCE] DECIDE: <N> additional URLs not probed in this review — manual spot-check recommended`. Do not skip URL probing entirely; sample instead.
+
+**Why this check exists:** This is the explicit guard against the "implementer hallucinated plausible-looking URLs and reviewer didn't notice because the code looked syntactically correct" failure mode. Static code review cannot catch fabricated resources — only an HTTP probe can.
+
 ### Phase C: Healthcare Compliance (Conditional)
 
 **Run Phase C only when the diff contains files matching healthcare-relevant patterns:**
@@ -306,6 +352,7 @@ TDD: A | B | C
 - [CODE-QUALITY] FIX: <specific finding with file/line reference> → <what to change>
 - [MOCK-CONSISTENCY] FIX: <Interface> changed but mock in <test-file:line> still uses old shape
 - [ASYNC-POLLUTION] FIX: <file:line> fire-and-forget pattern without test cleanup
+- [EXTERNAL-RESOURCE] FIX: <url> returned <http-code> — referenced in <file:line> but does not resolve (likely fabricated)
 
 ### Phase C: Healthcare Compliance (omit section if skipped or all pass)
 - [COMPLIANCE] FIX: <finding with regulatory reference>
@@ -362,6 +409,7 @@ Append to Summary: `NOTE: Safeguard triggered (iteration <N> >= 3). Proceeding d
 - **Be specific in findings**: Reference AK numbers, line numbers from the diff, and exact criterion text. Vague findings like "needs more tests" are not actionable. Every FIX finding must say what to change.
 - **Do not re-review already-addressed findings**: If spawned on iteration 2+, evaluate the final diff state — not just new commits. The previous iteration's findings may already be fixed.
 - **THREE dots in git diff, ALWAYS**: `git diff abc...HEAD` (three dots) shows changes on the branch since it diverged. `git diff abc..HEAD` (two dots) shows symmetric difference which includes unrelated commits and produces garbage results. If you use two dots, the entire review is worthless. There is never a reason to use two dots in this agent.
+- **Probe external URLs, do not trust them**: B4 exists because LLM agents fabricate plausible-looking URLs (real-shaped DICOM UIDs, valid-looking S3 paths) that simply do not resolve. The diff looks syntactically clean, the code reads correctly, the tests reference fixture URLs — and none of them exist. The ONLY way to catch this is to `curl` every new URL in the diff. Static review cannot tell a real URL from a fabricated one. If you skip B4, you will eventually wave through hallucinated test fixtures.
 
 ## Debrief
 

@@ -84,6 +84,26 @@ Load before implementing:
 - COMMIT after each module: `git add <files> && git commit -m "feat({bead_id}): green — <summary>"`
 - Run full test suite before done: 0 failures required
 
+## Anti-Hallucination Constraints (BLOCKING)
+- Do NOT fabricate external resources: URLs, S3 paths, CDN refs, DICOM UIDs, registry
+  identifiers, asset paths, third-party API endpoints, or package names. Plausible
+  structure is not evidence of existence — LLM agents are known to hallucinate URLs that
+  look real (real-shaped DICOM UIDs, plausible S3 bucket names, valid pattern) but do not
+  resolve.
+- Any external reference you introduce in production code, tests, fixtures, or seed data
+  MUST come from one of:
+  1. The bead description, its linked materials, or attached design notes
+  2. An existing reference already in this codebase (verifiable via `grep -r`)
+  3. An official documentation page you have fetched
+  4. A live HTTP probe you ran yourself:
+     `curl -sI -o /dev/null -w '%{http_code}' --max-time 10 '<url>'` returning 2xx/3xx
+     (on 405, retry as ranged GET: `curl -s -o /dev/null -w '%{http_code}' -r 0-0 '<url>'`)
+- If you cannot verify a URL/path resolves, do NOT write it. Report the gap in your
+  Completion Report as `[ ] Test X: NOT DONE — could not source verified URL/asset for <X>`.
+- The downstream review-agent's `B4. External Resource Verification` will probe every
+  new URL in the diff and flag fabricated ones as `[EXTERNAL-RESOURCE] FIX`. Verifying
+  upfront is cheaper than a review-loop iteration.
+
 ## Completion Report Format
 ## Completion Report
 - [x] Test X: <what was implemented>

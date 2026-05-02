@@ -508,6 +508,37 @@ For each acceptance criterion:
 
 **COMMIT IS MANDATORY.** Uncommitted work is lost.
 
+### Anti-Hallucination Constraints (BLOCKING)
+
+You MUST NOT fabricate external resources. Plausible structure is not evidence of existence.
+
+This includes — but is not limited to:
+- HTTP/HTTPS URLs
+- S3 bucket paths (`s3://...` or `https://<bucket>.s3.amazonaws.com/...`)
+- CDN / public asset URLs (jsdelivr, unpkg, GitHub raw, public buckets)
+- DICOM Study/Series/SOPInstance UIDs presented as resolvable paths
+- Container/image registry refs (`ghcr.io/...`, `docker.io/...`)
+- Public dataset paths the code/tests will fetch from
+- Third-party API endpoints, package names, or registry identifiers
+
+If your code, tests, fixtures, or seed data reference any external resource, that resource MUST come from one of:
+1. The bead description, its linked materials, or an attached design doc
+2. An existing reference already in this codebase (verifiable via `grep -r`)
+3. An official documentation page you have fetched (`crwl crawl <url> -o md` or equivalent)
+4. A live HTTP probe you ran yourself:
+   ```bash
+   code=$(curl -sI -o /dev/null -w '%{http_code}' --max-time 10 '<url>')
+   # Accept only 2xx/3xx; on 405, retry as a ranged GET
+   ```
+
+**If you cannot verify a URL/path resolves, do NOT write it.** Instead, report the gap in your Completion Report:
+
+```
+- [ ] Criterion N: NOT DONE — could not source verified URL/asset for <X>; fabrication is forbidden
+```
+
+The Phase 6 review-agent (`B4. External Resource Verification`) will probe every new URL in the diff. Fabricated references will be caught and flagged as `[EXTERNAL-RESOURCE] FIX`, costing you a fix iteration. Verifying upfront is cheaper.
+
 ### Metrics Logging
 At the end, log your token usage:
 ```python
@@ -678,7 +709,15 @@ listed files with file-scoped commands. Do NOT run repo onboarding commands (`bd
 ## Acceptance Criteria:
 <AK list>
 
-Report ONLY actual bugs and regressions. Format each finding as:
+Report ONLY actual bugs and regressions, INCLUDING fabricated external resources. Specifically check:
+- Any added URL, S3 path, CDN ref, DICOM/asset path, or registry identifier in the diff that
+  the implementer may have hallucinated. Plausible structure is not evidence of existence —
+  if a referenced URL is suspicious (made-up bucket name, invented DICOM UID treated as a
+  resolvable path, fictional public dataset path), flag it as a REGRESSION.
+- The Phase 6 reviewer probes URLs via curl; you do NOT need to probe, but you MUST flag
+  anything that looks fabricated so the reviewer knows where to focus.
+
+Format each finding as:
 REGRESSION: <file>:<line> — <description>
 Or if none: LGTM"
 ```
