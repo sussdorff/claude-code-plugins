@@ -1,3 +1,18 @@
+---
+id: ADR-0003
+status: accepted
+date: 2026-04-26
+contract: open-brain-http-client
+applies_to:
+  - core/agents/session-close-handlers/turn-log-upload.py
+  - scripts/query-sources.py
+  - scripts/orchestrate-brief.py
+prohibits:
+  - "Do not roll a custom MCP HTTP client using httpx or urllib"
+  - "Do not use REST /api/* endpoints for operations that are only exposed as MCP tools"
+  - "Do not call MCP tools without the official mcp Python SDK (mcp>=1.11)"
+decision_summary: "Use stdlib urllib for documented /api/* REST endpoints and the official mcp Python SDK (mcp>=1.11) for MCP-only tools."
+---
 # ADR-0003: open-brain HTTP — REST vs MCP Client Decision Tree
 
 ## Status
