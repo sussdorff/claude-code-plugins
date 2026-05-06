@@ -145,8 +145,14 @@ class WaveDispatcher:
     ) -> tuple[int, dict]:
         """Dispatch all beads. Returns (exit_code, output_dict).
 
-        exit_code 0 = success, 1 = error (e.g. missing scenarios, empty bead list).
+        exit_code 0 = success (>=1 bead dispatched or already-running),
+                  1 = error (no IDs, missing scenarios, or every dispatch failed —
+                      e.g. cmux socket broken pipe for every bead).
         output_dict is the wave config JSON (empty on error).
+
+        A wave with all dispatches failing must NOT exit 0 with an empty
+        beads list — that produces a "valid but empty" config file that
+        wait_for_wave will then poll forever (no beads to be 'closed').
         """
         all_ids = bead_ids + quick_ids
         quick_set = set(quick_ids)
@@ -277,6 +283,25 @@ class WaveDispatcher:
             "wave_id": wave_id,
             "beads": beads_json,
         }
+
+        # If we were asked to dispatch beads but every single attempt fell
+        # through (cmux socket broken pipe, surface allocation failure, send
+        # exception, ...) the result is a "successful" exit with an empty
+        # beads list. Downstream chain scripts then write a valid-but-empty
+        # JSON to /tmp/wave-config-wN.json and wait_for_wave polls forever
+        # because there are no beads to ever become 'closed'. Fail loudly
+        # instead so `set -e` aborts the chain.
+        if not beads_json:
+            print(
+                "Error: 0 of "
+                f"{len(all_ids)} bead(s) dispatched successfully. "
+                "All cmux split/send attempts failed (see errors above). "
+                "Aborting with exit 1 — caller chain script must not "
+                "treat an empty wave config as a successful dispatch.",
+                file=sys.stderr,
+            )
+            return 1, {}
+
         return 0, output
 
 

@@ -859,6 +859,100 @@ def test_wave_dispatcher_proceeds_when_not_running() -> None:
     assert output["beads"][0]["status"] == "dispatched"
 
 
+def test_wave_dispatcher_all_dispatches_failed_returns_error() -> None:
+    """When cmux dispatch fails for every requested bead the dispatcher exits 1.
+
+    Regression for CCP-4uxk: a broken cmux socket caused every new-split
+    call to return 'Error: Failed to write to socket (Broken pipe, errno 32)'.
+    Previously dispatch() returned exit 0 with beads_json=[], and the chain
+    script wrote a valid-but-empty /tmp/wave-config-wN.json. wait_for_wave
+    then polled forever because there were no beads to ever become 'closed'.
+
+    Expected behavior: when N >= 1 bead IDs are requested and 0 of them
+    successfully dispatched (and none are already-running), exit 1 with an
+    empty output dict so the caller's `set -e` aborts the chain.
+    """
+    wd = _wd()
+
+    def mock_runner(cmd, **kwargs):
+        # No process / worktree match → not already-running, will attempt dispatch
+        if cmd and cmd[0] == "pgrep":
+            return _MockResult(stdout="", returncode=1)
+        if cmd and cmd[0] == "git" and "worktree" in cmd:
+            return _MockResult(stdout="", returncode=0)
+        # cmux new-split returns the broken-pipe error wave-dispatch saw in production
+        if cmd and cmd[0] == "cmux" and "new-split" in cmd:
+            return _MockResult(
+                stdout="",
+                stderr="Error: Failed to write to socket (Broken pipe, errno 32)\n",
+                returncode=1,
+            )
+        return _MockResult()
+
+    dispatcher = wd.WaveDispatcher(runner=mock_runner)
+    exit_code, output = dispatcher.dispatch(
+        bead_ids=["proj-a", "proj-b"],
+        quick_ids=[],
+        workspace="ws:1",
+        base_surface="surface:1",
+        wave_id="wave-test",
+        skip_scenarios=True,
+    )
+
+    assert exit_code == 1, (
+        f"Expected exit 1 when all dispatches fail, got {exit_code}. "
+        f"Caller's `set -e` must abort instead of writing an empty wave config."
+    )
+    assert output == {}, (
+        f"Expected empty output dict on all-failed dispatch, got {output}. "
+        f"main() must NOT print misleading JSON to stdout in this case."
+    )
+
+
+def test_wave_dispatcher_partial_success_still_exits_zero() -> None:
+    """When at least one bead dispatches successfully, exit 0 even if others fail.
+
+    Companion to CCP-4uxk: the all-failed regression must NOT change behavior
+    for the partial-success path. If 1 of 2 beads dispatches, the chain still
+    has work to monitor, so we exit 0 and emit JSON with whatever succeeded.
+    """
+    wd = _wd()
+
+    new_split_calls = {"count": 0}
+
+    def mock_runner(cmd, **kwargs):
+        if cmd and cmd[0] == "pgrep":
+            return _MockResult(stdout="", returncode=1)
+        if cmd and cmd[0] == "git" and "worktree" in cmd:
+            return _MockResult(stdout="", returncode=0)
+        if cmd and cmd[0] == "cmux" and "new-split" in cmd:
+            new_split_calls["count"] += 1
+            # First split succeeds, second fails (broken pipe)
+            if new_split_calls["count"] == 1:
+                return _MockResult(stdout="surface:42\n", returncode=0)
+            return _MockResult(
+                stdout="",
+                stderr="Error: Failed to write to socket\n",
+                returncode=1,
+            )
+        return _MockResult()
+
+    dispatcher = wd.WaveDispatcher(runner=mock_runner)
+    exit_code, output = dispatcher.dispatch(
+        bead_ids=["proj-ok", "proj-fail"],
+        quick_ids=[],
+        workspace="ws:1",
+        base_surface="surface:1",
+        wave_id="wave-test",
+        skip_scenarios=True,
+    )
+
+    assert exit_code == 0
+    assert len(output["beads"]) == 1
+    assert output["beads"][0]["id"] == "proj-ok"
+    assert output["beads"][0]["status"] == "dispatched"
+
+
 def test_wave_dispatcher_skips_already_running_bead_worktree_only() -> None:
     """Dispatch skips a bead when only a worktree exists (no live process).
 
