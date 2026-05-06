@@ -9,6 +9,7 @@ All notable changes to the claude-code-plugins marketplace are documented here.
 - **ci**: Use ${CLAUDE_PLUGIN_ROOT} for adr-context.py refs in agents([0762897](https://github.com/sussdorff/claude-code-plugins/commit/0762897b8b919942b8326b380b7c67b9b49900bd))
 - Stabilize pytest drift([37f1f9b](https://github.com/sussdorff/claude-code-plugins/commit/37f1f9b25c121e917d6ad25940f039aaf10a547e))
 - **wave-orchestrator**: Reduce dispatch overhead([a56472e](https://github.com/sussdorff/claude-code-plugins/commit/a56472e48f67fb70b90d68b6fce8cca8416fa38c))
+- **wave-dispatch**: Exit non-zero when all bead dispatches fail (CCP-4uxk)([695788a](https://github.com/sussdorff/claude-code-plugins/commit/695788a))
 
 ### Features
 
