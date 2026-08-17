@@ -1,5 +1,5 @@
 {
-  "dolt_mode": "server",
+  "dolt_mode": "embedded",
   "dolt_database": "beads_claude_plugins",
   "project_id": "cf8ad557-5c45-44b8-b9ff-8c6365c3e337"
 }

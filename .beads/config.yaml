@@ -53,4 +53,13 @@ issue-prefix: "CCP"
 # - github.org
 # - github.repo
 
-dolt.shared-server: true
+dolt.shared-server: false
+
+# Disable JSONL auto-import; Dolt is the source of truth.
+no-auto-import: true
+
+import.auto: false
+
+export.auto: false
+
+export.git-add: false
